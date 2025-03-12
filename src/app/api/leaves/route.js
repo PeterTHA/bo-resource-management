@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
-import connectDB from '../../../lib/db';
-import Leave from '../../../models/Leave';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../lib/auth';
+import { getLeaves, createLeave } from '../../../lib/db-postgres';
 
 // GET - ดึงข้อมูลการลาทั้งหมด
 export async function GET(request) {
@@ -16,26 +15,36 @@ export async function GET(request) {
       );
     }
     
-    await connectDB();
-    
     const { searchParams } = new URL(request.url);
     const employeeId = searchParams.get('employeeId');
     
-    let query = {};
+    // ดึงข้อมูลการลาจาก Postgres
+    let result;
     
     // ถ้าเป็น admin หรือ manager สามารถดูข้อมูลการลาทั้งหมดได้
     // ถ้าเป็น employee สามารถดูข้อมูลการลาของตัวเองเท่านั้น
     if (session.user.role === 'employee') {
-      query.employee = session.user.id;
+      result = await getLeaves(session.user.id);
     } else if (employeeId) {
-      query.employee = employeeId;
+      result = await getLeaves(employeeId);
+    } else {
+      result = await getLeaves();
     }
     
-    const leaves = await Leave.find(query).populate('employee', 'firstName lastName employeeId');
+    if (!result.success) {
+      return NextResponse.json(
+        { success: false, message: result.message || 'เกิดข้อผิดพลาดในการดึงข้อมูลการลา', connectionError: true },
+        { status: 500 }
+      );
+    }
     
-    return NextResponse.json({ success: true, data: leaves }, { status: 200 });
+    return NextResponse.json({ success: true, data: result.data }, { status: 200 });
   } catch (error) {
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    console.error('Error in GET /api/leaves:', error);
+    return NextResponse.json(
+      { success: false, message: error.message, connectionError: true },
+      { status: 500 }
+    );
   }
 }
 
@@ -51,8 +60,6 @@ export async function POST(request) {
       );
     }
     
-    await connectDB();
-    
     const data = await request.json();
     
     // ถ้าเป็น employee ให้ใช้ ID ของตัวเอง
@@ -60,13 +67,22 @@ export async function POST(request) {
       data.employee = session.user.id;
     }
     
-    const leave = await Leave.create(data);
+    // เพิ่มข้อมูลการลาใน Postgres
+    const result = await createLeave(data);
+    
+    if (!result.success) {
+      return NextResponse.json(
+        { success: false, message: result.message || result.error || 'เกิดข้อผิดพลาดในการเพิ่มข้อมูลการลา' },
+        { status: 400 }
+      );
+    }
     
     return NextResponse.json(
-      { success: true, data: leave },
+      { success: true, data: result.data },
       { status: 201 }
     );
   } catch (error) {
+    console.error('Error in POST /api/leaves:', error);
     return NextResponse.json(
       { success: false, message: error.message },
       { status: 500 }

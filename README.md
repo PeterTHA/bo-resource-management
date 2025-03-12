@@ -115,6 +115,54 @@ async function cacheUserSession(userId, sessionData) {
 - **Blob Storage**: 1GB พื้นที่เก็บข้อมูล, 1,000 operations/วัน
 - **KV (Redis)**: 256MB พื้นที่เก็บข้อมูล, 2,000,000 operations/เดือน
 
+## การใช้งาน Vercel Postgres ในโปรเจคนี้
+
+โปรเจคนี้มีการเตรียมการรองรับการใช้งาน Vercel Postgres แทน MongoDB ดังนี้:
+
+### 1. การตั้งค่า Environment Variables
+
+เพิ่มค่าต่อไปนี้ใน `.env.local` หรือใน Vercel Dashboard:
+
+```
+# Vercel Postgres
+POSTGRES_URL=
+POSTGRES_PRISMA_URL=
+POSTGRES_URL_NON_POOLING=
+POSTGRES_USER=
+POSTGRES_HOST=
+POSTGRES_PASSWORD=
+POSTGRES_DATABASE=
+```
+
+### 2. การตั้งค่าฐานข้อมูล
+
+1. Deploy โปรเจคไปยัง Vercel และสร้าง Postgres Database ใน Vercel Dashboard
+2. เข้าไปที่ `/setup-postgres` เพื่อทดสอบการเชื่อมต่อและตั้งค่าฐานข้อมูล
+3. ระบบจะสร้างตารางที่จำเป็นและบัญชีผู้ดูแลระบบเริ่มต้น:
+   - อีเมล: admin@example.com
+   - รหัสผ่าน: admin123
+
+### 3. การเปลี่ยนจาก MongoDB เป็น Vercel Postgres
+
+เพื่อเปลี่ยนจาก MongoDB เป็น Vercel Postgres ให้แก้ไขไฟล์ `src/app/api/auth/[...nextauth]/route.js`:
+
+```javascript
+import NextAuth from 'next-auth';
+// เปลี่ยนจาก
+// import { authOptions } from '../../../../lib/auth';
+// เป็น
+import { authOptionsPostgres } from '../../../../lib/auth-postgres';
+
+// เปลี่ยนจาก
+// const handler = NextAuth(authOptions);
+// เป็น
+const handler = NextAuth(authOptionsPostgres);
+
+export { handler as GET, handler as POST };
+```
+
+จากนั้นแก้ไข API routes ต่างๆ ให้ใช้ฟังก์ชันจาก `src/lib/db-postgres.js` แทน `src/lib/db.js`
+
 ## โครงสร้างโปรเจค
 
 ```
@@ -125,9 +173,16 @@ src/
 │   ├── employees/      # หน้าจัดการพนักงาน
 │   ├── leaves/         # หน้าจัดการการลา
 │   ├── overtime/       # หน้าจัดการการทำงานล่วงเวลา
+│   ├── profile/        # หน้าโปรไฟล์ผู้ใช้
+│   ├── reports/        # หน้ารายงาน
+│   ├── setup-postgres/ # หน้าตั้งค่า Postgres
 │   └── login/          # หน้า Login
 ├── components/         # React Components
 ├── lib/                # Utility Functions
+│   ├── db.js           # MongoDB Connection
+│   ├── db-postgres.js  # Vercel Postgres Connection
+│   ├── auth.js         # NextAuth with MongoDB
+│   └── auth-postgres.js # NextAuth with Postgres
 └── models/             # Mongoose Models
 ```
 

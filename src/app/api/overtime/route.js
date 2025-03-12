@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
-import connectDB from '../../../lib/db';
-import Overtime from '../../../models/Overtime';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../lib/auth';
+import { getOvertimes, createOvertime } from '../../../lib/db-postgres';
 
 // GET - ดึงข้อมูลการทำงานล่วงเวลาทั้งหมด
 export async function GET(request) {
@@ -16,26 +15,36 @@ export async function GET(request) {
       );
     }
     
-    await connectDB();
-    
     const { searchParams } = new URL(request.url);
     const employeeId = searchParams.get('employeeId');
     
-    let query = {};
+    // ดึงข้อมูลการทำงานล่วงเวลาจาก Postgres
+    let result;
     
     // ถ้าเป็น admin หรือ manager สามารถดูข้อมูลการทำงานล่วงเวลาทั้งหมดได้
     // ถ้าเป็น employee สามารถดูข้อมูลการทำงานล่วงเวลาของตัวเองเท่านั้น
     if (session.user.role === 'employee') {
-      query.employee = session.user.id;
+      result = await getOvertimes(session.user.id);
     } else if (employeeId) {
-      query.employee = employeeId;
+      result = await getOvertimes(employeeId);
+    } else {
+      result = await getOvertimes();
     }
     
-    const overtimes = await Overtime.find(query).populate('employee', 'firstName lastName employeeId');
+    if (!result.success) {
+      return NextResponse.json(
+        { success: false, message: result.message || 'เกิดข้อผิดพลาดในการดึงข้อมูลการทำงานล่วงเวลา', connectionError: true },
+        { status: 500 }
+      );
+    }
     
-    return NextResponse.json({ success: true, data: overtimes }, { status: 200 });
+    return NextResponse.json({ success: true, data: result.data }, { status: 200 });
   } catch (error) {
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    console.error('Error in GET /api/overtime:', error);
+    return NextResponse.json(
+      { success: false, message: error.message, connectionError: true },
+      { status: 500 }
+    );
   }
 }
 
@@ -51,8 +60,6 @@ export async function POST(request) {
       );
     }
     
-    await connectDB();
-    
     const data = await request.json();
     
     // ถ้าเป็น employee ให้ใช้ ID ของตัวเอง
@@ -60,13 +67,22 @@ export async function POST(request) {
       data.employee = session.user.id;
     }
     
-    const overtime = await Overtime.create(data);
+    // เพิ่มข้อมูลการทำงานล่วงเวลาใน Postgres
+    const result = await createOvertime(data);
+    
+    if (!result.success) {
+      return NextResponse.json(
+        { success: false, message: result.message || result.error || 'เกิดข้อผิดพลาดในการเพิ่มข้อมูลการทำงานล่วงเวลา' },
+        { status: 400 }
+      );
+    }
     
     return NextResponse.json(
-      { success: true, data: overtime },
+      { success: true, data: result.data },
       { status: 201 }
     );
   } catch (error) {
+    console.error('Error in POST /api/overtime:', error);
     return NextResponse.json(
       { success: false, message: error.message },
       { status: 500 }

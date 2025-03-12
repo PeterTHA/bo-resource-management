@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
-import connectDB from '../../../../lib/db';
-import Overtime from '../../../../models/Overtime';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../../../../lib/auth';
+import { getOvertimeById, updateOvertime, deleteOvertime } from '../../../../lib/db-postgres';
 
 // GET - ดึงข้อมูลการทำงานล่วงเวลาตาม ID
 export async function GET(request, { params }) {
@@ -16,28 +15,33 @@ export async function GET(request, { params }) {
       );
     }
     
-    await connectDB();
+    const id = params.id;
     
-    const overtime = await Overtime.findById(params.id).populate('employee', 'firstName lastName employeeId');
+    // ดึงข้อมูลการทำงานล่วงเวลาจาก Postgres
+    const result = await getOvertimeById(id);
     
-    if (!overtime) {
+    if (!result.success) {
       return NextResponse.json(
-        { success: false, message: 'ไม่พบข้อมูลการทำงานล่วงเวลา' },
+        { success: false, message: result.message || 'ไม่พบข้อมูลการทำงานล่วงเวลา' },
         { status: 404 }
       );
     }
     
     // ตรวจสอบสิทธิ์การเข้าถึง
-    if (session.user.role === 'employee' && overtime.employee._id.toString() !== session.user.id) {
+    if (session.user.role === 'employee' && result.data.employee_id !== parseInt(session.user.id)) {
       return NextResponse.json(
         { success: false, message: 'ไม่มีสิทธิ์เข้าถึงข้อมูล' },
         { status: 403 }
       );
     }
     
-    return NextResponse.json({ success: true, data: overtime }, { status: 200 });
+    return NextResponse.json({ success: true, data: result.data }, { status: 200 });
   } catch (error) {
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    console.error('Error fetching overtime:', error);
+    return NextResponse.json(
+      { success: false, message: error.message },
+      { status: 500 }
+    );
   }
 }
 
@@ -53,54 +57,69 @@ export async function PUT(request, { params }) {
       );
     }
     
-    await connectDB();
+    const id = params.id;
     
-    const data = await request.json();
+    // ดึงข้อมูลการทำงานล่วงเวลาเพื่อตรวจสอบสิทธิ์
+    const checkResult = await getOvertimeById(id);
     
-    // ตรวจสอบว่ามีข้อมูลการทำงานล่วงเวลาหรือไม่
-    const overtime = await Overtime.findById(params.id);
-    
-    if (!overtime) {
+    if (!checkResult.success) {
       return NextResponse.json(
-        { success: false, message: 'ไม่พบข้อมูลการทำงานล่วงเวลา' },
+        { success: false, message: checkResult.message || 'ไม่พบข้อมูลการทำงานล่วงเวลา' },
         { status: 404 }
       );
     }
     
     // ตรวจสอบสิทธิ์การเข้าถึง
     if (session.user.role === 'employee') {
-      // พนักงานสามารถแก้ไขข้อมูลการทำงานล่วงเวลาของตัวเองได้เท่านั้น และต้องเป็นสถานะ 'รออนุมัติ' เท่านั้น
-      if (overtime.employee.toString() !== session.user.id || overtime.status !== 'รออนุมัติ') {
+      // พนักงานทั่วไปสามารถแก้ไขได้เฉพาะข้อมูลการทำงานล่วงเวลาของตัวเอง และต้องมีสถานะเป็น 'รออนุมัติ' เท่านั้น
+      if (checkResult.data.employee_id !== parseInt(session.user.id)) {
         return NextResponse.json(
           { success: false, message: 'ไม่มีสิทธิ์เข้าถึงข้อมูล' },
           { status: 403 }
         );
       }
       
-      // พนักงานไม่สามารถเปลี่ยนสถานะการอนุมัติได้
-      if (data.status && data.status !== 'รออนุมัติ') {
+      if (checkResult.data.status !== 'รออนุมัติ') {
         return NextResponse.json(
-          { success: false, message: 'ไม่มีสิทธิ์เปลี่ยนสถานะการอนุมัติ' },
-          { status: 403 }
+          { success: false, message: 'ไม่สามารถแก้ไขข้อมูลการทำงานล่วงเวลาที่ได้รับการอนุมัติหรือปฏิเสธแล้ว' },
+          { status: 400 }
         );
-      }
-    } else if (session.user.role === 'manager' || session.user.role === 'admin') {
-      // ผู้จัดการหรือแอดมินสามารถอนุมัติหรือไม่อนุมัติการทำงานล่วงเวลาได้
-      if (data.status && data.status !== 'รออนุมัติ') {
-        data.approvedBy = session.user.id;
-        data.approvedAt = new Date();
       }
     }
     
-    const updatedOvertime = await Overtime.findByIdAndUpdate(
-      params.id,
-      data,
-      { new: true, runValidators: true }
-    ).populate('employee', 'firstName lastName employeeId');
+    const data = await request.json();
     
-    return NextResponse.json({ success: true, data: updatedOvertime }, { status: 200 });
+    // ถ้าเป็นการอนุมัติหรือปฏิเสธการทำงานล่วงเวลา
+    if (data.status === 'อนุมัติ' || data.status === 'ไม่อนุมัติ') {
+      // ตรวจสอบว่าผู้ใช้เป็น admin หรือ manager หรือไม่
+      if (session.user.role !== 'admin' && session.user.role !== 'manager') {
+        return NextResponse.json(
+          { success: false, message: 'ไม่มีสิทธิ์อนุมัติหรือปฏิเสธการทำงานล่วงเวลา' },
+          { status: 403 }
+        );
+      }
+      
+      // เพิ่มข้อมูลผู้อนุมัติ
+      data.approvedBy = session.user.id;
+    }
+    
+    // อัปเดตข้อมูลการทำงานล่วงเวลาใน Postgres
+    const result = await updateOvertime(id, data);
+    
+    if (!result.success) {
+      return NextResponse.json(
+        { success: false, message: result.message || result.error || 'เกิดข้อผิดพลาดในการอัปเดตข้อมูลการทำงานล่วงเวลา' },
+        { status: 400 }
+      );
+    }
+    
+    return NextResponse.json({ success: true, data: result.data }, { status: 200 });
   } catch (error) {
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    console.error('Error updating overtime:', error);
+    return NextResponse.json(
+      { success: false, message: error.message },
+      { status: 500 }
+    );
   }
 }
 
@@ -116,41 +135,52 @@ export async function DELETE(request, { params }) {
       );
     }
     
-    await connectDB();
+    const id = params.id;
     
-    // ตรวจสอบว่ามีข้อมูลการทำงานล่วงเวลาหรือไม่
-    const overtime = await Overtime.findById(params.id);
+    // ดึงข้อมูลการทำงานล่วงเวลาเพื่อตรวจสอบสิทธิ์
+    const checkResult = await getOvertimeById(id);
     
-    if (!overtime) {
+    if (!checkResult.success) {
       return NextResponse.json(
-        { success: false, message: 'ไม่พบข้อมูลการทำงานล่วงเวลา' },
+        { success: false, message: checkResult.message || 'ไม่พบข้อมูลการทำงานล่วงเวลา' },
         { status: 404 }
       );
     }
     
     // ตรวจสอบสิทธิ์การเข้าถึง
     if (session.user.role === 'employee') {
-      // พนักงานสามารถลบข้อมูลการทำงานล่วงเวลาของตัวเองได้เท่านั้น และต้องเป็นสถานะ 'รออนุมัติ' เท่านั้น
-      if (overtime.employee.toString() !== session.user.id || overtime.status !== 'รออนุมัติ') {
+      // พนักงานทั่วไปสามารถลบได้เฉพาะข้อมูลการทำงานล่วงเวลาของตัวเอง และต้องมีสถานะเป็น 'รออนุมัติ' เท่านั้น
+      if (checkResult.data.employee_id !== parseInt(session.user.id)) {
         return NextResponse.json(
           { success: false, message: 'ไม่มีสิทธิ์เข้าถึงข้อมูล' },
           { status: 403 }
         );
       }
-    } else if (session.user.role !== 'admin') {
-      // เฉพาะแอดมินเท่านั้นที่สามารถลบข้อมูลการทำงานล่วงเวลาที่ได้รับการอนุมัติแล้วได้
-      if (overtime.status !== 'รออนุมัติ') {
+      
+      if (checkResult.data.status !== 'รออนุมัติ') {
         return NextResponse.json(
-          { success: false, message: 'ไม่มีสิทธิ์ลบข้อมูลการทำงานล่วงเวลาที่ได้รับการอนุมัติแล้ว' },
-          { status: 403 }
+          { success: false, message: 'ไม่สามารถลบข้อมูลการทำงานล่วงเวลาที่ได้รับการอนุมัติหรือปฏิเสธแล้ว' },
+          { status: 400 }
         );
       }
     }
     
-    await Overtime.findByIdAndDelete(params.id);
+    // ลบข้อมูลการทำงานล่วงเวลาใน Postgres
+    const result = await deleteOvertime(id);
+    
+    if (!result.success) {
+      return NextResponse.json(
+        { success: false, message: result.message || result.error || 'เกิดข้อผิดพลาดในการลบข้อมูลการทำงานล่วงเวลา' },
+        { status: 400 }
+      );
+    }
     
     return NextResponse.json({ success: true, data: {} }, { status: 200 });
   } catch (error) {
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    console.error('Error deleting overtime:', error);
+    return NextResponse.json(
+      { success: false, message: error.message },
+      { status: 500 }
+    );
   }
 } 

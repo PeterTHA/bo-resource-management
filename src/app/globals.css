@@ -1,8 +1,11 @@
 @import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #000000;
 }
 
 @theme inline {
@@ -15,7 +18,7 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
-    --foreground: #ededed;
+    --foreground: #ffffff;
   }
 }
 
@@ -23,4 +26,67 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Responsive Design */
+@layer components {
+  .container {
+    @apply px-4 mx-auto;
+    max-width: 1280px;
+  }
+  
+  /* Mobile First Design */
+  .responsive-grid {
+    @apply grid grid-cols-1 gap-4;
+  }
+  
+  /* Tablet (iPad) */
+  @media (min-width: 768px) {
+    .responsive-grid {
+      @apply grid-cols-2 gap-6;
+    }
+  }
+  
+  /* Desktop */
+  @media (min-width: 1024px) {
+    .responsive-grid {
+      @apply grid-cols-3 gap-6;
+    }
+  }
+  
+  /* iPhone SE / Small Screens */
+  @media (max-width: 375px) {
+    .text-3xl {
+      @apply text-2xl;
+    }
+    
+    .p-6 {
+      @apply p-4;
+    }
+  }
+  
+  /* iPad Specific */
+  @media (min-width: 768px) and (max-width: 1024px) {
+    .ipad-specific {
+      @apply py-6;
+    }
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #a8d8ff;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #0096ff;
 }

@@ -4,6 +4,9 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { FiPlus, FiEdit, FiTrash2, FiSearch } from 'react-icons/fi';
+import { Card, CardHeader, CardContent } from '../../components/ui/Card';
+import ErrorMessage, { ConnectionErrorMessage } from '../../components/ui/ErrorMessage';
 
 export default function EmployeesPage() {
   const { data: session, status } = useSession();
@@ -11,6 +14,7 @@ export default function EmployeesPage() {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [connectionError, setConnectionError] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
@@ -22,17 +26,39 @@ export default function EmployeesPage() {
   useEffect(() => {
     const fetchEmployees = async () => {
       try {
+        setLoading(true);
+        setError('');
+        setConnectionError(false);
+        
         const res = await fetch('/api/employees');
+        
+        if (!res.ok) {
+          // ถ้าเกิด error ในการเชื่อมต่อกับ API
+          if (res.status === 500) {
+            setError('ไม่สามารถเชื่อมต่อกับฐานข้อมูลได้ กรุณาลองใหม่อีกครั้ง');
+            setConnectionError(true);
+          } else {
+            const errorData = await res.json();
+            setError(errorData.message || 'เกิดข้อผิดพลาดในการดึงข้อมูลพนักงาน');
+          }
+          setEmployees([]);
+          return;
+        }
+        
         const data = await res.json();
         
-        if (data.success) {
-          setEmployees(data.data);
-        } else {
-          setError(data.message || 'เกิดข้อผิดพลาดในการดึงข้อมูลพนักงาน');
+        // ตรวจสอบว่ามีข้อผิดพลาดในการเชื่อมต่อกับฐานข้อมูลหรือไม่
+        if (data.connectionError) {
+          setConnectionError(true);
+          setError(data.message || 'ไม่สามารถเชื่อมต่อกับฐานข้อมูลได้ กรุณาลองใหม่อีกครั้ง');
         }
+        
+        setEmployees(data.data || []);
       } catch (error) {
-        setError('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์');
-        console.error(error);
+        console.error('Error fetching employees:', error);
+        setError('ไม่สามารถเชื่อมต่อกับฐานข้อมูลได้ กรุณาลองใหม่อีกครั้ง');
+        setConnectionError(true);
+        setEmployees([]);
       } finally {
         setLoading(false);
       }
@@ -56,7 +82,7 @@ export default function EmployeesPage() {
       const data = await res.json();
       
       if (data.success) {
-        setEmployees(employees.filter(employee => employee._id !== id));
+        setEmployees(employees.filter(employee => employee.id !== id));
       } else {
         alert(data.message || 'เกิดข้อผิดพลาดในการลบข้อมูลพนักงาน');
       }
@@ -67,14 +93,16 @@ export default function EmployeesPage() {
   };
 
   const filteredEmployees = employees.filter(employee => {
+    if (!employee) return false;
+    
     const searchValue = searchTerm.toLowerCase();
     return (
-      employee.firstName.toLowerCase().includes(searchValue) ||
-      employee.lastName.toLowerCase().includes(searchValue) ||
-      employee.employeeId.toLowerCase().includes(searchValue) ||
-      employee.email.toLowerCase().includes(searchValue) ||
-      employee.position.toLowerCase().includes(searchValue) ||
-      employee.department.toLowerCase().includes(searchValue)
+      employee.first_name?.toLowerCase().includes(searchValue) ||
+      employee.last_name?.toLowerCase().includes(searchValue) ||
+      employee.employee_id?.toLowerCase().includes(searchValue) ||
+      employee.email?.toLowerCase().includes(searchValue) ||
+      employee.position?.toLowerCase().includes(searchValue) ||
+      employee.department?.toLowerCase().includes(searchValue)
     );
   });
 
@@ -96,120 +124,95 @@ export default function EmployeesPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto py-6">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">รายการพนักงาน</h1>
-        {session.user.role === 'admin' && (
-          <Link
-            href="/employees/add"
-            className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-md"
-          >
+        <h1 className="text-2xl font-bold text-gray-900">รายการพนักงาน</h1>
+        {session?.user.role === 'admin' && (
+          <Link href="/employees/add" className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg flex items-center">
+            <FiPlus className="mr-2" />
             เพิ่มพนักงาน
           </Link>
         )}
       </div>
       
-      {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-          {error}
-        </div>
+      {connectionError ? (
+        <ConnectionErrorMessage />
+      ) : error && (
+        <ErrorMessage message={error} type="error" />
       )}
       
-      <div className="mb-4">
-        <input
-          type="text"
-          placeholder="ค้นหาพนักงาน..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
+      <div className="mb-6">
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="ค้นหาพนักงาน..."
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <FiSearch className="absolute right-3 top-3 text-gray-400" />
+        </div>
       </div>
       
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                รหัสพนักงาน
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                ชื่อ-นามสกุล
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                ตำแหน่ง
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                แผนก
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                อีเมล
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                สถานะ
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                จัดการ
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {filteredEmployees.length > 0 ? (
-              filteredEmployees.map((employee) => (
-                <tr key={employee._id}>
+      {loading ? (
+        <div className="text-center py-10">
+          <div className="spinner-border animate-spin inline-block w-8 h-8 border-4 rounded-full border-blue-300 border-t-blue-600" role="status">
+            <span className="visually-hidden">กำลังโหลด...</span>
+          </div>
+          <p className="mt-2 text-gray-600">กำลังโหลดข้อมูล...</p>
+        </div>
+      ) : employees.length > 0 ? (
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">รหัสพนักงาน</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ชื่อ-นามสกุล</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ตำแหน่ง</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">แผนก</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">อีเมล</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">สถานะ</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">จัดการ</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredEmployees.map((employee) => (
+                <tr key={employee.id}>
+                  <td className="px-6 py-4 whitespace-nowrap">{employee.employee_id}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">{`${employee.first_name} ${employee.last_name}`}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">{employee.position}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">{employee.department}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">{employee.email}</td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {employee.employeeId}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {employee.firstName} {employee.lastName}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {employee.position}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {employee.department}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {employee.email}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        employee.isActive
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}
-                    >
-                      {employee.isActive ? 'ทำงาน' : 'ลาออก'}
+                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${employee.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                      {employee.is_active ? 'ใช้งาน' : 'ไม่ใช้งาน'}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <Link
-                      href={`/employees/${employee._id}`}
-                      className="text-blue-600 hover:text-blue-900 mr-4"
-                    >
-                      ดูข้อมูล
-                    </Link>
-                    {session.user.role === 'admin' && (
-                      <button
-                        onClick={() => handleDelete(employee._id)}
-                        className="text-red-600 hover:text-red-900"
-                      >
-                        ลบ
-                      </button>
-                    )}
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <div className="flex space-x-2">
+                      <Link href={`/employees/${employee.id}/edit`} className="text-blue-600 hover:text-blue-900">
+                        <FiEdit className="h-5 w-5" />
+                      </Link>
+                      {session?.user.role === 'admin' && (
+                        <button
+                          onClick={() => handleDelete(employee.id)}
+                          className="text-red-600 hover:text-red-900"
+                        >
+                          <FiTrash2 className="h-5 w-5" />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="7" className="px-6 py-4 text-center">
-                  ไม่พบข้อมูลพนักงาน
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="text-center py-10 bg-white rounded-lg shadow">
+          <p className="text-gray-500">ไม่พบข้อมูลพนักงาน</p>
+        </div>
+      )}
     </div>
   );
 } 

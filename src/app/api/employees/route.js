@@ -1,19 +1,31 @@
 import { NextResponse } from 'next/server';
-import connectDB from '../../../lib/db';
-import Employee from '../../../models/Employee';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../lib/auth';
+import { getEmployees, createEmployee } from '../../../lib/db-postgres';
 
 // GET - ดึงข้อมูลพนักงานทั้งหมด
 export async function GET() {
   try {
-    await connectDB();
+    // ดึงข้อมูลพนักงานจาก Postgres
+    const result = await getEmployees();
     
-    const employees = await Employee.find({}).select('-password');
+    if (!result.success) {
+      return NextResponse.json({ 
+        success: false, 
+        message: result.message || 'เกิดข้อผิดพลาดในการดึงข้อมูลพนักงาน',
+        connectionError: true
+      }, { status: 500 });
+    }
     
-    return NextResponse.json({ success: true, data: employees }, { status: 200 });
+    return NextResponse.json({ success: true, data: result.data }, { status: 200 });
   } catch (error) {
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    console.error('Error in GET /api/employees:', error);
+    return NextResponse.json({ 
+      success: false, 
+      message: 'เกิดข้อผิดพลาดในการดึงข้อมูลพนักงาน',
+      error: error.message,
+      connectionError: true
+    }, { status: 500 });
   }
 }
 
@@ -30,29 +42,24 @@ export async function POST(request) {
       );
     }
     
-    await connectDB();
-    
     const data = await request.json();
     
-    // ตรวจสอบว่ามีอีเมลหรือรหัสพนักงานซ้ำหรือไม่
-    const existingEmployee = await Employee.findOne({
-      $or: [{ email: data.email }, { employeeId: data.employeeId }]
-    });
+    // เพิ่มข้อมูลพนักงานใน Postgres
+    const result = await createEmployee(data);
     
-    if (existingEmployee) {
+    if (!result.success) {
       return NextResponse.json(
-        { success: false, message: 'อีเมลหรือรหัสพนักงานนี้มีอยู่ในระบบแล้ว' },
+        { success: false, message: result.message || result.error || 'เกิดข้อผิดพลาดในการเพิ่มข้อมูลพนักงาน' },
         { status: 400 }
       );
     }
     
-    const employee = await Employee.create(data);
-    
     return NextResponse.json(
-      { success: true, data: employee },
+      { success: true, data: result.data },
       { status: 201 }
     );
   } catch (error) {
+    console.error('Error in POST /api/employees:', error);
     return NextResponse.json(
       { success: false, message: error.message },
       { status: 500 }

@@ -1,26 +1,37 @@
 import { NextResponse } from 'next/server';
-import connectDB from '../../../../lib/db';
-import Employee from '../../../../models/Employee';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../../../../lib/auth';
+import { getEmployeeById, updateEmployee, deleteEmployee } from '../../../../lib/db-postgres';
 
 // GET - ดึงข้อมูลพนักงานตาม ID
 export async function GET(request, { params }) {
   try {
-    await connectDB();
+    const session = await getServerSession(authOptions);
     
-    const employee = await Employee.findById(params.id).select('-password');
+    if (!session) {
+      return NextResponse.json({ message: 'ไม่ได้รับอนุญาต' }, { status: 401 });
+    }
     
-    if (!employee) {
+    // ดึงค่า id จาก params
+    const id = params.id;
+    
+    // ดึงข้อมูลพนักงานจาก Postgres
+    const result = await getEmployeeById(id);
+    
+    if (!result.success) {
       return NextResponse.json(
-        { success: false, message: 'ไม่พบข้อมูลพนักงาน' },
+        { message: result.message || 'ไม่พบข้อมูลพนักงาน' },
         { status: 404 }
       );
     }
     
-    return NextResponse.json({ success: true, data: employee }, { status: 200 });
+    return NextResponse.json({ success: true, data: result.data });
   } catch (error) {
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    console.error('Error fetching employee:', error);
+    return NextResponse.json(
+      { message: 'เกิดข้อผิดพลาดในการดึงข้อมูลพนักงาน', error: error.message },
+      { status: 500 }
+    );
   }
 }
 
@@ -37,56 +48,26 @@ export async function PUT(request, { params }) {
       );
     }
     
-    await connectDB();
-    
+    const id = params.id;
     const data = await request.json();
     
-    // ตรวจสอบว่ามีอีเมลซ้ำหรือไม่
-    if (data.email) {
-      const existingEmployee = await Employee.findOne({
-        email: data.email,
-        _id: { $ne: params.id }
-      });
-      
-      if (existingEmployee) {
-        return NextResponse.json(
-          { success: false, message: 'อีเมลนี้มีอยู่ในระบบแล้ว' },
-          { status: 400 }
-        );
-      }
-    }
+    // อัปเดตข้อมูลพนักงานใน Postgres
+    const result = await updateEmployee(id, data);
     
-    // ตรวจสอบว่ามีรหัสพนักงานซ้ำหรือไม่
-    if (data.employeeId) {
-      const existingEmployee = await Employee.findOne({
-        employeeId: data.employeeId,
-        _id: { $ne: params.id }
-      });
-      
-      if (existingEmployee) {
-        return NextResponse.json(
-          { success: false, message: 'รหัสพนักงานนี้มีอยู่ในระบบแล้ว' },
-          { status: 400 }
-        );
-      }
-    }
-    
-    const employee = await Employee.findByIdAndUpdate(
-      params.id,
-      data,
-      { new: true, runValidators: true }
-    ).select('-password');
-    
-    if (!employee) {
+    if (!result.success) {
       return NextResponse.json(
-        { success: false, message: 'ไม่พบข้อมูลพนักงาน' },
+        { success: false, message: result.message || 'ไม่พบข้อมูลพนักงาน' },
         { status: 404 }
       );
     }
     
-    return NextResponse.json({ success: true, data: employee }, { status: 200 });
+    return NextResponse.json({ success: true, data: result.data }, { status: 200 });
   } catch (error) {
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    console.error('Error updating employee:', error);
+    return NextResponse.json(
+      { success: false, message: error.message },
+      { status: 500 }
+    );
   }
 }
 
@@ -103,19 +84,24 @@ export async function DELETE(request, { params }) {
       );
     }
     
-    await connectDB();
+    const id = params.id;
     
-    const employee = await Employee.findByIdAndDelete(params.id);
+    // ลบข้อมูลพนักงานใน Postgres
+    const result = await deleteEmployee(id);
     
-    if (!employee) {
+    if (!result.success) {
       return NextResponse.json(
-        { success: false, message: 'ไม่พบข้อมูลพนักงาน' },
+        { success: false, message: result.message || 'ไม่พบข้อมูลพนักงาน' },
         { status: 404 }
       );
     }
     
     return NextResponse.json({ success: true, data: {} }, { status: 200 });
   } catch (error) {
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    console.error('Error deleting employee:', error);
+    return NextResponse.json(
+      { success: false, message: error.message },
+      { status: 500 }
+    );
   }
 } 
