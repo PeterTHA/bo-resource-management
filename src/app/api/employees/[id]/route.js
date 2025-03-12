@@ -15,7 +15,7 @@ export async function GET(request, { params }) {
       );
     }
     
-    const id = params.id;
+    const id = params?.id;
     
     // ดึงข้อมูลพนักงานจาก Prisma
     const result = await getEmployeeById(id);

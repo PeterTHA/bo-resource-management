@@ -5,8 +5,40 @@
 
 :root {
   --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
+  --background-start-rgb: 255, 255, 255;
   --background-end-rgb: 255, 255, 255;
+  --primary-color: #0096ff;
+  --secondary-color: #22c55e;
+  --accent-color: #d8a8ff;
+  --text-color: #1f2937;
+  --bg-color: #ffffff;
+  --card-bg-color: #ffffff;
+  --border-color: #e5e7eb;
+  --input-bg-color: #f9fafb;
+  --input-border-color: #d1d5db;
+  --success-color: #36d399;
+  --warning-color: #fbbd23;
+  --error-color: #f87272;
+  --info-color: #3abff8;
+}
+
+.dark {
+  --foreground-rgb: 255, 255, 255;
+  --background-start-rgb: 15, 23, 42;
+  --background-end-rgb: 15, 23, 42;
+  --primary-color: #33abff;
+  --secondary-color: #4ade80;
+  --accent-color: #e4bcff;
+  --text-color: #f3f4f6;
+  --bg-color: #0f172a;
+  --card-bg-color: #1e293b;
+  --border-color: #334155;
+  --input-bg-color: #1e293b;
+  --input-border-color: #475569;
+  --success-color: #86efac;
+  --warning-color: #fcd34d;
+  --error-color: #fca5a5;
+  --info-color: #7dd3fc;
 }
 
 @theme inline {
@@ -25,108 +57,177 @@
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+  color: var(--text-color);
+  background-color: var(--bg-color);
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* ทำให้ตัวหนังสือเป็นสีดำทั้งหมด */
-p, h1, h2, h3, h4, h5, h6, span, div, label, a, button, li {
-  color: #000000 !important;
+/* ปรับปรุงความคมชัดของข้อความในโหมดมืด */
+.dark {
+  color-scheme: dark;
 }
 
-/* ทำให้ input, select, textarea เป็นสีดำ */
-input, select, textarea, .input, .select, .textarea {
-  color: #000000 !important;
-  border-color: #d1d5db !important;
-  background-color: #ffffff !important;
+/* ปรับปรุงการแสดงผลของตาราง */
+table {
+  width: 100%;
+  border-collapse: collapse;
 }
 
-input::placeholder, select::placeholder, textarea::placeholder {
-  color: #6b7280 !important;
+table th {
+  background-color: var(--input-bg-color);
+  color: var(--text-color);
+  font-weight: 600;
+  text-align: left;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-color);
 }
 
-/* ทำให้ input type date เป็นสีดำ */
-input[type="date"], input[type="datetime-local"], input[type="time"] {
-  color: #000000 !important;
+table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-color);
 }
 
-/* ทำให้ dropdown เป็นสีดำ */
-.dropdown-content, .dropdown-content * {
-  color: #000000 !important;
-  background-color: #ffffff !important;
+table tbody tr:hover {
+  background-color: var(--input-bg-color);
 }
 
-/* ทำให้ table เป็นสีดำ */
-table, th, td, tr {
-  color: #000000 !important;
+/* ปรับปรุงการแสดงผลของปุ่ม */
+.btn, button, a.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-weight: 500;
+  transition: all 0.2s;
+  cursor: pointer;
 }
 
-/* ทำให้ card เป็นสีดำ */
-.card, .card-title, .card-body, .card-header, .card-footer {
-  color: #000000 !important;
+.btn-primary, button.btn-primary, a.btn-primary {
+  background-color: var(--primary-color);
+  color: white;
 }
 
-/* ทำให้ modal เป็นสีดำ */
-.modal, .modal-title, .modal-body, .modal-header, .modal-footer {
-  color: #000000 !important;
+.btn-primary:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
 }
 
-/* ทำให้ form เป็นสีดำ */
-.form-label, .form-control, .form-text {
-  color: #000000 !important;
+.btn-secondary, button.btn-secondary, a.btn-secondary {
+  background-color: var(--secondary-color);
+  color: white;
 }
 
-/* ทำให้ button เป็นสีดำ ยกเว้นปุ่มที่มี background สี */
-button:not(.btn-primary):not(.btn-secondary):not(.btn-success):not(.btn-danger):not(.btn-warning):not(.btn-info) {
-  color: #000000 !important;
+.btn-secondary:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
 }
 
-/* ทำให้ link เป็นสีดำ */
-a:not(.btn-primary):not(.btn-secondary):not(.btn-success):not(.btn-danger):not(.btn-warning):not(.btn-info) {
-  color: #000000 !important;
+.btn-outline, button.btn-outline, a.btn-outline {
+  background-color: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-color);
 }
 
-/* ทำให้ select option เป็นสีดำ */
-option {
-  color: #000000 !important;
-  background-color: #ffffff !important;
+.btn-outline:hover {
+  background-color: var(--input-bg-color);
 }
 
-/* ทำให้ datepicker เป็นสีดำ */
-.react-datepicker, .react-datepicker *, .flatpickr-calendar, .flatpickr-calendar * {
-  color: #000000 !important;
+/* ปรับปรุงการแสดงผลของ input */
+input, select, textarea {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--input-border-color);
+  border-radius: 0.375rem;
+  background-color: var(--input-bg-color);
+  color: var(--text-color);
 }
 
-/* ทำให้ checkbox และ radio เป็นสีดำ */
-input[type="checkbox"], input[type="radio"] {
-  border-color: #000000 !important;
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(0, 150, 255, 0.2);
 }
 
-/* ทำให้ tooltip เป็นสีดำ */
-.tooltip, .tooltip * {
-  color: #000000 !important;
+input::placeholder, textarea::placeholder {
+  color: #9ca3af;
 }
 
-/* ทำให้ pagination เป็นสีดำ */
-.pagination, .pagination * {
-  color: #000000 !important;
+/* ปรับปรุงการแสดงผลของการ์ด */
+.card {
+  background-color: var(--card-bg-color);
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
 }
 
-/* ทำให้ breadcrumb เป็นสีดำ */
-.breadcrumb, .breadcrumb * {
-  color: #000000 !important;
+.card-header {
+  padding: 1rem;
+  border-bottom: 1px solid var(--border-color);
 }
 
-/* ทำให้ alert เป็นสีดำ */
-.alert:not(.alert-primary):not(.alert-secondary):not(.alert-success):not(.alert-danger):not(.alert-warning):not(.alert-info), 
-.alert:not(.alert-primary):not(.alert-secondary):not(.alert-success):not(.alert-danger):not(.alert-warning):not(.alert-info) * {
-  color: #000000 !important;
+.card-body {
+  padding: 1rem;
+}
+
+.card-footer {
+  padding: 1rem;
+  border-top: 1px solid var(--border-color);
+}
+
+/* ปรับปรุงการแสดงผลของ badge */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.badge-primary {
+  background-color: rgba(0, 150, 255, 0.1);
+  color: var(--primary-color);
+}
+
+.badge-success {
+  background-color: rgba(34, 197, 94, 0.1);
+  color: var(--success-color);
+}
+
+.badge-warning {
+  background-color: rgba(251, 189, 35, 0.1);
+  color: var(--warning-color);
+}
+
+.badge-error {
+  background-color: rgba(248, 114, 114, 0.1);
+  color: var(--error-color);
+}
+
+/* ปรับปรุงการแสดงผลของ spinner */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* ปรับปรุงการแสดงผลของ visually-hidden */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }
 
 /* Responsive Design */
@@ -180,14 +281,14 @@ input[type="checkbox"], input[type="radio"] {
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--input-bg-color);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #a8d8ff;
+  background: var(--border-color);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #0096ff;
+  background: var(--primary-color);
 }

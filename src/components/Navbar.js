@@ -1,232 +1,173 @@
 'use client';
 
-import { useState } from 'react';
-import { useSession, signOut } from 'next-auth/react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FiMenu, FiX, FiUser, FiLogOut, FiHome, FiUsers, FiCalendar, FiClock, FiBarChart2 } from 'react-icons/fi';
+import { useSession, signOut } from 'next-auth/react';
 import ThemeToggle from './ThemeToggle';
+import { FiMenu, FiX, FiUser, FiLogOut, FiHome, FiUsers, FiCalendar, FiClock, FiBarChart2 } from 'react-icons/fi';
 
 export default function Navbar() {
   const { data: session } = useSession();
   const pathname = usePathname();
-  const [isOpen, setIsOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
-  const toggleMenu = () => {
-    setIsOpen(!isOpen);
+  // ปิดเมนูเมื่อคลิกนอกเมนู
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (isMenuOpen && !event.target.closest('#mobile-menu')) {
+        setIsMenuOpen(false);
+      }
+      if (isProfileOpen && !event.target.closest('#profile-menu')) {
+        setIsProfileOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isMenuOpen, isProfileOpen]);
+
+  // ปิดเมนูเมื่อเปลี่ยนหน้า
+  useEffect(() => {
+    setIsMenuOpen(false);
+    setIsProfileOpen(false);
+  }, [pathname]);
+
+  const handleSignOut = async () => {
+    await signOut({ callbackUrl: '/login' });
   };
 
-  const closeMenu = () => {
-    setIsOpen(false);
-  };
-
-  const handleSignOut = () => {
-    signOut({ callbackUrl: '/login' });
-  };
-
-  const isActive = (path) => {
-    return pathname === path;
-  };
-
-  if (!session) {
-    return null;
-  }
+  const navLinks = [
+    { href: '/dashboard', label: 'แดชบอร์ด', icon: <FiHome className="w-5 h-5" /> },
+    { href: '/employees', label: 'พนักงาน', icon: <FiUsers className="w-5 h-5" /> },
+    { href: '/leaves', label: 'การลา', icon: <FiCalendar className="w-5 h-5" /> },
+    { href: '/overtime', label: 'ทำงานล่วงเวลา', icon: <FiClock className="w-5 h-5" /> },
+    { href: '/reports', label: 'รายงาน', icon: <FiBarChart2 className="w-5 h-5" /> },
+    { href: '/employee-calendar', label: 'ปฏิทินพนักงาน', icon: <FiCalendar className="w-5 h-5" /> },
+  ];
 
   return (
-    <nav className="bg-white dark:bg-gray-800 shadow-md">
+    <nav className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
-          <div className="flex">
-            <div className="flex-shrink-0 flex items-center">
-              <Link href="/dashboard" className="text-xl font-bold text-blue-600 dark:text-blue-400">
-                BO Resource
-              </Link>
-            </div>
-            <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-              <Link
-                href="/dashboard"
-                className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
-                  isActive('/dashboard')
-                    ? 'border-blue-500 text-gray-900 dark:text-white'
-                    : 'border-transparent text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300'
-                }`}
-              >
-                <FiHome className="mr-1" /> หน้าหลัก
-              </Link>
-              <Link
-                href="/employees"
-                className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
-                  isActive('/employees')
-                    ? 'border-blue-500 text-gray-900 dark:text-white'
-                    : 'border-transparent text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300'
-                }`}
-              >
-                <FiUsers className="mr-1" /> พนักงาน
-              </Link>
-              <Link
-                href="/leaves"
-                className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
-                  isActive('/leaves')
-                    ? 'border-blue-500 text-gray-900 dark:text-white'
-                    : 'border-transparent text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300'
-                }`}
-              >
-                <FiCalendar className="mr-1" /> การลา
-              </Link>
-              <Link
-                href="/overtime"
-                className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
-                  isActive('/overtime')
-                    ? 'border-blue-500 text-gray-900 dark:text-white'
-                    : 'border-transparent text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300'
-                }`}
-              >
-                <FiClock className="mr-1" /> ทำงานล่วงเวลา
-              </Link>
-              {(session.user.role === 'admin' || session.user.role === 'manager') && (
-                <Link
-                  href="/reports"
-                  className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
-                    isActive('/reports')
-                      ? 'border-blue-500 text-gray-900 dark:text-white'
-                      : 'border-transparent text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <FiBarChart2 className="mr-1" /> รายงาน
-                </Link>
-              )}
-            </div>
-          </div>
-          <div className="hidden sm:ml-6 sm:flex sm:items-center sm:space-x-4">
-            <ThemeToggle />
-            <Link
-              href="/profile"
-              className="text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
-            >
-              <FiUser className="h-6 w-6" />
+          <div className="flex items-center">
+            <Link href="/" className="flex-shrink-0 flex items-center">
+              <span className="text-xl font-bold text-primary-600 dark:text-primary-400">BO Resource</span>
             </Link>
-            <button
-              onClick={handleSignOut}
-              className="text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
-            >
-              <FiLogOut className="h-6 w-6" />
-            </button>
           </div>
-          <div className="-mr-2 flex items-center sm:hidden">
+
+          {/* Desktop Navigation */}
+          <div className="hidden md:flex md:items-center md:space-x-4">
+            {session && navLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={`px-3 py-2 rounded-md text-sm font-medium flex items-center transition-colors duration-200 ${
+                  pathname === link.href
+                    ? 'bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400'
+                    : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
+                }`}
+              >
+                <span className="mr-2">{link.icon}</span>
+                {link.label}
+              </Link>
+            ))}
+          </div>
+
+          <div className="flex items-center space-x-4">
             <ThemeToggle />
-            <button
-              onClick={toggleMenu}
-              className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 ml-2"
-            >
-              <span className="sr-only">เปิดเมนู</span>
-              {isOpen ? <FiX className="block h-6 w-6" /> : <FiMenu className="block h-6 w-6" />}
-            </button>
+
+            {session ? (
+              <div className="relative" id="profile-menu">
+                <button
+                  onClick={() => setIsProfileOpen(!isProfileOpen)}
+                  className="flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 dark:focus:ring-offset-gray-800"
+                >
+                  <span className="sr-only">เปิดเมนูผู้ใช้</span>
+                  <div className="h-8 w-8 rounded-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center text-primary-600 dark:text-primary-300">
+                    {session?.user?.firstName?.charAt(0) || session?.user?.name?.charAt(0) || <FiUser />}
+                  </div>
+                </button>
+
+                {isProfileOpen && (
+                  <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 divide-y divide-gray-100 dark:divide-gray-700">
+                    <div className="py-1">
+                      <div className="px-4 py-2">
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                          {session.user.firstName} {session.user.lastName}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                          {session.user.email}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="py-1">
+                      <Link
+                        href="/profile"
+                        className="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      >
+                        <FiUser className="mr-3 h-4 w-4" />
+                        โปรไฟล์
+                      </Link>
+                      <button
+                        onClick={handleSignOut}
+                        className="flex w-full items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      >
+                        <FiLogOut className="mr-3 h-4 w-4" />
+                        ออกจากระบบ
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <Link
+                href="/login"
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+              >
+                เข้าสู่ระบบ
+              </Link>
+            )}
+
+            {/* Mobile menu button */}
+            <div className="flex md:hidden">
+              <button
+                onClick={() => setIsMenuOpen(!isMenuOpen)}
+                className="inline-flex items-center justify-center p-2 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500"
+              >
+                <span className="sr-only">เปิดเมนูหลัก</span>
+                {isMenuOpen ? (
+                  <FiX className="block h-6 w-6" />
+                ) : (
+                  <FiMenu className="block h-6 w-6" />
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      {isOpen && (
-        <div className="sm:hidden">
-          <div className="pt-2 pb-3 space-y-1">
-            <Link
-              href="/dashboard"
-              className={`block pl-3 pr-4 py-2 border-l-4 text-base font-medium ${
-                isActive('/dashboard')
-                  ? 'border-blue-500 text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-gray-700'
-                  : 'border-transparent text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-gray-300 hover:text-gray-700 dark:hover:text-gray-200'
-              }`}
-              onClick={closeMenu}
-            >
-              <div className="flex items-center">
-                <FiHome className="mr-2" /> หน้าหลัก
-              </div>
-            </Link>
-            <Link
-              href="/employees"
-              className={`block pl-3 pr-4 py-2 border-l-4 text-base font-medium ${
-                isActive('/employees')
-                  ? 'border-blue-500 text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-gray-700'
-                  : 'border-transparent text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-gray-300 hover:text-gray-700 dark:hover:text-gray-200'
-              }`}
-              onClick={closeMenu}
-            >
-              <div className="flex items-center">
-                <FiUsers className="mr-2" /> พนักงาน
-              </div>
-            </Link>
-            <Link
-              href="/leaves"
-              className={`block pl-3 pr-4 py-2 border-l-4 text-base font-medium ${
-                isActive('/leaves')
-                  ? 'border-blue-500 text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-gray-700'
-                  : 'border-transparent text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-gray-300 hover:text-gray-700 dark:hover:text-gray-200'
-              }`}
-              onClick={closeMenu}
-            >
-              <div className="flex items-center">
-                <FiCalendar className="mr-2" /> การลา
-              </div>
-            </Link>
-            <Link
-              href="/overtime"
-              className={`block pl-3 pr-4 py-2 border-l-4 text-base font-medium ${
-                isActive('/overtime')
-                  ? 'border-blue-500 text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-gray-700'
-                  : 'border-transparent text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-gray-300 hover:text-gray-700 dark:hover:text-gray-200'
-              }`}
-              onClick={closeMenu}
-            >
-              <div className="flex items-center">
-                <FiClock className="mr-2" /> ทำงานล่วงเวลา
-              </div>
-            </Link>
-            {(session.user.role === 'admin' || session.user.role === 'manager') && (
+      {/* Mobile menu */}
+      {isMenuOpen && (
+        <div className="md:hidden" id="mobile-menu">
+          <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+            {session && navLinks.map((link) => (
               <Link
-                href="/reports"
-                className={`block pl-3 pr-4 py-2 border-l-4 text-base font-medium ${
-                  isActive('/reports')
-                    ? 'border-blue-500 text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-gray-700'
-                    : 'border-transparent text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-gray-300 hover:text-gray-700 dark:hover:text-gray-200'
+                key={link.href}
+                href={link.href}
+                className={`block px-3 py-2 rounded-md text-base font-medium flex items-center ${
+                  pathname === link.href
+                    ? 'bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400'
+                    : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
                 }`}
-                onClick={closeMenu}
               >
-                <div className="flex items-center">
-                  <FiBarChart2 className="mr-2" /> รายงาน
-                </div>
+                <span className="mr-3">{link.icon}</span>
+                {link.label}
               </Link>
-            )}
-          </div>
-          <div className="pt-4 pb-3 border-t border-gray-200 dark:border-gray-700">
-            <div className="flex items-center px-4">
-              <div className="flex-shrink-0">
-                <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-300">
-                  {session.user.name ? session.user.name.charAt(0).toUpperCase() : 'U'}
-                </div>
-              </div>
-              <div className="ml-3">
-                <div className="text-base font-medium text-gray-800 dark:text-gray-200">{session.user.name}</div>
-                <div className="text-sm font-medium text-gray-500 dark:text-gray-400">{session.user.email}</div>
-              </div>
-            </div>
-            <div className="mt-3 space-y-1">
-              <Link
-                href="/profile"
-                className="block px-4 py-2 text-base font-medium text-gray-500 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                onClick={closeMenu}
-              >
-                <div className="flex items-center">
-                  <FiUser className="mr-2" /> โปรไฟล์
-                </div>
-              </Link>
-              <button
-                onClick={handleSignOut}
-                className="block w-full text-left px-4 py-2 text-base font-medium text-gray-500 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-              >
-                <div className="flex items-center">
-                  <FiLogOut className="mr-2" /> ออกจากระบบ
-                </div>
-              </button>
-            </div>
+            ))}
           </div>
         </div>
       )}
