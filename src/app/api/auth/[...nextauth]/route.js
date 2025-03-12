@@ -1,6 +1,6 @@
 import NextAuth from 'next-auth';
-import { authOptionsPostgres } from '../../../../lib/auth-postgres';
+import { authOptions } from '../../../../lib/auth';
 
-const handler = NextAuth(authOptionsPostgres);
+const handler = NextAuth(authOptions);
 
 export { handler as GET, handler as POST }; 

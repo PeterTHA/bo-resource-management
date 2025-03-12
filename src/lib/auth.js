@@ -1,7 +1,7 @@
 import { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
-import { getEmployeeByEmail } from './db-postgres';
+import { getEmployeeByEmail } from './db-prisma';
 
 export const authOptions = {
   providers: [
@@ -17,7 +17,7 @@ export const authOptions = {
             return null;
           }
 
-          // ดึงข้อมูลพนักงานจาก Postgres
+          // ดึงข้อมูลพนักงานจาก Prisma
           const result = await getEmployeeByEmail(credentials.email);
           
           if (!result.success || !result.data) {
@@ -39,11 +39,11 @@ export const authOptions = {
           return {
             id: user.id.toString(),
             email: user.email,
-            name: `${user.first_name} ${user.last_name}`,
-            firstName: user.first_name,
-            lastName: user.last_name,
+            name: `${user.firstName} ${user.lastName}`,
+            firstName: user.firstName,
+            lastName: user.lastName,
             role: user.role,
-            employeeId: user.employee_id,
+            employeeId: user.employeeId,
             department: user.department,
             position: user.position,
             image: user.image || null

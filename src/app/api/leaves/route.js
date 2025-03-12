@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../lib/auth';
-import { getLeaves, createLeave } from '../../../lib/db-postgres';
+import { getLeaves, createLeave } from '../../../lib/db-prisma';
 
 // GET - ดึงข้อมูลการลาทั้งหมด
 export async function GET(request) {
@@ -18,7 +18,7 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const employeeId = searchParams.get('employeeId');
     
-    // ดึงข้อมูลการลาจาก Postgres
+    // ดึงข้อมูลการลาจาก Prisma
     let result;
     
     // ถ้าเป็น admin หรือ manager สามารถดูข้อมูลการลาทั้งหมดได้
@@ -33,7 +33,7 @@ export async function GET(request) {
     
     if (!result.success) {
       return NextResponse.json(
-        { success: false, message: result.message || 'เกิดข้อผิดพลาดในการดึงข้อมูลการลา', connectionError: true },
+        { success: false, message: result.message || 'เกิดข้อผิดพลาดในการดึงข้อมูลการลา', connectionError: result.connectionError },
         { status: 500 }
       );
     }
@@ -42,7 +42,7 @@ export async function GET(request) {
   } catch (error) {
     console.error('Error in GET /api/leaves:', error);
     return NextResponse.json(
-      { success: false, message: error.message, connectionError: true },
+      { success: false, message: error.message },
       { status: 500 }
     );
   }
@@ -62,17 +62,25 @@ export async function POST(request) {
     
     const data = await request.json();
     
-    // ถ้าเป็น employee ให้ใช้ ID ของตัวเอง
-    if (session.user.role === 'employee') {
-      data.employee = session.user.id;
+    // ตรวจสอบข้อมูลที่จำเป็น
+    if (!data.leaveType || !data.startDate || !data.endDate || !data.reason) {
+      return NextResponse.json(
+        { success: false, message: 'กรุณากรอกข้อมูลให้ครบถ้วน' },
+        { status: 400 }
+      );
     }
     
-    // เพิ่มข้อมูลการลาใน Postgres
+    // ถ้าเป็น employee ให้ใช้ ID ของตัวเอง
+    if (session.user.role === 'employee') {
+      data.employeeId = session.user.id;
+    }
+    
+    // เพิ่มข้อมูลการลาใน Prisma
     const result = await createLeave(data);
     
     if (!result.success) {
       return NextResponse.json(
-        { success: false, message: result.message || result.error || 'เกิดข้อผิดพลาดในการเพิ่มข้อมูลการลา' },
+        { success: false, message: result.message || 'เกิดข้อผิดพลาดในการเพิ่มข้อมูลการลา' },
         { status: 400 }
       );
     }

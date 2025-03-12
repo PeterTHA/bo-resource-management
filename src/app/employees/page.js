@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { FiPlus, FiEdit, FiTrash2, FiSearch } from 'react-icons/fi';
+import { FiEdit, FiTrash2, FiPlus, FiSearch, FiUser, FiUsers } from 'react-icons/fi';
 import { Card, CardHeader, CardContent } from '../../components/ui/Card';
 import ErrorMessage, { ConnectionErrorMessage } from '../../components/ui/ErrorMessage';
 
@@ -124,15 +124,17 @@ export default function EmployeesPage() {
   }
 
   return (
-    <div className="container mx-auto py-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">รายการพนักงาน</h1>
-        {session?.user.role === 'admin' && (
-          <Link href="/employees/add" className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg flex items-center">
-            <FiPlus className="mr-2" />
-            เพิ่มพนักงาน
-          </Link>
-        )}
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center">
+          <FiUsers className="mr-2 text-purple-600" /> รายการพนักงาน
+        </h1>
+        <Link
+          href="/employees/add"
+          className="bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-lg flex items-center transition-all duration-200 shadow-md hover:shadow-lg"
+        >
+          <FiPlus className="mr-2" /> เพิ่มพนักงาน
+        </Link>
       </div>
       
       {connectionError ? (
@@ -142,75 +144,106 @@ export default function EmployeesPage() {
       )}
       
       <div className="mb-6">
-        <div className="relative">
-          <input
-            type="text"
-            placeholder="ค้นหาพนักงาน..."
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <FiSearch className="absolute right-3 top-3 text-gray-400" />
+        <div className="bg-white p-4 rounded-lg shadow-sm">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="ค้นหาพนักงาน..."
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            <FiSearch className="absolute left-3 top-3 text-gray-400" />
+          </div>
         </div>
       </div>
       
       {loading ? (
         <div className="text-center py-10">
-          <div className="spinner-border animate-spin inline-block w-8 h-8 border-4 rounded-full border-blue-300 border-t-blue-600" role="status">
+          <div className="spinner-border animate-spin inline-block w-8 h-8 border-4 rounded-full border-purple-300 border-t-purple-600" role="status">
             <span className="visually-hidden">กำลังโหลด...</span>
           </div>
           <p className="mt-2 text-gray-600">กำลังโหลดข้อมูล...</p>
         </div>
       ) : employees.length > 0 ? (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">รหัสพนักงาน</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ชื่อ-นามสกุล</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ตำแหน่ง</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">แผนก</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">อีเมล</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">สถานะ</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">จัดการ</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredEmployees.map((employee) => (
-                <tr key={employee.id}>
-                  <td className="px-6 py-4 whitespace-nowrap">{employee.employee_id}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{`${employee.first_name} ${employee.last_name}`}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{employee.position}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{employee.department}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{employee.email}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${employee.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                      {employee.is_active ? 'ใช้งาน' : 'ไม่ใช้งาน'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex space-x-2">
-                      <Link href={`/employees/${employee.id}/edit`} className="text-blue-600 hover:text-blue-900">
-                        <FiEdit className="h-5 w-5" />
-                      </Link>
-                      {session?.user.role === 'admin' && (
-                        <button
-                          onClick={() => handleDelete(employee.id)}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          <FiTrash2 className="h-5 w-5" />
-                        </button>
-                      )}
-                    </div>
-                  </td>
+        <div className="bg-white rounded-xl shadow-md overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">รหัสพนักงาน</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ชื่อ-นามสกุล</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ตำแหน่ง</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">แผนก</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">อีเมล</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">สถานะ</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">จัดการ</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredEmployees.map((employee) => (
+                  <tr key={employee.id} className="hover:bg-gray-50 transition-colors duration-150">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{employee.employee_id}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0 h-10 w-10 bg-purple-100 rounded-full flex items-center justify-center">
+                          <span className="text-purple-600 font-medium">
+                            {employee.first_name.charAt(0)}{employee.last_name.charAt(0)}
+                          </span>
+                        </div>
+                        <div className="ml-4">
+                          <div className="text-sm font-medium text-gray-900">
+                            {`${employee.first_name} ${employee.last_name}`}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            {employee.role === 'admin' ? 'ผู้ดูแลระบบ' : employee.role === 'manager' ? 'ผู้จัดการ' : 'พนักงาน'}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{employee.position}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{employee.department}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{employee.email}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${employee.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                        {employee.is_active ? 'ใช้งาน' : 'ไม่ใช้งาน'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex space-x-2">
+                        <Link href={`/employees/${employee.id}/edit`} className="text-blue-600 hover:text-blue-900 p-1 rounded-full hover:bg-blue-50 transition-colors duration-200" title="แก้ไข">
+                          <FiEdit className="h-5 w-5" />
+                        </Link>
+                        {session?.user.role === 'admin' && (
+                          <button
+                            onClick={() => handleDelete(employee.id)}
+                            className="text-red-600 hover:text-red-900 p-1 rounded-full hover:bg-red-50 transition-colors duration-200"
+                            title="ลบ"
+                          >
+                            <FiTrash2 className="h-5 w-5" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : (
-        <div className="text-center py-10 bg-white rounded-lg shadow">
-          <p className="text-gray-500">ไม่พบข้อมูลพนักงาน</p>
+        <div className="bg-white rounded-xl shadow-md p-10 text-center">
+          <div className="flex flex-col items-center justify-center">
+            <FiUser className="w-16 h-16 text-gray-400 mb-4" />
+            <p className="text-lg font-medium text-gray-900">ไม่พบข้อมูลพนักงาน</p>
+            <p className="text-sm text-gray-500 mt-1">เพิ่มพนักงานใหม่เพื่อเริ่มต้นใช้งานระบบ</p>
+            <Link
+              href="/employees/add"
+              className="mt-4 bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-lg flex items-center transition-all duration-200"
+            >
+              <FiPlus className="mr-2" /> เพิ่มพนักงาน
+            </Link>
+          </div>
         </div>
       )}
     </div>

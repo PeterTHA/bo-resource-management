@@ -1,0 +1,79 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("POSTGRES_PRISMA_URL")
+}
+
+// โมเดลพนักงาน
+model Employee {
+  id            String     @id @default(uuid())
+  employeeId    String     @unique @map("employee_id")
+  firstName     String     @map("first_name")
+  lastName      String     @map("last_name")
+  email         String     @unique
+  password      String
+  position      String
+  department    String
+  hireDate      DateTime   @map("hire_date")
+  role          String     @default("employee")
+  isActive      Boolean    @default(true) @map("is_active")
+  image         String?
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+  leaves        Leave[]    @relation("EmployeeLeaves")
+  approvedLeaves Leave[]   @relation("LeaveApprover")
+  overtimes     Overtime[] @relation("EmployeeOvertimes")
+  approvedOvertimes Overtime[] @relation("OvertimeApprover")
+
+  @@map("employees")
+}
+
+// โมเดลการลา
+model Leave {
+  id          String    @id @default(uuid())
+  employeeId  String    @map("employee_id")
+  employee    Employee  @relation("EmployeeLeaves", fields: [employeeId], references: [id])
+  leaveType   String    @map("leave_type")
+  startDate   DateTime  @map("start_date")
+  endDate     DateTime  @map("end_date")
+  reason      String
+  status      String    @default("รออนุมัติ")
+  approvedById String?  @map("approved_by_id")
+  approvedBy  Employee? @relation("LeaveApprover", fields: [approvedById], references: [id])
+  approvedAt  DateTime? @map("approved_at")
+  comment     String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@map("leaves")
+}
+
+// โมเดลการทำงานล่วงเวลา
+model Overtime {
+  id          String    @id @default(uuid())
+  employeeId  String    @map("employee_id")
+  employee    Employee  @relation("EmployeeOvertimes", fields: [employeeId], references: [id])
+  date        DateTime
+  startTime   String    @map("start_time")
+  endTime     String    @map("end_time")
+  totalHours  Float     @map("total_hours")
+  reason      String
+  status      String    @default("รออนุมัติ")
+  approvedById String?  @map("approved_by_id")
+  approvedBy  Employee? @relation("OvertimeApprover", fields: [approvedById], references: [id])
+  approvedAt  DateTime? @map("approved_at")
+  comment     String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@map("overtimes")
+}

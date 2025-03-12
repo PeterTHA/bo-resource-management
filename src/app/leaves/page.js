@@ -5,6 +5,9 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
+// เปลี่ยนจาก Heroicons เป็น react-icons
+import { FiCheckCircle, FiXCircle, FiTrash2, FiPlus, FiFilter } from 'react-icons/fi';
+
 export default function LeavesPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -127,165 +130,203 @@ export default function LeavesPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">รายการการลา</h1>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-800">รายการการลา</h1>
         <Link
           href="/leaves/add"
-          className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-md"
+          className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg flex items-center transition-all duration-200 shadow-md hover:shadow-lg"
         >
-          ขอลางาน
+          <FiPlus className="mr-2" /> ขอลางาน
         </Link>
       </div>
       
       {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-          {error}
+        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md mb-6 shadow-sm">
+          <div className="flex items-center">
+            <FiXCircle className="h-5 w-5 mr-2 text-red-500" />
+            <p>{error}</p>
+          </div>
         </div>
       )}
       
-      <div className="mb-4">
-        <div className="flex space-x-2">
-          <button
-            onClick={() => setFilter('all')}
-            className={`px-4 py-2 rounded-md ${
-              filter === 'all'
-                ? 'bg-blue-500 text-white'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-          >
-            ทั้งหมด
-          </button>
-          <button
-            onClick={() => setFilter('pending')}
-            className={`px-4 py-2 rounded-md ${
-              filter === 'pending'
-                ? 'bg-yellow-500 text-white'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-          >
-            รออนุมัติ
-          </button>
-          <button
-            onClick={() => setFilter('approved')}
-            className={`px-4 py-2 rounded-md ${
-              filter === 'approved'
-                ? 'bg-green-500 text-white'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-          >
-            อนุมัติแล้ว
-          </button>
-          <button
-            onClick={() => setFilter('rejected')}
-            className={`px-4 py-2 rounded-md ${
-              filter === 'rejected'
-                ? 'bg-red-500 text-white'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-          >
-            ไม่อนุมัติ
-          </button>
+      <div className="mb-6">
+        <div className="bg-white p-4 rounded-lg shadow-sm">
+          <h2 className="text-lg font-semibold text-gray-700 mb-3 flex items-center">
+            <FiFilter className="mr-2" /> กรองข้อมูล
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setFilter('all')}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                filter === 'all'
+                  ? 'bg-blue-600 text-white shadow-md'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              ทั้งหมด
+            </button>
+            <button
+              onClick={() => setFilter('pending')}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                filter === 'pending'
+                  ? 'bg-yellow-500 text-white shadow-md'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              รออนุมัติ
+            </button>
+            <button
+              onClick={() => setFilter('approved')}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                filter === 'approved'
+                  ? 'bg-green-600 text-white shadow-md'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              อนุมัติแล้ว
+            </button>
+            <button
+              onClick={() => setFilter('rejected')}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                filter === 'rejected'
+                  ? 'bg-red-600 text-white shadow-md'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              ไม่อนุมัติ
+            </button>
+          </div>
         </div>
       </div>
       
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                พนักงาน
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                ประเภทการลา
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                วันที่ลา
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                จำนวนวัน
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                เหตุผล
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                สถานะ
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                จัดการ
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {filteredLeaves.length > 0 ? (
-              filteredLeaves.map((leave) => (
-                <tr key={leave._id}>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {leave.employee.firstName} {leave.employee.lastName}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {leave.leaveType}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {formatDate(leave.startDate)} - {formatDate(leave.endDate)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {Math.ceil((new Date(leave.endDate) - new Date(leave.startDate)) / (1000 * 60 * 60 * 24)) + 1} วัน
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {leave.reason}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        leave.status === 'รออนุมัติ'
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : leave.status === 'อนุมัติ'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}
-                    >
-                      {leave.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    {(session.user.role === 'admin' || session.user.role === 'manager') && leave.status === 'รออนุมัติ' && (
-                      <>
-                        <button
-                          onClick={() => handleApprove(leave._id, 'อนุมัติ')}
-                          className="text-green-600 hover:text-green-900 mr-2"
-                        >
-                          อนุมัติ
-                        </button>
-                        <button
-                          onClick={() => handleApprove(leave._id, 'ไม่อนุมัติ')}
-                          className="text-red-600 hover:text-red-900 mr-2"
-                        >
-                          ไม่อนุมัติ
-                        </button>
-                      </>
-                    )}
-                    
-                    {(session.user.role === 'admin' || 
-                      (session.user.id === leave.employee._id && leave.status === 'รออนุมัติ')) && (
-                      <button
-                        onClick={() => handleDelete(leave._id)}
-                        className="text-red-600 hover:text-red-900"
+      <div className="bg-white rounded-xl shadow-md overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  พนักงาน
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  ประเภทการลา
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  วันที่ลา
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  จำนวนวัน
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  เหตุผล
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  สถานะ
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  จัดการ
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredLeaves.length > 0 ? (
+                filteredLeaves.map((leave) => (
+                  <tr key={leave._id} className="hover:bg-gray-50 transition-colors duration-150">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0 h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
+                          <span className="text-blue-600 font-medium">
+                            {leave.employee.firstName.charAt(0)}{leave.employee.lastName.charAt(0)}
+                          </span>
+                        </div>
+                        <div className="ml-4">
+                          <div className="text-sm font-medium text-gray-900">
+                            {leave.employee.firstName} {leave.employee.lastName}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            {leave.employee.position}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="px-3 py-1 inline-flex text-sm leading-5 font-medium rounded-full bg-blue-50 text-blue-700">
+                        {leave.leaveType}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{formatDate(leave.startDate)}</div>
+                      <div className="text-sm text-gray-500">{formatDate(leave.endDate)}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {Math.ceil((new Date(leave.endDate) - new Date(leave.startDate)) / (1000 * 60 * 60 * 24)) + 1} วัน
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {leave.reason}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span
+                        className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          leave.status === 'รออนุมัติ'
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : leave.status === 'อนุมัติ'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}
                       >
-                        ลบ
-                      </button>
-                    )}
+                        {leave.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <div className="flex justify-end space-x-2">
+                        {(session.user.role === 'admin' || session.user.role === 'manager') && leave.status === 'รออนุมัติ' && (
+                          <>
+                            <button
+                              onClick={() => handleApprove(leave._id, 'อนุมัติ')}
+                              className="text-green-600 hover:text-green-900 p-1 rounded-full hover:bg-green-50 transition-colors duration-200"
+                              title="อนุมัติ"
+                            >
+                              <FiCheckCircle className="h-5 w-5" />
+                            </button>
+                            <button
+                              onClick={() => handleApprove(leave._id, 'ไม่อนุมัติ')}
+                              className="text-red-600 hover:text-red-900 p-1 rounded-full hover:bg-red-50 transition-colors duration-200"
+                              title="ไม่อนุมัติ"
+                            >
+                              <FiXCircle className="h-5 w-5" />
+                            </button>
+                          </>
+                        )}
+                        
+                        {(session.user.role === 'admin' || 
+                          (session.user.id === leave.employee._id && leave.status === 'รออนุมัติ')) && (
+                          <button
+                            onClick={() => handleDelete(leave._id)}
+                            className="text-red-600 hover:text-red-900 p-1 rounded-full hover:bg-red-50 transition-colors duration-200"
+                            title="ลบ"
+                          >
+                            <FiTrash2 className="h-5 w-5" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="7" className="px-6 py-10 text-center text-gray-500">
+                    <div className="flex flex-col items-center justify-center">
+                      <svg className="w-12 h-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                      </svg>
+                      <p className="text-lg font-medium">ไม่พบข้อมูลการลา</p>
+                      <p className="text-sm text-gray-400 mt-1">ลองเปลี่ยนตัวกรองหรือเพิ่มข้อมูลการลาใหม่</p>
+                    </div>
                   </td>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="7" className="px-6 py-4 text-center">
-                  ไม่พบข้อมูลการลา
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

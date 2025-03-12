@@ -5,6 +5,7 @@ module.exports = {
     "./src/components/**/*.{js,jsx}",
     "./src/app/**/*.{js,jsx}",
   ],
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
@@ -49,9 +50,9 @@ module.exports = {
   daisyui: {
     themes: [
       {
-        pastel: {
-          primary: "#a8d8ff",
-          secondary: "#a8ffd8",
+        light: {
+          primary: "#0096ff",
+          secondary: "#22c55e",
           accent: "#d8a8ff",
           neutral: "#f5f5f5",
           "base-100": "#ffffff",
@@ -60,8 +61,22 @@ module.exports = {
           warning: "#fbbd23",
           error: "#f87272",
         },
+        dark: {
+          primary: "#0096ff",
+          secondary: "#22c55e",
+          accent: "#d8a8ff",
+          neutral: "#1f2937",
+          "base-100": "#111827",
+          "base-200": "#1f2937",
+          "base-300": "#374151",
+          info: "#3abff8",
+          success: "#36d399",
+          warning: "#fbbd23",
+          error: "#f87272",
+        },
       },
       "light",
+      "dark",
     ],
   },
 }; 

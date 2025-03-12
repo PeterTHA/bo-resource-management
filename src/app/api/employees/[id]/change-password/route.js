@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../../../lib/auth';
 import bcrypt from 'bcryptjs';
-import { getEmployeeById, updateEmployeePassword } from '../../../../../lib/db-postgres';
+import { getEmployeeById, updateEmployeePassword } from '../../../../../lib/db-prisma';
 
-// POST - เปลี่ยนรหัสผ่าน
+// PUT - เปลี่ยนรหัสผ่าน
 export async function PUT(request, { params }) {
   try {
     const session = await getServerSession(authOptions);
@@ -16,7 +16,7 @@ export async function PUT(request, { params }) {
       );
     }
     
-    const id = params.id;
+    const id = await params.id;
     
     // ตรวจสอบว่าผู้ใช้มีสิทธิ์เปลี่ยนรหัสผ่านหรือไม่
     if (session.user.role !== 'admin' && session.user.id !== id) {
@@ -26,7 +26,7 @@ export async function PUT(request, { params }) {
       );
     }
     
-    // ดึงข้อมูลพนักงานจาก Postgres
+    // ดึงข้อมูลพนักงานจาก Prisma
     const employeeResult = await getEmployeeById(id);
     
     if (!employeeResult.success) {
@@ -69,7 +69,7 @@ export async function PUT(request, { params }) {
     // เข้ารหัสรหัสผ่านใหม่
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     
-    // อัปเดตรหัสผ่านใน Postgres
+    // อัปเดตรหัสผ่านใน Prisma
     const result = await updateEmployeePassword(id, hashedPassword);
     
     if (!result.success) {

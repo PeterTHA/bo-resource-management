@@ -12,12 +12,14 @@
 
 ## เทคโนโลยีที่ใช้
 
-- Next.js 15
-- React 19
-- MongoDB (Mongoose)
-- NextAuth.js
-- Tailwind CSS
-- DaisyUI
+- **Next.js 15** - React framework สำหรับการสร้างเว็บแอปพลิเคชัน
+- **React 19** - JavaScript library สำหรับสร้าง UI
+- **Prisma** - ORM สำหรับจัดการฐานข้อมูล
+- **PostgreSQL** - ฐานข้อมูลเชิงสัมพันธ์
+- **NextAuth.js** - ระบบการยืนยันตัวตนสำหรับ Next.js
+- **Tailwind CSS** - Utility-first CSS framework
+- **DaisyUI** - Component library สำหรับ Tailwind CSS
+- **Vercel Storage** - บริการจัดเก็บข้อมูลบน Vercel (Postgres, Blob, KV)
 
 ## การติดตั้ง
 
@@ -27,24 +29,31 @@ git clone https://github.com/yourusername/bo-resource-management.git
 cd bo-resource-management
 ```
 
-2. ติดตั้ง Dependencies
+2. ติดตั้ง dependencies
 ```bash
 npm install
 ```
 
-3. สร้างไฟล์ .env.local และกำหนดค่าต่างๆ
+3. ตั้งค่า environment variables
+```bash
+cp .env.example .env
 ```
-MONGODB_URI=mongodb://localhost:27017/resource-management
-NEXTAUTH_URL=http://localhost:3000
-NEXTAUTH_SECRET=your-secret-key
+แก้ไขไฟล์ `.env` เพื่อกำหนดค่าต่างๆ ตามที่ต้องการ
+
+4. สร้างฐานข้อมูลและ Prisma Client
+```bash
+npx prisma generate
 ```
 
-4. รันโปรเจค
+5. รันโปรเจค
 ```bash
 npm run dev
 ```
 
-5. เปิดเบราว์เซอร์และเข้าไปที่ http://localhost:3000
+6. เข้าถึงเว็บไซต์ผ่านเบราว์เซอร์
+```
+http://localhost:3000
+```
 
 ## การใช้งาน Vercel Storage (Free Tier)
 
@@ -166,24 +175,34 @@ export { handler as GET, handler as POST };
 ## โครงสร้างโปรเจค
 
 ```
-src/
-├── app/                # Next.js App Router
-│   ├── api/            # API Routes
-│   ├── dashboard/      # หน้าแดชบอร์ด
-│   ├── employees/      # หน้าจัดการพนักงาน
-│   ├── leaves/         # หน้าจัดการการลา
-│   ├── overtime/       # หน้าจัดการการทำงานล่วงเวลา
-│   ├── profile/        # หน้าโปรไฟล์ผู้ใช้
-│   ├── reports/        # หน้ารายงาน
-│   ├── setup-postgres/ # หน้าตั้งค่า Postgres
-│   └── login/          # หน้า Login
-├── components/         # React Components
-├── lib/                # Utility Functions
-│   ├── db.js           # MongoDB Connection
-│   ├── db-postgres.js  # Vercel Postgres Connection
-│   ├── auth.js         # NextAuth with MongoDB
-│   └── auth-postgres.js # NextAuth with Postgres
-└── models/             # Mongoose Models
+bo-resource-management/
+├── prisma/                  # Prisma schema และ migrations
+├── public/                  # ไฟล์สาธารณะ
+├── src/
+│   ├── app/                 # Next.js App Router
+│   │   ├── api/             # API Routes
+│   │   ├── dashboard/       # หน้า Dashboard
+│   │   ├── employees/       # หน้าจัดการพนักงาน
+│   │   ├── leaves/          # หน้าจัดการการลา
+│   │   ├── login/           # หน้าเข้าสู่ระบบ
+│   │   ├── overtime/        # หน้าจัดการการทำงานล่วงเวลา
+│   │   ├── profile/         # หน้าโปรไฟล์ผู้ใช้
+│   │   ├── reports/         # หน้ารายงาน
+│   │   ├── layout.js        # Layout หลัก
+│   │   └── page.js          # หน้าแรก
+│   ├── components/          # React Components
+│   │   ├── ui/              # UI Components
+│   │   └── Layout.js        # Layout Component
+│   └── lib/                 # Utility functions
+│       ├── auth.js          # NextAuth configuration
+│       └── db-prisma.js     # Prisma database functions
+├── .env                     # Environment variables
+├── .env.example             # ตัวอย่าง Environment variables
+├── .gitignore               # Git ignore file
+├── next.config.js           # Next.js configuration
+├── package.json             # Project dependencies
+├── postcss.config.js        # PostCSS configuration
+└── tailwind.config.js       # Tailwind CSS configuration
 ```
 
 ## บทบาทในระบบ
@@ -208,3 +227,32 @@ src/
 2. เข้าสู่ระบบด้วยบัญชี Admin
 3. เพิ่มข้อมูลพนักงาน
 4. ทดลองใช้งานระบบการลาและการทำงานล่วงเวลา
+
+## การใช้งาน Prisma
+
+โปรเจคนี้ใช้ Prisma เป็น ORM สำหรับจัดการฐานข้อมูล PostgreSQL โดยมีคำสั่งที่ใช้บ่อยดังนี้:
+
+1. สร้าง Prisma Client
+```bash
+npx prisma generate
+```
+
+2. ดึงโครงสร้างฐานข้อมูลจากฐานข้อมูลที่มีอยู่แล้ว
+```bash
+npx prisma db pull
+```
+
+3. อัปเดตฐานข้อมูลตาม schema
+```bash
+npx prisma db push
+```
+
+4. สร้าง migration
+```bash
+npx prisma migrate dev --name init
+```
+
+5. เปิด Prisma Studio เพื่อดูและแก้ไขข้อมูล
+```bash
+npx prisma studio
+```

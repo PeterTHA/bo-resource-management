@@ -1,26 +1,26 @@
 import { Inter } from 'next/font/google';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '../lib/auth';
-import { SessionProvider } from '../components/SessionProvider';
-import Layout from '../components/Layout';
 import './globals.css';
+import { AuthProvider } from './providers';
+import Navbar from '../components/Navbar';
+import ThemeProvider from './theme-provider';
 
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
-  title: 'ระบบจัดการทรัพยากรบุคคล',
-  description: 'ระบบจัดการทรัพยากรบุคคลสำหรับองค์กร',
+  title: 'BO Resource Management',
+  description: 'ระบบจัดการทรัพยากรบุคคล',
 };
 
-export default async function RootLayout({ children }) {
-  const session = await getServerSession(authOptions);
-
+export default function RootLayout({ children }) {
   return (
-    <html lang="th">
-      <body className={inter.className}>
-        <SessionProvider session={session}>
-          <Layout>{children}</Layout>
-        </SessionProvider>
+    <html lang="th" suppressHydrationWarning>
+      <body className={`${inter.className} min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100`}>
+        <AuthProvider>
+          <ThemeProvider>
+            <Navbar />
+            <main className="py-4">{children}</main>
+          </ThemeProvider>
+        </AuthProvider>
       </body>
     </html>
   );

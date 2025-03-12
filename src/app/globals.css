@@ -4,8 +4,9 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #000000;
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 214, 219, 220;
+  --background-end-rgb: 255, 255, 255;
 }
 
 @theme inline {
@@ -17,15 +18,115 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ffffff;
+    --foreground-rgb: 0, 0, 0;
+    --background-start-rgb: 255, 255, 255;
+    --background-end-rgb: 255, 255, 255;
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    )
+    rgb(var(--background-start-rgb));
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* ทำให้ตัวหนังสือเป็นสีดำทั้งหมด */
+p, h1, h2, h3, h4, h5, h6, span, div, label, a, button, li {
+  color: #000000 !important;
+}
+
+/* ทำให้ input, select, textarea เป็นสีดำ */
+input, select, textarea, .input, .select, .textarea {
+  color: #000000 !important;
+  border-color: #d1d5db !important;
+  background-color: #ffffff !important;
+}
+
+input::placeholder, select::placeholder, textarea::placeholder {
+  color: #6b7280 !important;
+}
+
+/* ทำให้ input type date เป็นสีดำ */
+input[type="date"], input[type="datetime-local"], input[type="time"] {
+  color: #000000 !important;
+}
+
+/* ทำให้ dropdown เป็นสีดำ */
+.dropdown-content, .dropdown-content * {
+  color: #000000 !important;
+  background-color: #ffffff !important;
+}
+
+/* ทำให้ table เป็นสีดำ */
+table, th, td, tr {
+  color: #000000 !important;
+}
+
+/* ทำให้ card เป็นสีดำ */
+.card, .card-title, .card-body, .card-header, .card-footer {
+  color: #000000 !important;
+}
+
+/* ทำให้ modal เป็นสีดำ */
+.modal, .modal-title, .modal-body, .modal-header, .modal-footer {
+  color: #000000 !important;
+}
+
+/* ทำให้ form เป็นสีดำ */
+.form-label, .form-control, .form-text {
+  color: #000000 !important;
+}
+
+/* ทำให้ button เป็นสีดำ ยกเว้นปุ่มที่มี background สี */
+button:not(.btn-primary):not(.btn-secondary):not(.btn-success):not(.btn-danger):not(.btn-warning):not(.btn-info) {
+  color: #000000 !important;
+}
+
+/* ทำให้ link เป็นสีดำ */
+a:not(.btn-primary):not(.btn-secondary):not(.btn-success):not(.btn-danger):not(.btn-warning):not(.btn-info) {
+  color: #000000 !important;
+}
+
+/* ทำให้ select option เป็นสีดำ */
+option {
+  color: #000000 !important;
+  background-color: #ffffff !important;
+}
+
+/* ทำให้ datepicker เป็นสีดำ */
+.react-datepicker, .react-datepicker *, .flatpickr-calendar, .flatpickr-calendar * {
+  color: #000000 !important;
+}
+
+/* ทำให้ checkbox และ radio เป็นสีดำ */
+input[type="checkbox"], input[type="radio"] {
+  border-color: #000000 !important;
+}
+
+/* ทำให้ tooltip เป็นสีดำ */
+.tooltip, .tooltip * {
+  color: #000000 !important;
+}
+
+/* ทำให้ pagination เป็นสีดำ */
+.pagination, .pagination * {
+  color: #000000 !important;
+}
+
+/* ทำให้ breadcrumb เป็นสีดำ */
+.breadcrumb, .breadcrumb * {
+  color: #000000 !important;
+}
+
+/* ทำให้ alert เป็นสีดำ */
+.alert:not(.alert-primary):not(.alert-secondary):not(.alert-success):not(.alert-danger):not(.alert-warning):not(.alert-info), 
+.alert:not(.alert-primary):not(.alert-secondary):not(.alert-success):not(.alert-danger):not(.alert-warning):not(.alert-info) * {
+  color: #000000 !important;
 }
 
 /* Responsive Design */

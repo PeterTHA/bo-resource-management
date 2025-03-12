@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../../lib/auth';
-import { getLeaveById, updateLeave, deleteLeave } from '../../../../lib/db-postgres';
+import { getLeaveById, updateLeave, deleteLeave } from '../../../../lib/db-prisma';
 
 // GET - ดึงข้อมูลการลาตาม ID
 export async function GET(request, { params }) {
@@ -15,29 +15,29 @@ export async function GET(request, { params }) {
       );
     }
     
-    const id = params.id;
+    const id = await params.id;
     
-    // ดึงข้อมูลการลาจาก Postgres
+    // ดึงข้อมูลการลาจาก Prisma
     const result = await getLeaveById(id);
     
     if (!result.success) {
       return NextResponse.json(
-        { success: false, message: result.message || 'ไม่พบข้อมูลการลา' },
+        { success: false, message: result.message || 'เกิดข้อผิดพลาดในการดึงข้อมูลการลา' },
         { status: 404 }
       );
     }
     
     // ตรวจสอบสิทธิ์การเข้าถึง
-    if (session.user.role === 'employee' && result.data.employee_id !== parseInt(session.user.id)) {
+    if (session.user.role === 'employee' && session.user.id !== result.data.employeeId) {
       return NextResponse.json(
-        { success: false, message: 'ไม่มีสิทธิ์เข้าถึงข้อมูล' },
+        { success: false, message: 'ไม่มีสิทธิ์เข้าถึงข้อมูลการลาของผู้อื่น' },
         { status: 403 }
       );
     }
     
     return NextResponse.json({ success: true, data: result.data }, { status: 200 });
   } catch (error) {
-    console.error('Error fetching leave:', error);
+    console.error('Error in GET /api/leaves/[id]:', error);
     return NextResponse.json(
       { success: false, message: error.message },
       { status: 500 }
@@ -57,7 +57,7 @@ export async function PUT(request, { params }) {
       );
     }
     
-    const id = params.id;
+    const id = await params.id;
     
     // ดึงข้อมูลการลาเพื่อตรวจสอบสิทธิ์
     const checkResult = await getLeaveById(id);
@@ -69,19 +69,22 @@ export async function PUT(request, { params }) {
       );
     }
     
+    const leave = checkResult.data;
+    
     // ตรวจสอบสิทธิ์การเข้าถึง
+    // - พนักงานสามารถแก้ไขข้อมูลการลาของตัวเองได้เฉพาะเมื่อสถานะเป็น "รออนุมัติ"
+    // - ผู้จัดการและแอดมินสามารถอนุมัติหรือไม่อนุมัติการลาได้
     if (session.user.role === 'employee') {
-      // พนักงานทั่วไปสามารถแก้ไขได้เฉพาะข้อมูลการลาของตัวเอง และต้องมีสถานะเป็น 'รออนุมัติ' เท่านั้น
-      if (checkResult.data.employee_id !== parseInt(session.user.id)) {
+      if (session.user.id !== leave.employeeId) {
         return NextResponse.json(
-          { success: false, message: 'ไม่มีสิทธิ์เข้าถึงข้อมูล' },
+          { success: false, message: 'ไม่มีสิทธิ์แก้ไขข้อมูลการลาของผู้อื่น' },
           { status: 403 }
         );
       }
       
-      if (checkResult.data.status !== 'รออนุมัติ') {
+      if (leave.status !== 'รออนุมัติ') {
         return NextResponse.json(
-          { success: false, message: 'ไม่สามารถแก้ไขข้อมูลการลาที่ได้รับการอนุมัติหรือปฏิเสธแล้ว' },
+          { success: false, message: 'ไม่สามารถแก้ไขข้อมูลการลาที่ได้รับการอนุมัติหรือไม่อนุมัติแล้ว' },
           { status: 400 }
         );
       }
@@ -89,33 +92,36 @@ export async function PUT(request, { params }) {
     
     const data = await request.json();
     
-    // ถ้าเป็นการอนุมัติหรือปฏิเสธการลา
-    if (data.status === 'อนุมัติ' || data.status === 'ไม่อนุมัติ') {
-      // ตรวจสอบว่าผู้ใช้เป็น admin หรือ manager หรือไม่
-      if (session.user.role !== 'admin' && session.user.role !== 'manager') {
+    // ถ้าเป็นการอนุมัติหรือไม่อนุมัติ
+    if (data.status && (data.status === 'อนุมัติ' || data.status === 'ไม่อนุมัติ')) {
+      if (session.user.role === 'employee') {
         return NextResponse.json(
-          { success: false, message: 'ไม่มีสิทธิ์อนุมัติหรือปฏิเสธการลา' },
+          { success: false, message: 'ไม่มีสิทธิ์อนุมัติหรือไม่อนุมัติการลา' },
           { status: 403 }
         );
       }
       
-      // เพิ่มข้อมูลผู้อนุมัติ
-      data.approvedBy = session.user.id;
+      // เพิ่มข้อมูลการอนุมัติ
+      data.approvedById = session.user.id;
+      data.approvedAt = new Date();
     }
     
-    // อัปเดตข้อมูลการลาใน Postgres
+    // อัปเดตข้อมูลการลาใน Prisma
     const result = await updateLeave(id, data);
     
     if (!result.success) {
       return NextResponse.json(
-        { success: false, message: result.message || result.error || 'เกิดข้อผิดพลาดในการอัปเดตข้อมูลการลา' },
+        { success: false, message: result.message || 'เกิดข้อผิดพลาดในการอัปเดตข้อมูลการลา' },
         { status: 400 }
       );
     }
     
-    return NextResponse.json({ success: true, data: result.data }, { status: 200 });
+    return NextResponse.json(
+      { success: true, data: result.data },
+      { status: 200 }
+    );
   } catch (error) {
-    console.error('Error updating leave:', error);
+    console.error('Error in PUT /api/leaves/[id]:', error);
     return NextResponse.json(
       { success: false, message: error.message },
       { status: 500 }
@@ -135,7 +141,7 @@ export async function DELETE(request, { params }) {
       );
     }
     
-    const id = params.id;
+    const id = await params.id;
     
     // ดึงข้อมูลการลาเพื่อตรวจสอบสิทธิ์
     const checkResult = await getLeaveById(id);
@@ -147,37 +153,48 @@ export async function DELETE(request, { params }) {
       );
     }
     
+    const leave = checkResult.data;
+    
     // ตรวจสอบสิทธิ์การเข้าถึง
+    // - พนักงานสามารถลบข้อมูลการลาของตัวเองได้เฉพาะเมื่อสถานะเป็น "รออนุมัติ"
+    // - แอดมินสามารถลบข้อมูลการลาได้ทั้งหมด
     if (session.user.role === 'employee') {
-      // พนักงานทั่วไปสามารถลบได้เฉพาะข้อมูลการลาของตัวเอง และต้องมีสถานะเป็น 'รออนุมัติ' เท่านั้น
-      if (checkResult.data.employee_id !== parseInt(session.user.id)) {
+      if (session.user.id !== leave.employeeId) {
         return NextResponse.json(
-          { success: false, message: 'ไม่มีสิทธิ์เข้าถึงข้อมูล' },
+          { success: false, message: 'ไม่มีสิทธิ์ลบข้อมูลการลาของผู้อื่น' },
           { status: 403 }
         );
       }
       
-      if (checkResult.data.status !== 'รออนุมัติ') {
+      if (leave.status !== 'รออนุมัติ') {
         return NextResponse.json(
-          { success: false, message: 'ไม่สามารถลบข้อมูลการลาที่ได้รับการอนุมัติหรือปฏิเสธแล้ว' },
+          { success: false, message: 'ไม่สามารถลบข้อมูลการลาที่ได้รับการอนุมัติหรือไม่อนุมัติแล้ว' },
           { status: 400 }
         );
       }
+    } else if (session.user.role === 'manager') {
+      return NextResponse.json(
+        { success: false, message: 'ไม่มีสิทธิ์ลบข้อมูลการลา' },
+        { status: 403 }
+      );
     }
     
-    // ลบข้อมูลการลาใน Postgres
+    // ลบข้อมูลการลาใน Prisma
     const result = await deleteLeave(id);
     
     if (!result.success) {
       return NextResponse.json(
-        { success: false, message: result.message || result.error || 'เกิดข้อผิดพลาดในการลบข้อมูลการลา' },
+        { success: false, message: result.message || 'เกิดข้อผิดพลาดในการลบข้อมูลการลา' },
         { status: 400 }
       );
     }
     
-    return NextResponse.json({ success: true, data: {} }, { status: 200 });
+    return NextResponse.json(
+      { success: true, message: 'ลบข้อมูลการลาสำเร็จ' },
+      { status: 200 }
+    );
   } catch (error) {
-    console.error('Error deleting leave:', error);
+    console.error('Error in DELETE /api/leaves/[id]:', error);
     return NextResponse.json(
       { success: false, message: error.message },
       { status: 500 }

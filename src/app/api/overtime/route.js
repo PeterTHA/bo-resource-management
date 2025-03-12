@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../lib/auth';
-import { getOvertimes, createOvertime } from '../../../lib/db-postgres';
+import { getOvertimes, createOvertime } from '../../../lib/db-prisma';
 
 // GET - ดึงข้อมูลการทำงานล่วงเวลาทั้งหมด
 export async function GET(request) {
@@ -18,7 +18,7 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const employeeId = searchParams.get('employeeId');
     
-    // ดึงข้อมูลการทำงานล่วงเวลาจาก Postgres
+    // ดึงข้อมูลการทำงานล่วงเวลาจาก Prisma
     let result;
     
     // ถ้าเป็น admin หรือ manager สามารถดูข้อมูลการทำงานล่วงเวลาทั้งหมดได้
@@ -67,7 +67,7 @@ export async function POST(request) {
       data.employee = session.user.id;
     }
     
-    // เพิ่มข้อมูลการทำงานล่วงเวลาใน Postgres
+    // เพิ่มข้อมูลการทำงานล่วงเวลาใน Prisma
     const result = await createOvertime(data);
     
     if (!result.success) {
