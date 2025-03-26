@@ -38,3 +38,6 @@ next-env.d.ts
 
 # Prisma
 /prisma/migrations/
+# Email credentials
+.env.development.local
+.env.production.local

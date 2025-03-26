@@ -15,25 +15,19 @@ export async function getEmployees() {
       orderBy: {
         createdAt: 'desc'
       },
-      select: {
-        id: true,
-        employeeId: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        position: true,
-        department: true,
-        hireDate: true,
-        role: true,
-        isActive: true,
-        image: true,
-        createdAt: true,
-        updatedAt: true,
-        password: false,
-      }
+      include: {
+        teamData: true
+      },
+      select: undefined
     });
     
-    return { success: true, data: employees };
+    // ไม่ส่งรหัสผ่านกลับไป
+    const employeesWithoutPassword = employees.map(employee => {
+      const { password, ...employeeWithoutPassword } = employee;
+      return employeeWithoutPassword;
+    });
+    
+    return { success: true, data: employeesWithoutPassword };
   } catch (error) {
     console.error('Error fetching employees:', error);
     return { success: false, message: error.message, connectionError: true };
@@ -47,21 +41,8 @@ export async function getEmployeeById(id) {
   try {
     const employee = await prisma.employee.findUnique({
       where: { id },
-      select: {
-        id: true,
-        employeeId: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        password: true,
-        position: true,
-        department: true,
-        hireDate: true,
-        role: true,
-        isActive: true,
-        image: true,
-        createdAt: true,
-        updatedAt: true,
+      include: {
+        teamData: true
       }
     });
     
@@ -113,6 +94,24 @@ export async function getEmployeeByEmail(email) {
 }
 
 /**
+ * ฟังก์ชันสำหรับดึงข้อมูลทีมทั้งหมด
+ */
+export async function getTeams() {
+  try {
+    const teams = await prisma.team.findMany({
+      orderBy: {
+        name: 'asc',
+      },
+    });
+    
+    return { success: true, data: teams };
+  } catch (error) {
+    console.error('Error fetching teams:', error);
+    return { success: false, message: error.message, connectionError: true };
+  }
+}
+
+/**
  * ฟังก์ชันสำหรับเพิ่มข้อมูลพนักงาน
  */
 export async function createEmployee(data) {
@@ -145,6 +144,8 @@ export async function createEmployee(data) {
         password: data.password,
         position: data.position,
         department: data.department,
+        teamId: data.teamId || null,
+        team: data.team || null,
         hireDate: new Date(data.hireDate),
         role: data.role || 'employee',
         isActive: data.isActive !== undefined ? data.isActive : true,
@@ -205,6 +206,8 @@ export async function updateEmployee(id, data) {
     if (data.email !== undefined) updateData.email = data.email;
     if (data.position !== undefined) updateData.position = data.position;
     if (data.department !== undefined) updateData.department = data.department;
+    if (data.teamId !== undefined) updateData.teamId = data.teamId;
+    if (data.team !== undefined) updateData.team = data.team;
     if (data.hireDate !== undefined) updateData.hireDate = new Date(data.hireDate);
     if (data.role !== undefined) updateData.role = data.role;
     if (data.isActive !== undefined) updateData.isActive = data.isActive;

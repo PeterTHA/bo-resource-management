@@ -14,8 +14,10 @@ export async function GET(request, { params }) {
         { status: 401 }
       );
     }
+
     
-    const id = params?.id;
+    const resolvedParams = await params;
+    const id = resolvedParams.id;
     
     // ดึงข้อมูลพนักงานจาก Prisma
     const result = await getEmployeeById(id);
@@ -68,7 +70,8 @@ export async function PUT(request, { params }) {
       );
     }
     
-    const id = params.id;
+    const resolvedParams = await params;
+    const id = resolvedParams.id;
     const data = await request.json();
     
     // ถ้าไม่ใช่แอดมิน ไม่สามารถเปลี่ยนบทบาทได้
@@ -119,7 +122,8 @@ export async function DELETE(request, { params }) {
       );
     }
     
-    const id = params.id;
+    const resolvedParams = await params;
+    const id = resolvedParams.id;
     
     // ลบข้อมูลพนักงานใน Prisma
     const result = await deleteEmployee(id);

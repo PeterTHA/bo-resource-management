@@ -23,6 +23,9 @@ model Employee {
   password      String
   position      String
   department    String
+  team          String?
+  teamId        String?    @map("team_id")
+  teamData      Team?      @relation(fields: [teamId], references: [id])
   hireDate      DateTime   @map("hire_date")
   role          String     @default("employee")
   isActive      Boolean    @default(true) @map("is_active")
@@ -76,4 +79,15 @@ model Overtime {
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
   @@map("overtimes")
+}
+
+// โมเดลทีม
+model Team {
+  id        String     @id @default(uuid())
+  name      String     @unique
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+  employees Employee[]
+
+  @@map("teams")
 }

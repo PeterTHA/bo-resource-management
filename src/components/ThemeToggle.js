@@ -1,48 +1,45 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useTheme } from 'next-themes';
 import { FiSun, FiMoon } from 'react-icons/fi';
-import { useTheme } from '../app/theme-provider';
 
 export default function ThemeToggle() {
-  const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const { theme, setTheme } = useTheme();
 
-  // เมื่อคอมโพเนนต์โหลด
+  // เมื่อ component ถูก mount บนฝั่ง client จึงแสดง UI
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // ป้องกัน hydration mismatch
+  // ป้องกันการเกิด hydration error
   if (!mounted) {
-    return <div className="w-10 h-10"></div>;
+    return null;
   }
 
-  // เปลี่ยนธีม
+  // สลับระหว่าง light กับ dark mode
   const toggleTheme = () => {
     setTheme(theme === 'light' ? 'dark' : 'light');
   };
 
   return (
-    <button
+    <button 
       onClick={toggleTheme}
-      className="relative inline-flex items-center justify-center w-12 h-6 rounded-full bg-gray-200 dark:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 dark:focus:ring-offset-gray-800"
-      aria-label="สลับธีม"
-      title={theme === 'light' ? 'เปลี่ยนเป็นโหมดมืด' : 'เปลี่ยนเป็นโหมดสว่าง'}
+      className={`
+        btn btn-lg btn-circle transition-all duration-300 shadow-lg
+        scale-100 hover:scale-110
+        ${theme === 'dark' 
+          ? 'bg-amber-500 hover:bg-amber-600 text-amber-950 border-2 border-amber-400' 
+          : 'bg-indigo-700 hover:bg-indigo-800 text-indigo-50 border-2 border-indigo-600'}
+      `}
+      aria-label={theme === 'dark' ? 'เปลี่ยนเป็นโหมดสว่าง' : 'เปลี่ยนเป็นโหมดมืด'}
     >
-      <span 
-        className={`absolute left-1 top-1 flex items-center justify-center w-4 h-4 rounded-full bg-white dark:bg-gray-800 text-yellow-500 dark:text-blue-400 transition-all duration-300 transform ${
-          theme === 'dark' ? 'translate-x-6' : 'translate-x-0'
-        }`}
-      >
-        {theme === 'light' ? 
-          <FiSun className="w-3 h-3" /> : 
-          <FiMoon className="w-3 h-3" />
-        }
-      </span>
-      <span className="sr-only">
-        {theme === 'light' ? 'เปลี่ยนเป็นโหมดมืด' : 'เปลี่ยนเป็นโหมดสว่าง'}
-      </span>
+      {theme === 'dark' ? (
+        <FiSun className="w-6 h-6" />
+      ) : (
+        <FiMoon className="w-6 h-6" />
+      )}
     </button>
   );
 } 

@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { FiUsers, FiCalendar, FiClock, FiPlusCircle, FiUser, FiFileText } from 'react-icons/fi';
+import { LoadingPage } from '../../components/ui/LoadingSpinner';
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
@@ -49,13 +50,8 @@ export default function DashboardPage() {
 
   if (status === 'loading' || loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="spinner-border animate-spin inline-block w-8 h-8 border-4 rounded-full" role="status">
-            <span className="visually-hidden">กำลังโหลด...</span>
-          </div>
-          <p className="mt-2">กำลังโหลด...</p>
-        </div>
+      <div className="container mx-auto px-4 py-8">
+        <LoadingPage message="กำลังโหลดข้อมูลแดชบอร์ด..." />
       </div>
     );
   }
@@ -66,7 +62,7 @@ export default function DashboardPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-2xl md:text-3xl font-bold mb-8">แดชบอร์ด</h1>
+      <h1 className="text-2xl md:text-3xl font-bold mb-8 text-gray-900 dark:text-gray-100">แดชบอร์ด</h1>
       
       {error && (
         <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md mb-6 shadow-sm dark:bg-red-900/30 dark:text-red-300 dark:border-red-500">
@@ -75,83 +71,83 @@ export default function DashboardPage() {
       )}
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden border border-gray-200 dark:border-gray-700 transition-colors duration-300">
           <div className="p-6 flex items-center">
-            <div className="bg-purple-100 dark:bg-purple-900/30 p-3 rounded-full mr-4">
+            <div className="bg-purple-100 dark:bg-purple-900/30 p-3 rounded-full mr-4 transition-colors duration-300">
               <FiUsers className="h-8 w-8 text-purple-600 dark:text-purple-400" />
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">พนักงานทั้งหมด</p>
-              <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.totalEmployees}</p>
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-300 transition-colors duration-300">พนักงานทั้งหมด</p>
+              <p className="text-3xl font-bold text-gray-900 dark:text-white transition-colors duration-300">{stats.totalEmployees}</p>
             </div>
           </div>
         </div>
         
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden border border-gray-200 dark:border-gray-700 transition-colors duration-300">
           <div className="p-6 flex items-center">
-            <div className="bg-yellow-100 dark:bg-yellow-900/30 p-3 rounded-full mr-4">
+            <div className="bg-yellow-100 dark:bg-yellow-900/30 p-3 rounded-full mr-4 transition-colors duration-300">
               <FiCalendar className="h-8 w-8 text-yellow-600 dark:text-yellow-400" />
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">การลารออนุมัติ</p>
-              <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.pendingLeaves}</p>
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-300 transition-colors duration-300">การลารออนุมัติ</p>
+              <p className="text-3xl font-bold text-gray-900 dark:text-white transition-colors duration-300">{stats.pendingLeaves}</p>
             </div>
           </div>
         </div>
         
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden border border-gray-200 dark:border-gray-700 transition-colors duration-300">
           <div className="p-6 flex items-center">
-            <div className="bg-green-100 dark:bg-green-900/30 p-3 rounded-full mr-4">
+            <div className="bg-green-100 dark:bg-green-900/30 p-3 rounded-full mr-4 transition-colors duration-300">
               <FiClock className="h-8 w-8 text-green-600 dark:text-green-400" />
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">OT รออนุมัติ</p>
-              <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.pendingOvertimes}</p>
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-300 transition-colors duration-300">OT รออนุมัติ</p>
+              <p className="text-3xl font-bold text-gray-900 dark:text-white transition-colors duration-300">{stats.pendingOvertimes}</p>
             </div>
           </div>
         </div>
       </div>
       
-      <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-white">ทางลัด</h2>
+      <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-100 transition-colors duration-300">ทางลัด</h2>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <Link href="/employees/add" className="block">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow duration-300">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-300">
             <div className="p-6 flex items-center">
-              <div className="bg-blue-100 dark:bg-blue-900/30 p-3 rounded-full mr-4">
+              <div className="bg-blue-100 dark:bg-blue-900/30 p-3 rounded-full mr-4 transition-colors duration-300">
                 <FiPlusCircle className="h-6 w-6 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <p className="text-lg font-medium text-gray-900 dark:text-white">เพิ่มพนักงาน</p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">เพิ่มข้อมูลพนักงานใหม่</p>
+                <p className="text-lg font-medium text-gray-900 dark:text-white transition-colors duration-300">เพิ่มพนักงาน</p>
+                <p className="text-sm text-gray-600 dark:text-gray-300 transition-colors duration-300">เพิ่มข้อมูลพนักงานใหม่</p>
               </div>
             </div>
           </div>
         </Link>
         
         <Link href="/leaves/add" className="block">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow duration-300">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-300">
             <div className="p-6 flex items-center">
-              <div className="bg-orange-100 dark:bg-orange-900/30 p-3 rounded-full mr-4">
+              <div className="bg-orange-100 dark:bg-orange-900/30 p-3 rounded-full mr-4 transition-colors duration-300">
                 <FiCalendar className="h-6 w-6 text-orange-600 dark:text-orange-400" />
               </div>
               <div>
-                <p className="text-lg font-medium text-gray-900 dark:text-white">ขอลางาน</p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">ส่งคำขอลางาน</p>
+                <p className="text-lg font-medium text-gray-900 dark:text-white transition-colors duration-300">ขอลางาน</p>
+                <p className="text-sm text-gray-600 dark:text-gray-300 transition-colors duration-300">ส่งคำขอลางาน</p>
               </div>
             </div>
           </div>
         </Link>
         
         <Link href="/overtime/add" className="block">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow duration-300">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-300">
             <div className="p-6 flex items-center">
-              <div className="bg-indigo-100 dark:bg-indigo-900/30 p-3 rounded-full mr-4">
+              <div className="bg-indigo-100 dark:bg-indigo-900/30 p-3 rounded-full mr-4 transition-colors duration-300">
                 <FiClock className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
               </div>
               <div>
-                <p className="text-lg font-medium text-gray-900 dark:text-white">ขอทำงานล่วงเวลา</p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">ส่งคำขอทำงานล่วงเวลา</p>
+                <p className="text-lg font-medium text-gray-900 dark:text-white transition-colors duration-300">ขอทำงานล่วงเวลา</p>
+                <p className="text-sm text-gray-600 dark:text-gray-300 transition-colors duration-300">ส่งคำขอทำงานล่วงเวลา</p>
               </div>
             </div>
           </div>
@@ -160,28 +156,28 @@ export default function DashboardPage() {
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Link href="/profile" className="block">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow duration-300">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-300">
             <div className="p-6 flex items-center">
-              <div className="bg-pink-100 dark:bg-pink-900/30 p-3 rounded-full mr-4">
+              <div className="bg-pink-100 dark:bg-pink-900/30 p-3 rounded-full mr-4 transition-colors duration-300">
                 <FiUser className="h-6 w-6 text-pink-600 dark:text-pink-400" />
               </div>
               <div>
-                <p className="text-lg font-medium text-gray-900 dark:text-white">โปรไฟล์</p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">จัดการข้อมูลส่วนตัว</p>
+                <p className="text-lg font-medium text-gray-900 dark:text-white transition-colors duration-300">โปรไฟล์</p>
+                <p className="text-sm text-gray-600 dark:text-gray-300 transition-colors duration-300">จัดการข้อมูลส่วนตัว</p>
               </div>
             </div>
           </div>
         </Link>
         
         <Link href="/reports" className="block">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow duration-300">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-300">
             <div className="p-6 flex items-center">
-              <div className="bg-teal-100 dark:bg-teal-900/30 p-3 rounded-full mr-4">
+              <div className="bg-teal-100 dark:bg-teal-900/30 p-3 rounded-full mr-4 transition-colors duration-300">
                 <FiFileText className="h-6 w-6 text-teal-600 dark:text-teal-400" />
               </div>
               <div>
-                <p className="text-lg font-medium text-gray-900 dark:text-white">รายงาน</p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">ดูรายงานสรุป</p>
+                <p className="text-lg font-medium text-gray-900 dark:text-white transition-colors duration-300">รายงาน</p>
+                <p className="text-sm text-gray-600 dark:text-gray-300 transition-colors duration-300">ดูรายงานสรุป</p>
               </div>
             </div>
           </div>

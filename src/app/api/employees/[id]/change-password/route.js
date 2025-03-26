@@ -16,7 +16,8 @@ export async function PUT(request, { params }) {
       );
     }
     
-    const id = await params.id;
+    const resolvedParams = await params;
+    const id = resolvedParams.id;
     
     // ตรวจสอบว่าผู้ใช้มีสิทธิ์เปลี่ยนรหัสผ่านหรือไม่
     if (session.user.role !== 'admin' && session.user.id !== id) {

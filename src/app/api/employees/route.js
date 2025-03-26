@@ -3,6 +3,18 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../lib/auth';
 import { getEmployees, createEmployee } from '../../../lib/db-prisma';
 import bcrypt from 'bcryptjs';
+import { sendWelcomeEmail } from '../../../lib/sendgrid-service';
+
+// ฟังก์ชันสำหรับสร้างรหัสผ่านแบบสุ่ม
+function generateRandomPassword(length = 10) {
+  const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+";
+  let password = "";
+  for (let i = 0; i < length; i++) {
+    const randomIndex = Math.floor(Math.random() * charset.length);
+    password += charset[randomIndex];
+  }
+  return password;
+}
 
 // GET - ดึงข้อมูลพนักงานทั้งหมด
 export async function GET(request) {
@@ -67,15 +79,19 @@ export async function POST(request) {
     const data = await request.json();
     
     // ตรวจสอบข้อมูลที่จำเป็น
-    if (!data.employeeId || !data.firstName || !data.lastName || !data.email || !data.password || !data.position || !data.department) {
+    if (!data.employeeId || !data.firstName || !data.lastName || !data.email || !data.position || !data.department || !data.hireDate || !data.role) {
       return NextResponse.json(
-        { success: false, message: 'กรุณากรอกข้อมูลให้ครบถ้วน' },
+        { success: false, message: 'กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน (รหัสพนักงาน, ชื่อ, นามสกุล, อีเมล, ตำแหน่ง, แผนก, วันที่เริ่มงาน, บทบาท)' },
         { status: 400 }
       );
     }
     
+    // สร้างรหัสผ่านแบบสุ่ม
+    const randomPassword = generateRandomPassword();
+    console.log(`รหัสผ่านที่สร้างสำหรับพนักงาน ${data.email}: ${randomPassword}`);
+    
     // เข้ารหัสรหัสผ่าน
-    const hashedPassword = await bcrypt.hash(data.password, 10);
+    const hashedPassword = await bcrypt.hash(randomPassword, 10);
     data.password = hashedPassword;
     
     // เพิ่มข้อมูลพนักงานใน Prisma
@@ -88,8 +104,28 @@ export async function POST(request) {
       );
     }
     
+    // ส่งอีเมลต้อนรับพร้อมรหัสผ่าน
+    try {
+      await sendWelcomeEmail({
+        email: data.email,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        password: randomPassword,
+        role: data.role,
+        employeeId: data.employeeId
+      });
+      console.log(`ส่งอีเมลต้อนรับไปยัง ${data.email} เรียบร้อยแล้ว`);
+    } catch (emailError) {
+      console.error('เกิดข้อผิดพลาดในการส่งอีเมล:', emailError);
+      // ยังคงดำเนินการต่อแม้การส่งอีเมลจะล้มเหลว
+    }
+    
     return NextResponse.json(
-      { success: true, data: result.data },
+      { 
+        success: true, 
+        data: result.data,
+        message: `สร้างบัญชีพนักงานสำเร็จแล้วและได้ส่งอีเมลพร้อมรหัสผ่านไปที่ ${data.email}`
+      },
       { status: 201 }
     );
   } catch (error) {

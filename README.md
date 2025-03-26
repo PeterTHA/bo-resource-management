@@ -256,3 +256,44 @@ npx prisma migrate dev --name init
 ```bash
 npx prisma studio
 ```
+
+## การตั้งค่าระบบส่งอีเมล
+
+ระบบนี้รองรับการส่งอีเมลผ่านบริการต่างๆ ดังนี้:
+
+### การใช้งาน SendGrid API (แนะนำ)
+
+1. สมัครบัญชี [SendGrid](https://sendgrid.com/) (มีแผนฟรีที่ส่งได้ 100 อีเมล/วัน)
+2. สร้าง API Key จาก SendGrid Dashboard
+3. ตั้งค่าในไฟล์ `.env.development.local` หรือ `.env.production.local`:
+
+```env
+SENDGRID_API_KEY=SG.YOUR_SENDGRID_API_KEY
+EMAIL_FROM=your-verified-sender@example.com
+```
+
+**หมายเหตุ:** คุณต้องยืนยันโดเมนหรืออีเมลผู้ส่งกับ SendGrid ก่อนใช้งานจริง
+
+### การใช้งาน SMTP (สำรอง)
+
+หากต้องการใช้ SMTP โดยตรง สามารถตั้งค่าดังนี้:
+
+```env
+EMAIL_HOST=your-smtp-server.com
+EMAIL_PORT=587
+EMAIL_SECURE=false
+EMAIL_USER=your-username
+EMAIL_PASS=your-password
+EMAIL_FROM=your-email@example.com
+```
+
+### แนะนำบริการส่งอีเมลฟรีสำหรับการทดสอบ
+
+1. **Ethereal Email** - ใช้งานอัตโนมัติเมื่อไม่มีการตั้งค่าอื่น (จำลองการส่ง)
+2. **Mailersend** - ส่งได้ 3,000 อีเมล/เดือน (ฟรี) [mailersend.com](https://www.mailersend.com/)
+3. **Resend** - ส่งได้ 100 อีเมล/วัน (ฟรี) [resend.com](https://resend.com/)
+4. **Mailgun** - ส่งได้ 5,000 อีเมล/เดือน แต่ใช้ได้ 3 เดือน [mailgun.com](https://www.mailgun.com/)
+
+### การทดสอบระบบส่งอีเมลโดยไม่ต้องใช้บริการจริง
+
+หากไม่ได้ตั้งค่า API key ใดๆ ระบบจะใช้ Ethereal Email ซึ่งเป็นบริการจำลองการส่งอีเมล โดยจะแสดง URL สำหรับดูเนื้อหาอีเมลในคอนโซล เมื่อมีการเรียกใช้งานฟังก์ชันส่งอีเมล

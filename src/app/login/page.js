@@ -4,7 +4,9 @@ import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { FiMail, FiLock, FiLogIn } from 'react-icons/fi';
+import { FiMail, FiLock, FiLogIn, FiHelpCircle } from 'react-icons/fi';
+import ErrorMessage from '../../components/ui/ErrorMessage';
+import { LoadingButton } from '../../components/ui/LoadingSpinner';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -25,24 +27,23 @@ export default function LoginPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
+    setLoading(true);
 
     try {
-      const result = await signIn('credentials', {
+      const res = await signIn('credentials', {
         redirect: false,
         email: formData.email,
         password: formData.password,
       });
 
-      if (result.error) {
-        setError(result.error);
+      if (res.error) {
+        setError(res.error);
       } else {
         router.push('/dashboard');
-        router.refresh();
       }
     } catch (error) {
-      setError('เกิดข้อผิดพลาดในการเข้าสู่ระบบ');
+      setError('เกิดข้อผิดพลาดในการเข้าสู่ระบบ กรุณาลองใหม่อีกครั้ง');
       console.error(error);
     } finally {
       setLoading(false);
@@ -50,79 +51,76 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100">
-      <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">เข้าสู่ระบบ</h1>
-          <p className="text-gray-600">ระบบจัดการทรัพยากรบุคคล</p>
+    <div className="hero min-h-screen bg-base-200">
+      <div className="hero-content flex-col lg:flex-row-reverse">
+        <div className="text-center lg:text-left lg:ml-8">
+          <h1 className="text-4xl font-bold">เข้าสู่ระบบ</h1>
+          <p className="py-6">ระบบจัดการทรัพยากรบุคคล สำหรับจัดการข้อมูลพนักงาน การลา และการทำงานล่วงเวลา</p>
         </div>
-        
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 flex items-start">
-            <span className="mr-2">⚠️</span>
-            <span>{error}</span>
+        <div className="card flex-shrink-0 w-full max-w-sm shadow-2xl bg-base-100">
+          <div className="card-body">
+            <form onSubmit={handleSubmit}>
+              {error && <ErrorMessage message={error} />}
+              
+              <div className="form-control">
+                <label className="label" htmlFor="email">
+                  <span className="label-text">อีเมล</span>
+                </label>
+                <div className="input-group">
+                  <span className="bg-base-200 flex items-center justify-center px-4 border border-r-0 border-base-300 rounded-l-lg">
+                    <FiMail className="text-base-content/60" />
+                  </span>
+                  <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    placeholder="อีเมล"
+                    className="input input-bordered w-full rounded-l-none"
+                    value={formData.email}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+              </div>
+              
+              <div className="form-control mt-4">
+                <label className="label" htmlFor="password">
+                  <span className="label-text">รหัสผ่าน</span>
+                </label>
+                <div className="input-group">
+                  <span className="bg-base-200 flex items-center justify-center px-4 border border-r-0 border-base-300 rounded-l-lg">
+                    <FiLock className="text-base-content/60" />
+                  </span>
+                  <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    placeholder="รหัสผ่าน"
+                    className="input input-bordered w-full rounded-l-none"
+                    value={formData.password}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+                <div className="flex justify-end mt-1">
+                  <Link href="/forgot-password" className="text-sm text-primary hover:underline flex items-center">
+                    <FiHelpCircle className="mr-1" size={14} />
+                    ลืมรหัสผ่าน?
+                  </Link>
+                </div>
+              </div>
+              
+              <div className="form-control mt-6">
+                <LoadingButton 
+                  type="submit" 
+                  className="btn-primary"
+                  loading={loading}
+                >
+                  เข้าสู่ระบบ
+                </LoadingButton>
+              </div>
+            </form>
           </div>
-        )}
-        
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label htmlFor="email" className="block text-gray-700 font-medium mb-2 flex items-center">
-              <FiMail className="mr-2" />
-              <span>อีเมล</span>
-            </label>
-            <input
-              type="email"
-              id="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-              placeholder="your.email@example.com"
-              required
-            />
-          </div>
-          
-          <div>
-            <label htmlFor="password" className="block text-gray-700 font-medium mb-2 flex items-center">
-              <FiLock className="mr-2" />
-              <span>รหัสผ่าน</span>
-            </label>
-            <input
-              type="password"
-              id="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-              placeholder="••••••••"
-              required
-            />
-          </div>
-          
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 transition-colors flex items-center justify-center"
-          >
-            {loading ? (
-              <span className="flex items-center">
-                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                กำลังเข้าสู่ระบบ...
-              </span>
-            ) : (
-              <span className="flex items-center">
-                <FiLogIn className="mr-2" />
-                เข้าสู่ระบบ
-              </span>
-            )}
-          </button>
-        </form>
-        
-        <div className="mt-8 text-center text-sm text-gray-500">
-          <p>ระบบจัดการทรัพยากรบุคคล © {new Date().getFullYear()}</p>
         </div>
       </div>
     </div>

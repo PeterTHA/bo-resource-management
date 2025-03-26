@@ -7,6 +7,7 @@ import Link from 'next/link';
 
 // เปลี่ยนจาก Heroicons เป็น react-icons
 import { FiCheckCircle, FiXCircle, FiTrash2, FiPlus, FiFilter, FiCalendar } from 'react-icons/fi';
+import { LoadingPage } from '../../components/ui/LoadingSpinner';
 
 export default function LeavesPage() {
   const { data: session, status } = useSession();
@@ -113,13 +114,8 @@ export default function LeavesPage() {
 
   if (status === 'loading' || loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="spinner-border animate-spin inline-block w-8 h-8 border-4 rounded-full" role="status">
-            <span className="visually-hidden">กำลังโหลด...</span>
-          </div>
-          <p className="mt-2">กำลังโหลด...</p>
-        </div>
+      <div className="container mx-auto px-4 py-8">
+        <LoadingPage message="กำลังโหลดข้อมูลการลา..." />
       </div>
     );
   }

@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Image from "next/image";
+import { LoadingPage } from '../components/ui/LoadingSpinner';
 
 export default function HomePage() {
   const { data: session, status } = useSession();
@@ -21,12 +22,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center">
-      <div className="text-center">
-        <div className="spinner-border animate-spin inline-block w-8 h-8 border-4 rounded-full" role="status">
-          <span className="visually-hidden">กำลังโหลด...</span>
-        </div>
-        <p className="mt-2">กำลังนำทางไปยังหน้าที่เหมาะสม...</p>
-      </div>
+      <LoadingPage message="กำลังนำทางไปยังหน้าที่เหมาะสม..." />
     </div>
   );
 }

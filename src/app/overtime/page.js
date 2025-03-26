@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { LoadingPage } from '../../components/ui/LoadingSpinner';
 
 // เปลี่ยนจาก Heroicons เป็น react-icons
 import { FiCheckCircle, FiXCircle, FiTrash2, FiPlus, FiFilter, FiClock } from 'react-icons/fi';
@@ -113,13 +114,8 @@ export default function OvertimePage() {
 
   if (status === 'loading' || loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="spinner-border animate-spin inline-block w-8 h-8 border-4 rounded-full border-indigo-300 border-t-indigo-600 dark:border-indigo-700 dark:border-t-indigo-400" role="status">
-            <span className="visually-hidden">กำลังโหลด...</span>
-          </div>
-          <p className="mt-2 text-gray-600 dark:text-gray-300">กำลังโหลด...</p>
-        </div>
+      <div className="container mx-auto px-4 py-8">
+        <LoadingPage message="กำลังโหลดข้อมูลการทำงานล่วงเวลา..." />
       </div>
     );
   }

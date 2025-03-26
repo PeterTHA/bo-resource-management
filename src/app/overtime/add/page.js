@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { FiSave, FiArrowLeft } from 'react-icons/fi';
+import { LoadingPage, LoadingButton } from '../../../components/ui/LoadingSpinner';
 
 export default function AddOvertimePage() {
   const { data: session, status } = useSession();
@@ -123,13 +125,8 @@ export default function AddOvertimePage() {
 
   if (status === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="spinner-border animate-spin inline-block w-8 h-8 border-4 rounded-full" role="status">
-            <span className="visually-hidden">กำลังโหลด...</span>
-          </div>
-          <p className="mt-2">กำลังโหลด...</p>
-        </div>
+      <div className="container mx-auto p-4">
+        <LoadingPage message="กำลังโหลด..." />
       </div>
     );
   }
@@ -141,27 +138,28 @@ export default function AddOvertimePage() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">ขอทำงานล่วงเวลา</h1>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">ขอทำงานล่วงเวลา</h1>
         <Link
           href="/overtime"
-          className="bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md"
+          className="btn btn-outline btn-sm border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
         >
+          <FiArrowLeft className="mr-1 h-4 w-4" />
           กลับ
         </Link>
       </div>
       
       {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+        <div className="bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-800/50 text-red-700 dark:text-red-300 px-4 py-3 rounded mb-4">
           {error}
         </div>
       )}
       
-      <div className="bg-white rounded-lg shadow-md p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/30 p-6">
         <form onSubmit={handleSubmit}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {(session.user.role === 'admin' || session.user.role === 'manager') && (
               <div>
-                <label htmlFor="employee" className="block text-gray-700 font-medium mb-2">
+                <label htmlFor="employee" className="block text-gray-700 dark:text-gray-200 font-medium mb-2">
                   พนักงาน
                 </label>
                 <select
@@ -169,7 +167,7 @@ export default function AddOvertimePage() {
                   name="employee"
                   value={formData.employee}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   required
                 >
                   <option value="">เลือกพนักงาน</option>
@@ -183,7 +181,7 @@ export default function AddOvertimePage() {
             )}
             
             <div>
-              <label htmlFor="date" className="block text-gray-700 font-medium mb-2">
+              <label htmlFor="date" className="block text-gray-700 dark:text-gray-200 font-medium mb-2">
                 วันที่ทำงานล่วงเวลา
               </label>
               <input
@@ -192,13 +190,13 @@ export default function AddOvertimePage() {
                 name="date"
                 value={formData.date}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 required
               />
             </div>
             
             <div>
-              <label htmlFor="startTime" className="block text-gray-700 font-medium mb-2">
+              <label htmlFor="startTime" className="block text-gray-700 dark:text-gray-200 font-medium mb-2">
                 เวลาเริ่มต้น
               </label>
               <input
@@ -207,13 +205,13 @@ export default function AddOvertimePage() {
                 name="startTime"
                 value={formData.startTime}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 required
               />
             </div>
             
             <div>
-              <label htmlFor="endTime" className="block text-gray-700 font-medium mb-2">
+              <label htmlFor="endTime" className="block text-gray-700 dark:text-gray-200 font-medium mb-2">
                 เวลาสิ้นสุด
               </label>
               <input
@@ -222,13 +220,13 @@ export default function AddOvertimePage() {
                 name="endTime"
                 value={formData.endTime}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 required
               />
             </div>
             
             <div className="md:col-span-2">
-              <label htmlFor="reason" className="block text-gray-700 font-medium mb-2">
+              <label htmlFor="reason" className="block text-gray-700 dark:text-gray-200 font-medium mb-2">
                 เหตุผลการทำงานล่วงเวลา
               </label>
               <textarea
@@ -237,28 +235,30 @@ export default function AddOvertimePage() {
                 value={formData.reason}
                 onChange={handleChange}
                 rows="4"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 required
               ></textarea>
             </div>
             
             {formData.startTime && formData.endTime && (
               <div className="md:col-span-2">
-                <div className="p-4 bg-blue-50 rounded-md">
-                  <p className="font-medium">จำนวนชั่วโมงทำงานล่วงเวลา: <span className="text-blue-600">{calculateTotalHours()} ชั่วโมง</span></p>
+                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-md">
+                  <p className="font-medium text-gray-800 dark:text-gray-100">จำนวนชั่วโมงทำงานล่วงเวลา: <span className="text-blue-600 dark:text-blue-400">{calculateTotalHours()} ชั่วโมง</span></p>
                 </div>
               </div>
             )}
           </div>
           
           <div className="mt-6">
-            <button
+            <LoadingButton
               type="submit"
-              disabled={loading}
-              className="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+              loading={loading}
+              className="btn btn-primary w-full"
+              textClass="text-black dark:text-white"
             >
+              <FiSave className="mr-2 h-4 w-4" />
               {loading ? 'กำลังบันทึก...' : 'บันทึก'}
-            </button>
+            </LoadingButton>
           </div>
         </form>
       </div>

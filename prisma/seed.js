@@ -6,6 +6,47 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('เริ่มต้นการเพิ่มข้อมูลตัวอย่าง...');
 
+  // เพิ่มข้อมูลทีม
+  const teams = await Promise.all([
+    prisma.team.upsert({
+      where: { name: 'Development' },
+      update: {},
+      create: { name: 'Development' },
+    }),
+    prisma.team.upsert({
+      where: { name: 'Design' },
+      update: {},
+      create: { name: 'Design' },
+    }),
+    prisma.team.upsert({
+      where: { name: 'Marketing' },
+      update: {},
+      create: { name: 'Marketing' },
+    }),
+    prisma.team.upsert({
+      where: { name: 'Sales' },
+      update: {},
+      create: { name: 'Sales' },
+    }),
+    prisma.team.upsert({
+      where: { name: 'HR' },
+      update: {},
+      create: { name: 'HR' },
+    }),
+    prisma.team.upsert({
+      where: { name: 'Finance' },
+      update: {},
+      create: { name: 'Finance' },
+    }),
+    prisma.team.upsert({
+      where: { name: 'Operations' },
+      update: {},
+      create: { name: 'Operations' },
+    }),
+  ]);
+
+  console.log(`สร้างข้อมูลทีมทั้งหมด ${teams.length} ทีม`);
+
   // เข้ารหัสรหัสผ่าน
   const salt = await bcrypt.genSalt(10);
   const hashedPassword = await bcrypt.hash('admin123', salt);
@@ -22,6 +63,7 @@ async function main() {
       password: hashedPassword,
       position: 'Administrator',
       department: 'IT',
+      teamId: teams[0].id, // Development team
       hireDate: new Date('2023-01-01'),
       role: 'admin',
       isActive: true,
@@ -40,6 +82,7 @@ async function main() {
       password: hashedPassword,
       position: 'Manager',
       department: 'HR',
+      teamId: teams[4].id, // HR team
       hireDate: new Date('2023-01-15'),
       role: 'manager',
       isActive: true,
@@ -58,6 +101,7 @@ async function main() {
       password: hashedPassword,
       position: 'Staff',
       department: 'Marketing',
+      teamId: teams[2].id, // Marketing team
       hireDate: new Date('2023-02-01'),
       role: 'employee',
       isActive: true,

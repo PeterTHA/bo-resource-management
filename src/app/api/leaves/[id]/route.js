@@ -15,7 +15,8 @@ export async function GET(request, { params }) {
       );
     }
     
-    const id = await params.id;
+    const resolvedParams = await params;
+    const id = resolvedParams.id;
     
     // ดึงข้อมูลการลาจาก Prisma
     const result = await getLeaveById(id);
@@ -57,7 +58,8 @@ export async function PUT(request, { params }) {
       );
     }
     
-    const id = await params.id;
+    const resolvedParams = await params;
+    const id = resolvedParams.id;
     
     // ดึงข้อมูลการลาเพื่อตรวจสอบสิทธิ์
     const checkResult = await getLeaveById(id);
@@ -141,7 +143,8 @@ export async function DELETE(request, { params }) {
       );
     }
     
-    const id = await params.id;
+    const resolvedParams = await params;
+    const id = resolvedParams.id;
     
     // ดึงข้อมูลการลาเพื่อตรวจสอบสิทธิ์
     const checkResult = await getLeaveById(id);
