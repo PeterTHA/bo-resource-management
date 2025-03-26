@@ -22,8 +22,8 @@ export async function GET(request) {
     let result;
     
     // ถ้าเป็น admin หรือ manager สามารถดูข้อมูลการลาทั้งหมดได้
-    // ถ้าเป็น employee สามารถดูข้อมูลการลาของตัวเองเท่านั้น
-    if (session.user.role === 'employee') {
+    // ถ้าเป็นพนักงานทั่วไป จะลาให้คนอื่นไม่ได้
+    if (session.user.role === 'permanent' || session.user.role === 'temporary') {
       result = await getLeaves(session.user.id);
     } else if (employeeId) {
       result = await getLeaves(employeeId);
@@ -70,8 +70,8 @@ export async function POST(request) {
       );
     }
     
-    // ถ้าเป็น employee ให้ใช้ ID ของตัวเอง
-    if (session.user.role === 'employee') {
+    // ถ้าเป็นพนักงานทั่วไป ให้ดูแค่การลาของตัวเอง
+    if (session.user.role === 'permanent' || session.user.role === 'temporary') {
       data.employeeId = session.user.id;
     }
     

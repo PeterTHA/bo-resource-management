@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { FiUsers, FiCalendar, FiClock, FiPlusCircle, FiUser, FiFileText } from 'react-icons/fi';
+import { FiUsers, FiCalendar, FiClock, FiPlusCircle, FiUser, FiFileText, FiSettings } from 'react-icons/fi';
 import { LoadingPage } from '../../components/ui/LoadingSpinner';
 
 export default function DashboardPage() {
@@ -60,6 +60,8 @@ export default function DashboardPage() {
     return null;
   }
 
+  const isAdmin = session.user.role === 'admin';
+
   return (
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-2xl md:text-3xl font-bold mb-8 text-gray-900 dark:text-gray-100">แดชบอร์ด</h1>
@@ -111,19 +113,21 @@ export default function DashboardPage() {
       <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-100 transition-colors duration-300">ทางลัด</h2>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <Link href="/employees/add" className="block">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-300">
-            <div className="p-6 flex items-center">
-              <div className="bg-blue-100 dark:bg-blue-900/30 p-3 rounded-full mr-4 transition-colors duration-300">
-                <FiPlusCircle className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <p className="text-lg font-medium text-gray-900 dark:text-white transition-colors duration-300">เพิ่มพนักงาน</p>
-                <p className="text-sm text-gray-600 dark:text-gray-300 transition-colors duration-300">เพิ่มข้อมูลพนักงานใหม่</p>
+        {(isAdmin || session.user.role === 'supervisor') && (
+          <Link href="/employees/add" className="block">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-300">
+              <div className="p-6 flex items-center">
+                <div className="bg-blue-100 dark:bg-blue-900/30 p-3 rounded-full mr-4 transition-colors duration-300">
+                  <FiPlusCircle className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                  <p className="text-lg font-medium text-gray-900 dark:text-white transition-colors duration-300">เพิ่มพนักงาน</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300 transition-colors duration-300">เพิ่มข้อมูลพนักงานใหม่</p>
+                </div>
               </div>
             </div>
-          </div>
-        </Link>
+          </Link>
+        )}
         
         <Link href="/leaves/add" className="block">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-300">
@@ -154,7 +158,7 @@ export default function DashboardPage() {
         </Link>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <Link href="/profile" className="block">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-300">
             <div className="p-6 flex items-center">
@@ -182,6 +186,22 @@ export default function DashboardPage() {
             </div>
           </div>
         </Link>
+        
+        {isAdmin && (
+          <Link href="/admin" className="block">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-300">
+              <div className="p-6 flex items-center">
+                <div className="bg-purple-100 dark:bg-purple-900/30 p-3 rounded-full mr-4 transition-colors duration-300">
+                  <FiSettings className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                </div>
+                <div>
+                  <p className="text-lg font-medium text-gray-900 dark:text-white transition-colors duration-300">จัดการระบบ</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300 transition-colors duration-300">สำหรับผู้ดูแลระบบ</p>
+                </div>
+              </div>
+            </div>
+          </Link>
+        )}
       </div>
     </div>
   );

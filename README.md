@@ -261,7 +261,24 @@ npx prisma studio
 
 ระบบนี้รองรับการส่งอีเมลผ่านบริการต่างๆ ดังนี้:
 
-### การใช้งาน SendGrid API (แนะนำ)
+### การใช้งาน Gmail (แนะนำ)
+
+1. สร้าง App Password สำหรับใช้กับ Gmail ของคุณ (ดูวิธีการที่ [docs/gmail-app-password.md](docs/gmail-app-password.md))
+2. ตั้งค่าในไฟล์ `.env.development.local` หรือ `.env.production.local`:
+
+```env
+EMAIL_PROVIDER=gmail
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=465
+EMAIL_SECURE=true
+EMAIL_USER=your-email@gmail.com
+EMAIL_PASS=your-app-password-without-spaces
+EMAIL_FROM=your-email@gmail.com
+```
+
+**หมายเหตุ:** คุณต้องเปิดใช้งานการยืนยันตัวตนสองชั้น (2FA) และสร้าง App Password สำหรับแอปพลิเคชันเพื่อใช้กับ Gmail
+
+### การใช้งาน SendGrid API
 
 1. สมัครบัญชี [SendGrid](https://sendgrid.com/) (มีแผนฟรีที่ส่งได้ 100 อีเมล/วัน)
 2. สร้าง API Key จาก SendGrid Dashboard
@@ -274,9 +291,9 @@ EMAIL_FROM=your-verified-sender@example.com
 
 **หมายเหตุ:** คุณต้องยืนยันโดเมนหรืออีเมลผู้ส่งกับ SendGrid ก่อนใช้งานจริง
 
-### การใช้งาน SMTP (สำรอง)
+### การใช้งาน SMTP ทั่วไป
 
-หากต้องการใช้ SMTP โดยตรง สามารถตั้งค่าดังนี้:
+หากต้องการใช้ SMTP ของผู้ให้บริการอื่น สามารถตั้งค่าดังนี้:
 
 ```env
 EMAIL_HOST=your-smtp-server.com
@@ -296,4 +313,4 @@ EMAIL_FROM=your-email@example.com
 
 ### การทดสอบระบบส่งอีเมลโดยไม่ต้องใช้บริการจริง
 
-หากไม่ได้ตั้งค่า API key ใดๆ ระบบจะใช้ Ethereal Email ซึ่งเป็นบริการจำลองการส่งอีเมล โดยจะแสดง URL สำหรับดูเนื้อหาอีเมลในคอนโซล เมื่อมีการเรียกใช้งานฟังก์ชันส่งอีเมล
+หากไม่ได้ตั้งค่าบริการอีเมลใดๆ ระบบจะใช้ Ethereal Email ซึ่งเป็นบริการจำลองการส่งอีเมล โดยจะแสดง URL สำหรับดูเนื้อหาอีเมลในคอนโซล เมื่อมีการเรียกใช้งานฟังก์ชันส่งอีเมล

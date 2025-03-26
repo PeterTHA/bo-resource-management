@@ -20,13 +20,7 @@ export async function POST(request) {
       );
     }
     
-    // ตรวจสอบสิทธิ์การเข้าถึง
-    if (session.user.role !== 'admin') {
-      return NextResponse.json(
-        { success: false, message: 'ไม่มีสิทธิ์อัปโหลดรูปภาพ' },
-        { status: 403 }
-      );
-    }
+    // ทุกคนมีสิทธิ์ในการอัปโหลดรูปโปรไฟล์ของตัวเอง
     
     // แปลงข้อมูล request เป็น FormData
     const formData = await request.formData();
@@ -56,11 +50,11 @@ export async function POST(request) {
       );
     }
     
-    // สร้าง ID ชั่วคราวสำหรับบันทึกรูปภาพ
-    const tempId = `temp-${Date.now()}`;
+    // ใช้ userId เป็นส่วนหนึ่งของชื่อไฟล์
+    const userId = session.user.id;
     
     // อัปโหลดรูปภาพไปยัง Vercel Blob
-    const result = await uploadProfileImage(file, tempId);
+    const result = await uploadProfileImage(file, userId);
     
     if (!result.success) {
       return NextResponse.json(

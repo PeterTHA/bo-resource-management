@@ -4,146 +4,124 @@ const bcrypt = require('bcryptjs');
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('เริ่มต้นการเพิ่มข้อมูลตัวอย่าง...');
+  console.log('เริ่มต้นการเพิ่มข้อมูลมาสเตอร์...');
+
+  // เพิ่มข้อมูลตำแหน่ง (positions)
+  console.log('กำลังเพิ่มข้อมูลตำแหน่ง...');
+  const positions = [
+    { code: 'PM', name: 'Project Manager', category: 'management', description: 'ผู้จัดการโครงการ' },
+    { code: 'BU', name: 'Business Analyst', category: 'management', description: 'นักวิเคราะห์ธุรกิจ' },
+    { code: 'QA', name: 'Quality Assurance', category: 'testing', description: 'ผู้ทดสอบคุณภาพซอฟต์แวร์' },
+    { code: 'SA', name: 'System Analyst', category: 'development', description: 'นักวิเคราะห์ระบบ' },
+    { code: 'DEVOPS', name: 'DevOps Engineer', category: 'devops', description: 'วิศวกร DevOps' },
+    { code: 'FE', name: 'Frontend Developer', category: 'development', description: 'นักพัฒนาฝั่งลูกข่าย' },
+    { code: 'BE', name: 'Backend Developer', category: 'development', description: 'นักพัฒนาฝั่งแม่ข่าย' },
+    { code: 'FS', name: 'Fullstack Developer', category: 'development', description: 'นักพัฒนาทั้งฝั่งลูกข่ายและแม่ข่าย' },
+    { code: 'MOB', name: 'Mobile Developer', category: 'development', description: 'นักพัฒนาแอปพลิเคชันมือถือ' },
+    { code: 'PS', name: 'Production Support', category: 'support', description: 'ผู้ดูแลระบบการผลิต' },
+    { code: 'UX', name: 'UX/UI Designer', category: 'design', description: 'นักออกแบบประสบการณ์และส่วนติดต่อผู้ใช้' },
+    { code: 'TL', name: 'Technical Lead', category: 'management', description: 'หัวหน้าทีมเทคนิค' },
+  ];
+
+  for (const position of positions) {
+    await prisma.position.upsert({
+      where: { code: position.code },
+      update: position,
+      create: position,
+    });
+  }
+
+  // เพิ่มข้อมูลระดับตำแหน่ง (position levels)
+  console.log('กำลังเพิ่มข้อมูลระดับตำแหน่ง...');
+  const positionLevels = [
+    { code: 'INTERN', name: 'Intern', level: 1, description: 'นักศึกษาฝึกงาน' },
+    { code: 'JR', name: 'Junior', level: 2, description: 'ระดับเริ่มต้น' },
+    { code: 'MID', name: 'Mid', level: 3, description: 'ระดับกลาง' }, 
+    { code: 'SR', name: 'Senior', level: 4, description: 'ระดับอาวุโส' },
+    { code: 'LEAD', name: 'Lead', level: 5, description: 'ระดับหัวหน้า' },
+    { code: 'PRINCIPAL', name: 'Principal', level: 6, description: 'ระดับหลัก' },
+    { code: 'DIRECTOR', name: 'Director', level: 7, description: 'ระดับผู้อำนวยการ' },
+  ];
+
+  for (const level of positionLevels) {
+    await prisma.positionLevel.upsert({
+      where: { code: level.code },
+      update: level,
+      create: level,
+    });
+  }
 
   // เพิ่มข้อมูลทีม
-  const teams = await Promise.all([
-    prisma.team.upsert({
-      where: { name: 'Development' },
-      update: {},
-      create: { name: 'Development' },
-    }),
-    prisma.team.upsert({
-      where: { name: 'Design' },
-      update: {},
-      create: { name: 'Design' },
-    }),
-    prisma.team.upsert({
-      where: { name: 'Marketing' },
-      update: {},
-      create: { name: 'Marketing' },
-    }),
-    prisma.team.upsert({
-      where: { name: 'Sales' },
-      update: {},
-      create: { name: 'Sales' },
-    }),
-    prisma.team.upsert({
-      where: { name: 'HR' },
-      update: {},
-      create: { name: 'HR' },
-    }),
-    prisma.team.upsert({
-      where: { name: 'Finance' },
-      update: {},
-      create: { name: 'Finance' },
-    }),
-    prisma.team.upsert({
-      where: { name: 'Operations' },
-      update: {},
-      create: { name: 'Operations' },
-    }),
-  ]);
+  const teams = [
+    { code: 'BO', name: 'Banking Operation', description: 'ทีมปฏิบัติการธนาคาร' },
+    { code: 'OB', name: 'Open Banking', description: 'ทีมโอเพ่นแบงค์กิ้ง' },
+    { code: 'QA', name: 'Quality Assurance', description: 'ทีมประกันคุณภาพ' },
+    { code: 'PM', name: 'Project Manager', description: 'ทีมผู้จัดการโครงการ' },
+    { code: 'AD', name: 'Admin', description: 'ทีมผู้ดูแลระบบ' },
+  ];
 
-  console.log(`สร้างข้อมูลทีมทั้งหมด ${teams.length} ทีม`);
+  console.log('กำลังเพิ่มข้อมูลทีม...');
+  for (const team of teams) {
+    await prisma.team.upsert({
+      where: { code: team.code },
+      update: team,
+      create: team,
+    });
+  }
 
-  // เข้ารหัสรหัสผ่าน
-  const salt = await bcrypt.genSalt(10);
-  const hashedPassword = await bcrypt.hash('admin123', salt);
+  // เพิ่มข้อมูลแผนก
+  const departments = [
+    { code: 'IT', name: 'IT', description: 'แผนกไอที' },
+    { code: 'ITDG', name: 'IT - Digital', description: 'แผนกไอทีดิจิทัล' },
+    { code: 'BUDG', name: 'BU - Digital', description: 'แผนกธุรกิจดิจิทัล' },
+  ];
 
-  // สร้างผู้ใช้ admin
-  const admin = await prisma.employee.upsert({
-    where: { email: 'admin@example.com' },
-    update: {},
-    create: {
-      employeeId: 'ADMIN001',
-      firstName: 'Admin',
-      lastName: 'User',
-      email: 'admin@example.com',
-      password: hashedPassword,
-      position: 'Administrator',
-      department: 'IT',
-      teamId: teams[0].id, // Development team
-      hireDate: new Date('2023-01-01'),
-      role: 'admin',
-      isActive: true,
-    },
+  console.log('กำลังเพิ่มข้อมูลแผนก...');
+  for (const department of departments) {
+    await prisma.department.upsert({
+      where: { code: department.code },
+      update: department,
+      create: department,
+    });
+  }
+
+  // สร้างผู้ใช้ admin (ถ้ายังไม่มี)
+  const admin = await prisma.employee.findFirst({
+    where: { role: 'admin' }
   });
 
-  // สร้างผู้ใช้ manager
-  const manager = await prisma.employee.upsert({
-    where: { email: 'manager@example.com' },
-    update: {},
-    create: {
-      employeeId: 'MGR001',
-      firstName: 'Manager',
-      lastName: 'User',
-      email: 'manager@example.com',
-      password: hashedPassword,
-      position: 'Manager',
-      department: 'HR',
-      teamId: teams[4].id, // HR team
-      hireDate: new Date('2023-01-15'),
-      role: 'manager',
-      isActive: true,
-    },
-  });
+  if (!admin) {
+    console.log('กำลังสร้างผู้ใช้ admin...');
+    
+    // หาข้อมูล reference
+    const adminTeam = await prisma.team.findUnique({ where: { code: 'AD' } });
+    const itDepartment = await prisma.department.findUnique({ where: { code: 'IT' } });
+    
+    // สร้าง admin
+    const hashedPassword = await bcrypt.hash('admin123', 10);
+    await prisma.employee.create({
+      data: {
+        employeeId: 'ADMIN001',
+        firstName: 'Admin',
+        lastName: 'User',
+        email: 'admin@example.com',
+        password: hashedPassword,
+        position: 'System Administrator',
+        departmentId: itDepartment?.id,
+        teamId: adminTeam?.id,
+        hireDate: new Date(),
+        role: 'admin',
+        isActive: true
+      }
+    });
+  }
 
-  // สร้างผู้ใช้ employee
-  const employee = await prisma.employee.upsert({
-    where: { email: 'employee@example.com' },
-    update: {},
-    create: {
-      employeeId: 'EMP001',
-      firstName: 'Employee',
-      lastName: 'User',
-      email: 'employee@example.com',
-      password: hashedPassword,
-      position: 'Staff',
-      department: 'Marketing',
-      teamId: teams[2].id, // Marketing team
-      hireDate: new Date('2023-02-01'),
-      role: 'employee',
-      isActive: true,
-    },
-  });
-
-  // สร้างข้อมูลการลา
-  const leave = await prisma.leave.create({
-    data: {
-      employeeId: employee.id,
-      leaveType: 'ลาป่วย',
-      startDate: new Date('2023-05-01'),
-      endDate: new Date('2023-05-03'),
-      reason: 'ไม่สบาย',
-      status: 'รออนุมัติ',
-    },
-  });
-
-  // สร้างข้อมูลการทำงานล่วงเวลา
-  const overtime = await prisma.overtime.create({
-    data: {
-      employeeId: employee.id,
-      date: new Date('2023-06-01'),
-      startTime: '17:00',
-      endTime: '20:00',
-      totalHours: 3,
-      reason: 'ทำงานไม่เสร็จ',
-      status: 'รออนุมัติ',
-    },
-  });
-
-  console.log('เพิ่มข้อมูลตัวอย่างสำเร็จ!');
-  console.log(`สร้างผู้ใช้ admin: ${admin.email}`);
-  console.log(`สร้างผู้ใช้ manager: ${manager.email}`);
-  console.log(`สร้างผู้ใช้ employee: ${employee.email}`);
-  console.log(`สร้างข้อมูลการลา ID: ${leave.id}`);
-  console.log(`สร้างข้อมูลการทำงานล่วงเวลา ID: ${overtime.id}`);
+  console.log('การเพิ่มข้อมูลมาสเตอร์เสร็จสมบูรณ์');
 }
 
 main()
   .catch((e) => {
-    console.error('เกิดข้อผิดพลาดในการเพิ่มข้อมูลตัวอย่าง:', e);
+    console.error('เกิดข้อผิดพลาดในการเพิ่มข้อมูล:', e);
     process.exit(1);
   })
   .finally(async () => {

@@ -22,8 +22,8 @@ export async function GET(request) {
     let result;
     
     // ถ้าเป็น admin หรือ manager สามารถดูข้อมูลการทำงานล่วงเวลาทั้งหมดได้
-    // ถ้าเป็น employee สามารถดูข้อมูลการทำงานล่วงเวลาของตัวเองเท่านั้น
-    if (session.user.role === 'employee') {
+    // ถ้าเป็นพนักงานทั่วไป จะบันทึกโอทีให้คนอื่นไม่ได้
+    if (session.user.role === 'permanent' || session.user.role === 'temporary') {
       result = await getOvertimes(session.user.id);
     } else if (employeeId) {
       result = await getOvertimes(employeeId);
@@ -62,8 +62,8 @@ export async function POST(request) {
     
     const data = await request.json();
     
-    // ถ้าเป็น employee ให้ใช้ ID ของตัวเอง
-    if (session.user.role === 'employee') {
+    // ถ้าเป็นพนักงานทั่วไป ให้ดูแค่โอทีของตัวเอง
+    if (session.user.role === 'permanent' || session.user.role === 'temporary') {
       data.employee = session.user.id;
     }
     

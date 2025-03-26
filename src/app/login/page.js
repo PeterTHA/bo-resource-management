@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { signIn } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { FiMail, FiLock, FiLogIn, FiHelpCircle } from 'react-icons/fi';
 import ErrorMessage from '../../components/ui/ErrorMessage';
@@ -10,12 +10,29 @@ import { LoadingButton } from '../../components/ui/LoadingSpinner';
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // ตรวจสอบ URL parameters เมื่อโหลดหน้า
+  useEffect(() => {
+    const errorType = searchParams.get('error');
+    if (errorType === 'SessionExpired') {
+      setError('เซสชันของคุณหมดอายุ กรุณาเข้าสู่ระบบอีกครั้ง');
+    } else if (errorType === 'ServerRestarted') {
+      setError('เซิร์ฟเวอร์มีการรีสตาร์ท กรุณาเข้าสู่ระบบอีกครั้ง');
+    } else if (errorType === 'AuthError') {
+      setError('เกิดข้อผิดพลาดในระบบยืนยันตัวตน กรุณาเข้าสู่ระบบอีกครั้ง');
+    } else if (errorType === 'ConfigError') {
+      setError('เกิดข้อผิดพลาดในการตั้งค่าระบบ กรุณาติดต่อผู้ดูแลระบบ');
+    } else if (errorType) {
+      setError('เกิดข้อผิดพลาดในการเข้าสู่ระบบ กรุณาลองใหม่อีกครั้ง');
+    }
+  }, [searchParams]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -37,14 +54,20 @@ export default function LoginPage() {
         password: formData.password,
       });
 
-      if (res.error) {
-        setError(res.error);
+      if (!res) {
+        setError('เกิดข้อผิดพลาดในการเข้าสู่ระบบ กรุณาลองใหม่อีกครั้ง');
+      } else if (res.error) {
+        if (res.error === 'ServerRestarted') {
+          setError('เซิร์ฟเวอร์มีการรีสตาร์ท กรุณาเข้าสู่ระบบอีกครั้ง');
+        } else {
+          setError('อีเมลหรือรหัสผ่านไม่ถูกต้อง');
+        }
       } else {
         router.push('/dashboard');
       }
     } catch (error) {
+      console.error('Login error:', error);
       setError('เกิดข้อผิดพลาดในการเข้าสู่ระบบ กรุณาลองใหม่อีกครั้ง');
-      console.error(error);
     } finally {
       setLoading(false);
     }

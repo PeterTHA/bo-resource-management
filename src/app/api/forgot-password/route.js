@@ -1,94 +1,140 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import prisma from '../../../lib/prisma';
-import { sendPasswordResetEmail } from '../../../lib/sendgrid-service';
+import { prisma } from '@/lib/prisma';
+import { sendPasswordResetEmail } from '@/lib/email-service';
 
 // ฟังก์ชันสำหรับสร้างรหัสผ่านแบบสุ่ม
 function generateRandomPassword(length = 10) {
-  const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+";
-  let password = "";
+  const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()-_=+';
+  let password = '';
+  
   for (let i = 0; i < length; i++) {
     const randomIndex = Math.floor(Math.random() * charset.length);
     password += charset[randomIndex];
   }
+  
   return password;
 }
 
 // POST - จัดการคำขอรีเซ็ตรหัสผ่าน
 export async function POST(request) {
   try {
-    const { email, employeeId } = await request.json();
-    
-    // ตรวจสอบว่ามีการส่งข้อมูลที่จำเป็นมาครบหรือไม่
+    // รับข้อมูลจาก request
+    const data = await request.json();
+    const { email, employeeId } = data;
+
+    // ตรวจสอบข้อมูลที่จำเป็น
     if (!email || !employeeId) {
       return NextResponse.json(
-        { success: false, message: 'กรุณากรอกอีเมลและรหัสพนักงาน' },
+        { 
+          success: false, 
+          message: 'กรุณาระบุอีเมลและรหัสพนักงาน' 
+        },
         { status: 400 }
       );
     }
-    
-    // ค้นหาพนักงานโดยใช้อีเมลและรหัสพนักงาน
+
+    // ค้นหาพนักงานจากอีเมลและรหัสพนักงาน
     const employee = await prisma.employee.findFirst({
       where: {
         email: email,
         employeeId: employeeId
       }
     });
-    
-    // ไม่พบพนักงานที่ตรงกับข้อมูลที่ให้มา
+
+    // หากไม่พบพนักงาน ให้ส่งข้อความว่าจะส่งอีเมลหากพบบัญชี (เพื่อความปลอดภัย)
     if (!employee) {
-      // สำหรับความปลอดภัย ไม่ควรบอกว่าพบหรือไม่พบข้อมูล แต่ให้แจ้งว่ากำลังดำเนินการ
+      console.log(`[FORGOT PASSWORD] Account not found for email: ${email} with ID: ${employeeId}`);
+      
       return NextResponse.json(
         { 
           success: true, 
-          message: 'หากมีบัญชีที่ตรงกับข้อมูลที่ให้มา ระบบจะส่งอีเมลสำหรับรีเซ็ตรหัสผ่านไปให้' 
+          message: 'หากพบบัญชีที่ตรงกับข้อมูลของคุณ เราจะส่งรหัสผ่านใหม่ไปยังอีเมลของคุณ' 
         },
         { status: 200 }
       );
     }
-    
-    // สร้างรหัสผ่านใหม่แบบสุ่ม
-    const newPassword = generateRandomPassword();
-    console.log(`รหัสผ่านที่รีเซ็ตสำหรับพนักงาน ${employee.email}: ${newPassword}`);
+
+    // สร้างรหัสผ่านใหม่
+    const newPassword = generateRandomPassword(12);
     
     // เข้ารหัสรหัสผ่านใหม่
     const hashedPassword = await bcrypt.hash(newPassword, 10);
-    
+
     // อัปเดตรหัสผ่านในฐานข้อมูล
     await prisma.employee.update({
-      where: { id: employee.id },
-      data: { password: hashedPassword }
+      where: {
+        id: employee.id
+      },
+      data: {
+        password: hashedPassword
+      }
     });
-    
-    // ส่งอีเมลรหัสผ่านใหม่ให้พนักงาน
+
+    // เก็บรหัสผ่านใหม่ไว้ในส่วนของ debug log (ไม่แสดงกลับไปที่ผู้ใช้)
+    console.log(`[FORGOT PASSWORD] New password for employee ${employee.email} (${employee.employeeId}): ${newPassword}`);
+
+    // ส่งอีเมลแจ้งรหัสผ่านใหม่ไปให้พนักงาน
     try {
-      await sendPasswordResetEmail({
+      const emailResult = await sendPasswordResetEmail({
         email: employee.email,
         firstName: employee.firstName,
         lastName: employee.lastName,
         password: newPassword,
-        role: employee.role,
         employeeId: employee.employeeId,
-        resetBy: 'ระบบรีเซ็ตรหัสผ่านอัตโนมัติ (คำขอจากผู้ใช้)'
+        role: employee.role,
+        resetBy: 'ระบบลืมรหัสผ่าน'
       });
-      console.log(`ส่งอีเมลรีเซ็ตรหัสผ่านไปยัง ${employee.email} เรียบร้อยแล้ว`);
+      
+      if (emailResult.success) {
+        // ส่งอีเมลสำเร็จ
+        console.log(`[FORGOT PASSWORD] Email sent successfully to ${employee.email}`);
+        
+        // แสดง URL พรีวิวในโหมดทดสอบ
+        if (emailResult.preview) {
+          console.log(`[FORGOT PASSWORD] Email preview URL: ${emailResult.preview}`);
+        }
+        
+        return NextResponse.json({
+          success: true,
+          message: 'รหัสผ่านใหม่ได้ถูกส่งไปยังอีเมลของคุณแล้ว'
+        });
+      } else {
+        // ส่งอีเมลไม่สำเร็จ แต่รหัสผ่านถูกรีเซ็ตแล้ว
+        console.error(`[FORGOT PASSWORD] Failed to send email to ${employee.email}: ${emailResult.message}`);
+        
+        // อย่าเปิดเผยความผิดพลาดไปยังผู้ใช้ แต่บันทึกไว้ในระบบ
+        return NextResponse.json({
+          success: true,
+          message: 'หากพบบัญชีที่ตรงกับข้อมูลของคุณ เราจะส่งรหัสผ่านใหม่ไปยังอีเมลของคุณ',
+          debug: {
+            emailSent: false,
+            reason: emailResult.message
+          }
+        });
+      }
     } catch (emailError) {
-      console.error('เกิดข้อผิดพลาดในการส่งอีเมล:', emailError);
-      // ยังคงดำเนินการต่อแม้การส่งอีเมลจะล้มเหลว
+      // เกิดข้อผิดพลาดในการส่งอีเมล แต่รหัสผ่านถูกรีเซ็ตแล้ว
+      console.error(`[FORGOT PASSWORD] Error sending email to ${employee.email}:`, emailError.message);
+      
+      // อย่าเปิดเผยความผิดพลาดไปยังผู้ใช้ แต่บันทึกไว้ในระบบ
+      return NextResponse.json({
+        success: true,
+        message: 'หากพบบัญชีที่ตรงกับข้อมูลของคุณ เราจะส่งรหัสผ่านใหม่ไปยังอีเมลของคุณ',
+        debug: {
+          emailSent: false,
+          reason: emailError.message
+        }
+      });
     }
+  } catch (error) {
+    console.error('[FORGOT PASSWORD ERROR]', error.message);
     
-    // สำหรับความปลอดภัย ไม่ควรบอกว่าพบหรือไม่พบข้อมูล แต่ให้แจ้งว่ากำลังดำเนินการ
     return NextResponse.json(
       { 
-        success: true, 
-        message: 'หากมีบัญชีที่ตรงกับข้อมูลที่ให้มา ระบบจะส่งอีเมลสำหรับรีเซ็ตรหัสผ่านไปให้' 
+        success: false, 
+        message: 'เกิดข้อผิดพลาดในการรีเซ็ตรหัสผ่าน กรุณาลองใหม่อีกครั้ง' 
       },
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error('Error resetting password:', error);
-    return NextResponse.json(
-      { success: false, message: 'เกิดข้อผิดพลาดในการรีเซ็ตรหัสผ่าน' },
       { status: 500 }
     );
   }

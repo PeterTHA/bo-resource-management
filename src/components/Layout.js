@@ -32,10 +32,13 @@ export default function Layout({ children }) {
       try {
         setLoading(true);
         const res = await fetch(`/api/employees/${session.user.id}`);
-        const data = await res.json();
+        const result = await res.json();
         
-        if (data.success) {
-          setUserData(data.data);
+        // รองรับทั้งรูปแบบเก่าและรูปแบบใหม่
+        if (result.data) {
+          setUserData(result.data);
+        } else if (!result.error) {
+          setUserData(result);
         }
       } catch (error) {
         console.error('Error fetching user data:', error);

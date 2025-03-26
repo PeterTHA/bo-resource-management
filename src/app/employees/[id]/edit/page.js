@@ -10,6 +10,11 @@ import { LoadingPage, LoadingButton } from '../../../../components/ui/LoadingSpi
 import ErrorMessage from '../../../../components/ui/ErrorMessage';
 import { use } from 'react';
 
+// เพิ่มฟังก์ชันตรวจสอบว่าเป็นรูปภาพจาก mock-images หรือไม่
+const isMockImage = (src) => {
+  return src && typeof src === 'string' && (src.startsWith('/mock-images/') || src.startsWith('./mock-images/'));
+};
+
 export default function EditEmployeePage({ params }) {
   // ใช้ React.use เพื่อแกะ params promise
   const resolvedParams = use(params);
@@ -23,14 +28,22 @@ export default function EditEmployeePage({ params }) {
     lastName: '',
     email: '',
     position: '',
-    department: '',
+    positionLevel: '',
+    positionTitle: '',
+    departmentId: '',
     teamId: '',
     hireDate: '',
     role: 'employee',
     isActive: true,
     image: '',
+    gender: 'male',
+    birthDate: '',
+    phoneNumber: '',
   });
   const [teams, setTeams] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [positions, setPositions] = useState([]);
+  const [positionLevels, setPositionLevels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -39,14 +52,32 @@ export default function EditEmployeePage({ params }) {
   const [imagePreview, setImagePreview] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
 
-  // เรียกข้อมูลทีมเมื่อโหลดหน้า
+  // เรียกข้อมูลทีม แผนก ตำแหน่ง และระดับตำแหน่งเมื่อโหลดหน้า
   useEffect(() => {
-    if (status === 'authenticated' && session.user.role === 'admin') {
-      fetchTeams();
+    if (status === 'authenticated') {
+      fetchPositions();
+      fetchPositionLevels();
+      
+      // ดึงข้อมูลทีมตามบทบาท
+      if (session.user.role === 'admin') {
+        // หากเป็นแอดมิน ดึงทุกทีม
+        fetchTeams();
+        fetchDepartments();
+      } else if (session.user.role === 'supervisor') {
+        // หากเป็นหัวหน้างาน ดึงเฉพาะทีมของตัวเอง
+        fetchSupervisorTeam();
+        fetchSupervisorDepartment();
+      }
     }
   }, [status, session]);
 
-  // ดึงข้อมูลทีมจาก API
+  // กำหนดตัวแปรเพื่อตรวจสอบว่าเป็นหัวหน้างานหรือไม่
+  const isSupervisor = session?.user?.role === 'supervisor';
+  
+  // ตรวจสอบว่าผู้ใช้เป็นเจ้าของข้อมูลที่กำลังแก้ไขหรือไม่
+  const isOwnProfile = session?.user?.id === employeeId;
+
+  // ดึงข้อมูลทีมจาก API (สำหรับแอดมิน)
   const fetchTeams = async () => {
     try {
       const res = await fetch('/api/teams');
@@ -62,11 +93,181 @@ export default function EditEmployeePage({ params }) {
     }
   };
 
+  // ดึงข้อมูลทีมของหัวหน้างาน
+  const fetchSupervisorTeam = async () => {
+    try {
+      // ถ้าเป็นหัวหน้างาน ใช้ teamId จาก session
+      if (session.user.teamId) {
+        // ใช้ข้อมูลทีมที่มีอยู่ใน session ก่อน
+        const teamName = session.user.team;
+        if (teamName) {
+          setTeams([{
+            id: session.user.teamId,
+            name: teamName
+          }]);
+        } else {
+          // ถ้าไม่มีชื่อทีมใน session ค่อยดึงจาก API
+          try {
+            const res = await fetch(`/api/teams/${session.user.teamId}`);
+            if (res.ok) {
+              const data = await res.json();
+              
+              if (data.success && data.data) {
+                // กำหนดเป็นอาร์เรย์ที่มีเพียงทีมเดียว
+                setTeams([data.data]);
+              } else {
+                // ถ้าไม่สำเร็จแต่ไม่มีข้อผิดพลาด กำหนดเป็นทีมเปล่า
+                setTeams([{
+                  id: session.user.teamId,
+                  name: 'ทีมของคุณ'
+                }]);
+              }
+            } else {
+              // ถ้า API ตอบกลับด้วย error ใช้ค่าที่มีอยู่
+              setTeams([{
+                id: session.user.teamId,
+                name: 'ทีมของคุณ'
+              }]);
+            }
+          } catch (error) {
+            console.error('API error when fetching team:', error);
+            // ใช้ค่าเริ่มต้นในกรณีที่มีข้อผิดพลาด
+            setTeams([{
+              id: session.user.teamId,
+              name: 'ทีมของคุณ'
+            }]);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error in fetchSupervisorTeam:', error);
+      // สร้างทีมเริ่มต้นในกรณีที่มีข้อผิดพลาด
+      if (session.user.teamId) {
+        setTeams([{
+          id: session.user.teamId,
+          name: 'ทีมของคุณ'
+        }]);
+      }
+    }
+  };
+
+  // ดึงข้อมูลแผนกของหัวหน้างาน
+  const fetchSupervisorDepartment = async () => {
+    try {
+      // กรณีหัวหน้างาน ตรวจสอบก่อนว่ามีข้อมูลแผนกใน session หรือไม่
+      if (session.user.departmentId && session.user.department) {
+        // ถ้ามีข้อมูลแผนกใน session ใช้ข้อมูลนั้นเลย
+        setDepartments([{
+          id: session.user.departmentId,
+          name: session.user.department
+        }]);
+        return;
+      }
+      
+      // ถ้าไม่มีข้อมูลใน session ดึงจาก API
+      const res = await fetch('/api/departments');
+      const data = await res.json();
+      
+      if (data.success) {
+        // ถ้าเป็นหัวหน้างาน แสดงแค่แผนกของตัวเอง
+        if (session.user.departmentId) {
+          const supervisorDept = data.data?.find(d => d.id === session.user.departmentId);
+          if (supervisorDept) {
+            setDepartments([supervisorDept]);
+          } else {
+            // ถ้าไม่พบแผนกในข้อมูล API ใช้แผนกเริ่มต้น
+            setDepartments([{
+              id: session.user.departmentId,
+              name: 'แผนกของคุณ'
+            }]);
+          }
+        } else {
+          // กรณีไม่มี departmentId ใน session ให้แสดงทุกแผนก
+          setDepartments(data.data || []);
+        }
+      } else {
+        console.error('Error fetching departments:', data.message);
+        
+        // กรณีมีข้อผิดพลาด ใช้แผนกเริ่มต้น
+        if (session.user.departmentId) {
+          setDepartments([{
+            id: session.user.departmentId,
+            name: 'แผนกของคุณ'
+          }]);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching departments:', error);
+      
+      // กรณีผิดพลาดแต่เป็นหัวหน้างาน สร้างแผนกเริ่มต้น
+      if (session.user.departmentId) {
+        setDepartments([{
+          id: session.user.departmentId,
+          name: session.user.department || 'แผนกของคุณ'
+        }]);
+      }
+    }
+  };
+
+  // ดึงข้อมูลแผนกจาก API (สำหรับแอดมิน)
+  const fetchDepartments = async () => {
+    try {
+      const res = await fetch('/api/departments');
+      const data = await res.json();
+      
+      if (data.success) {
+        setDepartments(data.data || []);
+      } else {
+        console.error('Error fetching departments:', data.message);
+      }
+    } catch (error) {
+      console.error('Error fetching departments:', error);
+    }
+  };
+
+  // ดึงข้อมูลตำแหน่งจาก API
+  const fetchPositions = async () => {
+    try {
+      const res = await fetch('/api/positions');
+      const data = await res.json();
+      
+      if (data.success) {
+        setPositions(data.data || []);
+      } else {
+        console.error('Error fetching positions:', data.message);
+      }
+    } catch (error) {
+      console.error('Error fetching positions:', error);
+    }
+  };
+
+  // ดึงข้อมูลระดับตำแหน่งจาก API
+  const fetchPositionLevels = async () => {
+    try {
+      const res = await fetch('/api/position-levels');
+      const data = await res.json();
+      
+      if (data.success) {
+        setPositionLevels(data.data || []);
+      } else {
+        console.error('Error fetching position levels:', data.message);
+      }
+    } catch (error) {
+      console.error('Error fetching position levels:', error);
+    }
+  };
+
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/login');
-    } else if (status === 'authenticated' && session.user.role !== 'admin') {
-      router.push('/dashboard');
+    } else if (status === 'authenticated') {
+      // ตรวจสอบสิทธิ์ในการเข้าถึงหน้านี้
+      const hasAccess = session.user.role === 'admin' || session.user.role === 'supervisor';
+      
+      if (!hasAccess) {
+        alert('คุณไม่มีสิทธิ์ในการเข้าถึงหน้านี้');
+        router.push('/dashboard');
+      }
     }
   }, [status, session, router]);
 
@@ -74,12 +275,12 @@ export default function EditEmployeePage({ params }) {
     const fetchEmployeeData = async () => {
       try {
         const res = await fetch(`/api/employees/${employeeId}`);
-        const data = await res.json();
+        const result = await res.json();
         
-        if (data.success) {
-          // แปลงข้อมูล
-          const employee = data.data;
-          
+        // รองรับทั้งรูปแบบเก่าและรูปแบบใหม่
+        const employee = result.data || result;
+        
+        if (employee && !result.error) {
           // แปลง hireDate ให้ถูกต้องป้องกัน Invalid time value
           let formattedHireDate = '';
           try {
@@ -91,18 +292,34 @@ export default function EditEmployeePage({ params }) {
             console.error('Error formatting hire date:', error);
           }
           
+          // แปลง birthDate ให้ถูกต้อง
+          let formattedBirthDate = '';
+          try {
+            if (employee.birthDate) {
+              const birthDate = new Date(employee.birthDate);
+              formattedBirthDate = birthDate.toISOString().split('T')[0];
+            }
+          } catch (error) {
+            console.error('Error formatting birth date:', error);
+          }
+          
           setFormData({
             employeeId: employee.employeeId,
             firstName: employee.firstName,
             lastName: employee.lastName,
             email: employee.email,
-            position: employee.position,
-            department: employee.department,
+            position: employee.position || '',
+            positionLevel: employee.positionLevel || '',
+            positionTitle: employee.positionTitle || '',
+            departmentId: employee.departmentId || '',
             teamId: employee.teamId || '',
             hireDate: formattedHireDate,
             role: employee.role,
             isActive: employee.isActive,
             image: employee.image || '',
+            gender: employee.gender || 'male',
+            birthDate: formattedBirthDate,
+            phoneNumber: employee.phoneNumber || '',
           });
           
           // ตั้งค่าภาพตัวอย่างถ้ามีรูปภาพ
@@ -110,7 +327,7 @@ export default function EditEmployeePage({ params }) {
             setImagePreview(employee.image);
           }
         } else {
-          setError(data.message || 'เกิดข้อผิดพลาดในการดึงข้อมูลพนักงาน');
+          setError(result.message || 'เกิดข้อผิดพลาดในการดึงข้อมูลพนักงาน');
         }
       } catch (error) {
         setError('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์');
@@ -124,6 +341,22 @@ export default function EditEmployeePage({ params }) {
       fetchEmployeeData();
     }
   }, [session, employeeId]);
+
+  // อัปเดตชื่อตำแหน่งเมื่อมีการเลือกตำแหน่งและระดับตำแหน่ง
+  useEffect(() => {
+    if (formData.position && formData.positionLevel && positions.length > 0 && positionLevels.length > 0) {
+      const selectedPosition = positions.find(pos => pos.code === formData.position);
+      const selectedLevel = positionLevels.find(level => level.code === formData.positionLevel);
+      
+      if (selectedPosition && selectedLevel) {
+        const positionTitle = `${selectedLevel.name} ${selectedPosition.name}`;
+        setFormData(prev => ({
+          ...prev,
+          positionTitle
+        }));
+      }
+    }
+  }, [formData.position, formData.positionLevel, positions, positionLevels]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -226,8 +459,9 @@ export default function EditEmployeePage({ params }) {
       
       const data = await res.json();
       
-      if (data.success) {
-        setSuccess('อัปเดตข้อมูลพนักงานเรียบร้อยแล้ว');
+      // รองรับทั้งรูปแบบเก่าและรูปแบบใหม่
+      if (!data.error) {
+        setSuccess(data.message || 'อัปเดตข้อมูลพนักงานเรียบร้อยแล้ว');
         setTimeout(() => {
           router.push('/employees');
         }, 2000);
@@ -250,7 +484,7 @@ export default function EditEmployeePage({ params }) {
     );
   }
 
-  if (!session || session.user.role !== 'admin') {
+  if (!session || (session.user.role !== 'admin' && session.user.role !== 'supervisor')) {
     return null;
   }
 
@@ -296,6 +530,7 @@ export default function EditEmployeePage({ params }) {
                     alt="รูปโปรไฟล์"
                     fill
                     className="object-cover rounded-full border-4 border-gray-200 dark:border-gray-700"
+                    unoptimized={isMockImage(imagePreview)}
                   />
                   <button
                     type="button"
@@ -391,35 +626,165 @@ export default function EditEmployeePage({ params }) {
               <label htmlFor="position" className="block text-gray-700 dark:text-gray-200 font-medium mb-2">
                 ตำแหน่ง <span className="text-red-500">*</span>
               </label>
-              <input
-                type="text"
+              <select
                 id="position"
                 name="position"
                 value={formData.position}
                 onChange={handleChange}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 required
+              >
+                <option value="">-- เลือกตำแหน่ง --</option>
+                {positions.map((position) => (
+                  <option key={position.id} value={position.code}>
+                    {position.name} ({position.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <label htmlFor="positionLevel" className="block text-gray-700 dark:text-gray-200 font-medium mb-2">
+                ระดับตำแหน่ง <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="positionLevel"
+                name="positionLevel"
+                value={formData.positionLevel}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                required
+              >
+                <option value="">-- เลือกระดับตำแหน่ง --</option>
+                {positionLevels.map((level) => (
+                  <option key={level.id} value={level.code}>
+                    {level.name} ({level.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            {formData.positionTitle && (
+              <div className="col-span-1 md:col-span-2">
+                <label htmlFor="positionTitle" className="block text-gray-700 dark:text-gray-200 font-medium mb-2">
+                  ชื่อตำแหน่งที่แสดง
+                </label>
+                <input
+                  type="text"
+                  id="positionTitle"
+                  name="positionTitle"
+                  value={formData.positionTitle}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  สามารถปรับแต่งชื่อตำแหน่งที่แสดงได้ตามต้องการ
+                </p>
+              </div>
+            )}
+            
+            <div>
+              <label htmlFor="gender" className="block text-gray-700 dark:text-gray-200 font-medium mb-2">
+                เพศ <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="gender"
+                name="gender"
+                value={formData.gender}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                required
+              >
+                <option value="male">ชาย</option>
+                <option value="female">หญิง</option>
+                <option value="other">อื่นๆ</option>
+              </select>
+            </div>
+            
+            <div>
+              <label htmlFor="birthDate" className="block text-gray-700 dark:text-gray-200 font-medium mb-2">
+                วันเกิด
+              </label>
+              <input
+                type="date"
+                id="birthDate"
+                name="birthDate"
+                value={formData.birthDate}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               />
             </div>
             
             <div>
-              <label htmlFor="department" className="block text-gray-700 dark:text-gray-200 font-medium mb-2">
-                แผนก <span className="text-red-500">*</span>
+              <label htmlFor="phoneNumber" className="block text-gray-700 dark:text-gray-200 font-medium mb-2">
+                เบอร์โทรศัพท์
               </label>
               <input
-                type="text"
-                id="department"
-                name="department"
-                value={formData.department}
+                type="tel"
+                id="phoneNumber"
+                name="phoneNumber"
+                value={formData.phoneNumber}
+                onChange={handleChange}
+                placeholder="0812345678"
+                pattern="[0-9]{9,10}"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              />
+            </div>
+            
+            <div>
+              <label htmlFor="departmentId" className="block text-gray-700 dark:text-gray-200 font-medium mb-2">
+                แผนก <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="departmentId"
+                name="departmentId"
+                value={formData.departmentId}
                 onChange={handleChange}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 required
-              />
+              >
+                <option value="">-- เลือกแผนก --</option>
+                {departments.map((department) => (
+                  <option key={department.id} value={department.id}>
+                    {department.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <label htmlFor="role" className="block text-gray-700 dark:text-gray-200 font-medium mb-2">
+                บทบาท <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="role"
+                name="role"
+                value={formData.role}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                required
+                disabled={isSupervisor && formData.role === 'supervisor'}
+              >
+                <option value="permanent">พนักงานประจำ</option>
+                <option value="temporary">พนักงานชั่วคราว</option>
+                {!isSupervisor && (
+                  <>
+                    <option value="supervisor">หัวหน้างาน</option>
+                    <option value="admin">ผู้ดูแลระบบ</option>
+                  </>
+                )}
+                {isSupervisor && formData.role === 'supervisor' && (
+                  <option value="supervisor">หัวหน้างาน</option>
+                )}
+                {isSupervisor && formData.role === 'admin' && (
+                  <option value="admin">ผู้ดูแลระบบ</option>
+                )}
+              </select>
             </div>
             
             <div>
               <label htmlFor="teamId" className="block text-gray-700 dark:text-gray-200 font-medium mb-2">
-                ทีม
+                ทีม {isSupervisor && <span className="text-red-500">*</span>}
               </label>
               <select
                 id="teamId"
@@ -427,6 +792,8 @@ export default function EditEmployeePage({ params }) {
                 value={formData.teamId}
                 onChange={handleChange}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                required={isSupervisor}
+                disabled={isSupervisor && teams.length === 1}
               >
                 <option value="">-- เลือกทีม --</option>
                 {teams.map((team) => (
@@ -450,24 +817,6 @@ export default function EditEmployeePage({ params }) {
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 required
               />
-            </div>
-            
-            <div>
-              <label htmlFor="role" className="block text-gray-700 dark:text-gray-200 font-medium mb-2">
-                บทบาท <span className="text-red-500">*</span>
-              </label>
-              <select
-                id="role"
-                name="role"
-                value={formData.role}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                required
-              >
-                <option value="employee">พนักงาน</option>
-                <option value="manager">ผู้จัดการ</option>
-                <option value="admin">ผู้ดูแลระบบ</option>
-              </select>
             </div>
             
             <div className="flex items-center">

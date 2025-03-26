@@ -1,102 +1,153 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '../../../../../lib/auth';
 import bcrypt from 'bcryptjs';
-import { getEmployeeById, updateEmployeePassword } from '../../../../../lib/db-prisma';
-import { sendPasswordResetEmail } from '../../../../../lib/sendgrid-service';
+import { prisma } from '@/lib/prisma';
+import { authOptions } from '@/lib/auth';
+import { sendPasswordResetEmail } from '@/lib/email-service';
 
 // ฟังก์ชันสำหรับสร้างรหัสผ่านแบบสุ่ม
 function generateRandomPassword(length = 10) {
-  const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+";
-  let password = "";
+  const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()-_=+';
+  let password = '';
+  
   for (let i = 0; i < length; i++) {
     const randomIndex = Math.floor(Math.random() * charset.length);
     password += charset[randomIndex];
   }
+  
   return password;
 }
 
-// POST - รีเซ็ตรหัสผ่าน
-export async function POST(request, { params }) {
+// ฟังก์ชันสำหรับจัดการการรีเซ็ตรหัสผ่าน ซึ่งรองรับทั้ง PUT และ POST
+async function handleResetPassword(request, { params }) {
   try {
+    // ตรวจสอบสิทธิ์ผู้ใช้
     const session = await getServerSession(authOptions);
     
     if (!session) {
       return NextResponse.json(
-        { success: false, message: 'กรุณาเข้าสู่ระบบ' },
+        { error: 'กรุณาเข้าสู่ระบบก่อนใช้งาน' },
         { status: 401 }
       );
     }
     
-    const resolvedParams = await params;
-    const id = resolvedParams.id;
-    
-    // ตรวจสอบว่าผู้ใช้มีสิทธิ์รีเซ็ตรหัสผ่านหรือไม่ (เฉพาะ admin เท่านั้น)
+    // ตรวจสอบว่าผู้ใช้มีสิทธิ์ admin หรือไม่
     if (session.user.role !== 'admin') {
       return NextResponse.json(
-        { success: false, message: 'ไม่มีสิทธิ์รีเซ็ตรหัสผ่านของผู้ใช้' },
+        { error: 'คุณไม่มีสิทธิ์ในการรีเซ็ตรหัสผ่าน' },
         { status: 403 }
       );
     }
     
-    // ดึงข้อมูลพนักงานจาก Prisma
-    const employeeResult = await getEmployeeById(id);
+    // ดึงข้อมูลพนักงานจาก ID
+    const resolvedParams = await params;
+    const id = resolvedParams.id;
     
-    if (!employeeResult.success) {
+    if (!id) {
       return NextResponse.json(
-        { success: false, message: employeeResult.message || 'ไม่พบข้อมูลพนักงาน' },
+        { error: 'ไม่พบรหัสพนักงาน' },
+        { status: 400 }
+      );
+    }
+    
+    console.log(`กำลังรีเซ็ตรหัสผ่านสำหรับพนักงาน ID: ${id}`);
+    
+    // ค้นหาพนักงานในฐานข้อมูล
+    const employee = await prisma.employee.findUnique({
+      where: {
+        id: id,
+      },
+    });
+    
+    if (!employee) {
+      return NextResponse.json(
+        { error: 'ไม่พบข้อมูลพนักงาน' },
         { status: 404 }
       );
     }
     
-    // สร้างรหัสผ่านใหม่แบบสุ่ม
-    const newPassword = generateRandomPassword();
-    console.log(`รหัสผ่านที่รีเซ็ตสำหรับพนักงาน ${employeeResult.data.email}: ${newPassword}`);
+    // สร้างรหัสผ่านใหม่
+    const newPassword = generateRandomPassword(12);
     
     // เข้ารหัสรหัสผ่านใหม่
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     
-    // อัปเดตรหัสผ่านใน Prisma
-    const result = await updateEmployeePassword(id, hashedPassword);
-    
-    if (!result.success) {
-      return NextResponse.json(
-        { success: false, message: result.message || 'เกิดข้อผิดพลาดในการรีเซ็ตรหัสผ่าน' },
-        { status: 500 }
-      );
-    }
-    
-    // ส่งอีเมลรหัสผ่านใหม่ให้พนักงาน
-    try {
-      await sendPasswordResetEmail({
-        email: employeeResult.data.email,
-        firstName: employeeResult.data.firstName,
-        lastName: employeeResult.data.lastName,
-        password: newPassword,
-        role: employeeResult.data.role,
-        employeeId: employeeResult.data.employeeId,
-        resetBy: session.user.name || session.user.email
-      });
-      console.log(`ส่งอีเมลรีเซ็ตรหัสผ่านไปยัง ${employeeResult.data.email} เรียบร้อยแล้ว`);
-    } catch (emailError) {
-      console.error('เกิดข้อผิดพลาดในการส่งอีเมล:', emailError);
-      // ยังคงดำเนินการต่อแม้การส่งอีเมลจะล้มเหลว
-    }
-    
-    return NextResponse.json(
-      { 
-        success: true, 
-        message: 'รีเซ็ตรหัสผ่านสำเร็จและส่งรหัสผ่านใหม่ทางอีเมลแล้ว', 
-        password: newPassword,  // ส่งรหัสผ่านกลับไปแสดงให้ admin เห็น
-        email: employeeResult.data.email
+    // อัปเดตรหัสผ่านใหม่ในฐานข้อมูล
+    await prisma.employee.update({
+      where: {
+        id: id,
       },
-      { status: 200 }
-    );
+      data: {
+        password: hashedPassword,
+      },
+    });
+    
+    // เก็บรหัสผ่านใหม่ไว้ในส่วนของ debug log (ไม่แสดงกลับไปที่ผู้ใช้)
+    console.log(`[PASSWORD RESET] New password for employee ${employee.email} (${employee.employeeId}): ${newPassword}`);
+    
+    // ส่งอีเมลแจ้งรหัสผ่านใหม่ไปให้พนักงาน
+    try {
+      const emailResult = await sendPasswordResetEmail({
+        email: employee.email,
+        firstName: employee.firstName,
+        lastName: employee.lastName,
+        password: newPassword,
+        employeeId: employee.employeeId,
+        role: employee.role,
+        resetBy: `${session.user.firstName} ${session.user.lastName} (${session.user.email})`
+      });
+      
+      if (emailResult.success) {
+        // ส่งอีเมลสำเร็จ
+        console.log(`[PASSWORD RESET] Email sent successfully to ${employee.email}`);
+        
+        // แสดง URL พรีวิวในโหมดทดสอบ
+        if (emailResult.preview) {
+          console.log(`[PASSWORD RESET] Email preview URL: ${emailResult.preview}`);
+        }
+        
+        return NextResponse.json({
+          success: true,
+          message: 'รีเซ็ตรหัสผ่านเรียบร้อยแล้ว และส่งอีเมลไปยังพนักงานแล้ว',
+          emailSent: true
+        });
+      } else {
+        // ส่งอีเมลไม่สำเร็จ แต่รหัสผ่านถูกรีเซ็ตแล้ว
+        console.error(`[PASSWORD RESET] Failed to send email to ${employee.email}: ${emailResult.message}`);
+        
+        return NextResponse.json({
+          success: true,
+          message: 'รีเซ็ตรหัสผ่านเรียบร้อยแล้ว แต่ไม่สามารถส่งอีเมลได้',
+          emailSent: false,
+          emailError: emailResult.message
+        });
+      }
+    } catch (emailError) {
+      // เกิดข้อผิดพลาดในการส่งอีเมล แต่รหัสผ่านถูกรีเซ็ตแล้ว
+      console.error(`[PASSWORD RESET] Error sending email to ${employee.email}:`, emailError.message);
+      
+      return NextResponse.json({
+        success: true,
+        message: 'รีเซ็ตรหัสผ่านเรียบร้อยแล้ว แต่เกิดข้อผิดพลาดในการส่งอีเมล',
+        emailSent: false,
+        emailError: emailError.message
+      });
+    }
   } catch (error) {
-    console.error('Error resetting password:', error);
+    console.error('[PASSWORD RESET ERROR]', error.message);
+    
     return NextResponse.json(
-      { success: false, message: error.message },
+      { error: 'เกิดข้อผิดพลาดในการรีเซ็ตรหัสผ่าน', details: error.message },
       { status: 500 }
     );
   }
+}
+
+// รองรับทั้ง PUT และ POST method
+export async function PUT(request, { params }) {
+  return handleResetPassword(request, { params });
+}
+
+export async function POST(request, { params }) {
+  return handleResetPassword(request, { params });
 } 

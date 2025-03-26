@@ -29,7 +29,7 @@ export async function GET(request, { params }) {
     }
     
     // ตรวจสอบสิทธิ์การเข้าถึง
-    if (session.user.role === 'employee' && session.user.id !== result.data.employeeId) {
+    if ((session.user.role === 'permanent' || session.user.role === 'temporary') && session.user.id !== result.data.employeeId) {
       return NextResponse.json(
         { success: false, message: 'ไม่มีสิทธิ์เข้าถึงข้อมูลการทำงานล่วงเวลาของผู้อื่น' },
         { status: 403 }
@@ -76,7 +76,7 @@ export async function PUT(request, { params }) {
     // ตรวจสอบสิทธิ์การเข้าถึง
     // - พนักงานสามารถแก้ไขข้อมูลการทำงานล่วงเวลาของตัวเองได้เฉพาะเมื่อสถานะเป็น "รออนุมัติ"
     // - ผู้จัดการและแอดมินสามารถอนุมัติหรือไม่อนุมัติการทำงานล่วงเวลาได้
-    if (session.user.role === 'employee') {
+    if ((session.user.role === 'permanent' || session.user.role === 'temporary')) {
       if (session.user.id !== overtime.employeeId) {
         return NextResponse.json(
           { success: false, message: 'ไม่มีสิทธิ์แก้ไขข้อมูลการทำงานล่วงเวลาของผู้อื่น' },
@@ -96,7 +96,7 @@ export async function PUT(request, { params }) {
     
     // ถ้าเป็นการอนุมัติหรือไม่อนุมัติ
     if (data.status && (data.status === 'อนุมัติ' || data.status === 'ไม่อนุมัติ')) {
-      if (session.user.role === 'employee') {
+      if ((session.user.role === 'permanent' || session.user.role === 'temporary')) {
         return NextResponse.json(
           { success: false, message: 'ไม่มีสิทธิ์อนุมัติหรือไม่อนุมัติการทำงานล่วงเวลา' },
           { status: 403 }
@@ -161,7 +161,7 @@ export async function DELETE(request, { params }) {
     // ตรวจสอบสิทธิ์การเข้าถึง
     // - พนักงานสามารถลบข้อมูลการทำงานล่วงเวลาของตัวเองได้เฉพาะเมื่อสถานะเป็น "รออนุมัติ"
     // - แอดมินสามารถลบข้อมูลการทำงานล่วงเวลาได้ทั้งหมด
-    if (session.user.role === 'employee') {
+    if ((session.user.role === 'permanent' || session.user.role === 'temporary')) {
       if (session.user.id !== overtime.employeeId) {
         return NextResponse.json(
           { success: false, message: 'ไม่มีสิทธิ์ลบข้อมูลการทำงานล่วงเวลาของผู้อื่น' },

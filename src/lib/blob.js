@@ -1,6 +1,7 @@
 import { put, del, list } from '@vercel/blob';
 import * as fs from 'fs';
 import * as path from 'path';
+import { randomUUID } from 'crypto';
 
 /**
  * อัปโหลดรูปภาพโปรไฟล์ไปยัง Vercel Blob
@@ -13,13 +14,16 @@ export async function uploadProfileImage(file, employeeId) {
     // ตรวจสอบว่าเป็นสภาพแวดล้อมการพัฒนาหรือไม่
     const isDevelopment = process.env.NODE_ENV === 'development';
     
+    // สร้าง UUID เพื่อป้องกันการซ้ำกันของชื่อไฟล์
+    const uuid = randomUUID();
+    
     if (isDevelopment) {
       // ถ้าอยู่ในสภาพแวดล้อมการพัฒนา ให้จำลองการอัปโหลดไฟล์
-      return simulateUpload(file, employeeId);
+      return simulateUpload(file, uuid);
     }
     
     // ถ้าเป็น production ให้ใช้ Vercel Blob
-    const filename = `${employeeId}-${Date.now()}-${file.name}`;
+    const filename = `${uuid}-${Date.now()}-${file.name}`;
     const blob = await put(filename, file, {
       access: 'public',
       addRandomSuffix: false,
@@ -42,14 +46,16 @@ export async function uploadProfileImage(file, employeeId) {
 /**
  * จำลองการอัปโหลดไฟล์ในสภาพแวดล้อมการพัฒนา
  * @param {File} file - ไฟล์รูปภาพที่จะอัปโหลด
- * @param {string} employeeId - รหัสพนักงาน
+ * @param {string} uuid - UUID สำหรับไฟล์
  * @returns {Promise<Object>} - ข้อมูลการอัปโหลด
  */
-async function simulateUpload(file, employeeId) {
+async function simulateUpload(file, uuid) {
   try {
     // สร้างชื่อไฟล์
-    const filename = `${employeeId}-${Date.now()}-${file.name.replace(/\s+/g, '-')}`;
+    const filename = `${uuid}-${Date.now()}-${file.name.replace(/\s+/g, '-')}`;
+    // ต้องใส่ / นำหน้าเพื่อให้เป็น URL จาก root ของเว็บไซต์
     const fileUrl = `/mock-images/${filename}`;
+    // กำหนดเส้นทางที่จะบันทึกไฟล์ในระบบไฟล์
     const filePath = path.join(process.cwd(), 'public/mock-images', filename);
 
     console.log('Development mode: Simulating file upload', {
@@ -75,15 +81,16 @@ async function simulateUpload(file, employeeId) {
       // เขียนไฟล์
       fs.writeFileSync(filePath, buffer);
       console.log(`File saved to ${filePath}`);
+      console.log(`File URL: ${fileUrl}`);
     } catch (error) {
       console.error('Error saving file:', error);
       throw error;
     }
 
-    // ในโหมดพัฒนา เราจะบันทึกไฟล์และส่งคืน URL
+    // ในโหมดพัฒนา เราจะบันทึกไฟล์และส่งคืน URL ที่ถูกต้อง
     return {
       success: true,
-      url: fileUrl,
+      url: fileUrl, // URL ที่ชี้ไปยังไฟล์ใน public/mock-images
       size: file.size,
     };
   } catch (error) {

@@ -6,6 +6,9 @@ const prisma = global.prisma || new PrismaClient();
 // ในสภาพแวดล้อมการพัฒนา (development) เก็บ instance ไว้ใน global
 if (process.env.NODE_ENV === 'development') global.prisma = prisma;
 
+// ส่งออก prisma instance เพื่อให้ไฟล์อื่นนำไปใช้ได้
+export { prisma };
+
 /**
  * ฟังก์ชันสำหรับดึงข้อมูลพนักงานทั้งหมด
  */
@@ -754,12 +757,35 @@ export async function getStatistics() {
       where: { status: 'รออนุมัติ' },
     });
     
-    // จำนวนพนักงานแยกตามแผนก
-    const departmentStats = await prisma.employee.groupBy({
-      by: ['department'],
-      _count: { id: true },
+    // จำนวนพนักงานแยกตามแผนก - ปรับปรุงวิธีการนับ
+    const employeesByDepartment = await prisma.employee.findMany({
       where: { isActive: true },
+      select: {
+        departmentId: true,
+        department: {
+          select: {
+            name: true
+          }
+        }
+      }
     });
+    
+    // นับจำนวนพนักงานแยกตามแผนก
+    const departmentStats = [];
+    const departmentCount = {};
+    
+    employeesByDepartment.forEach(employee => {
+      const deptName = employee.department?.name || 'ไม่ระบุแผนก';
+      if (!departmentCount[deptName]) {
+        departmentCount[deptName] = 0;
+      }
+      departmentCount[deptName]++;
+    });
+    
+    // แปลงเป็นรูปแบบที่ต้องการ
+    for (const [department, count] of Object.entries(departmentCount)) {
+      departmentStats.push({ department, count });
+    }
     
     // จำนวนการลาในเดือนปัจจุบัน
     const currentDate = new Date();
@@ -800,10 +826,7 @@ export async function getStatistics() {
         totalEmployees,
         pendingLeaves,
         pendingOvertimes,
-        departmentStats: departmentStats.map(dept => ({
-          department: dept.department,
-          count: dept._count.id,
-        })),
+        departmentStats,
         leavesThisMonth,
         totalOvertimeHours,
       },
@@ -812,6 +835,4 @@ export async function getStatistics() {
     console.error('Error fetching statistics:', error);
     return { success: false, message: error.message, connectionError: true };
   }
-}
-
-export default prisma; 
+} 

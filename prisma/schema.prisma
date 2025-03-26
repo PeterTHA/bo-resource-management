@@ -15,79 +15,127 @@ datasource db {
 
 // โมเดลพนักงาน
 model Employee {
-  id            String     @id @default(uuid())
-  employeeId    String     @unique @map("employee_id")
-  firstName     String     @map("first_name")
-  lastName      String     @map("last_name")
-  email         String     @unique
-  password      String
-  position      String
-  department    String
-  team          String?
-  teamId        String?    @map("team_id")
-  teamData      Team?      @relation(fields: [teamId], references: [id])
-  hireDate      DateTime   @map("hire_date")
-  role          String     @default("employee")
-  isActive      Boolean    @default(true) @map("is_active")
-  image         String?
-  createdAt     DateTime   @default(now()) @map("created_at")
-  updatedAt     DateTime   @updatedAt @map("updated_at")
-  leaves        Leave[]    @relation("EmployeeLeaves")
-  approvedLeaves Leave[]   @relation("LeaveApprover")
-  overtimes     Overtime[] @relation("EmployeeOvertimes")
-  approvedOvertimes Overtime[] @relation("OvertimeApprover")
+  id                String      @id @default(uuid())
+  employeeId        String      @unique @map("employee_id")
+  firstName         String      @map("first_name")
+  lastName          String      @map("last_name")
+  email             String      @unique
+  password          String
+  position          String
+  positionLevel     String?     @map("position_level")
+  positionTitle     String?     @map("position_title")
+  departmentId      String?     @map("department_id")
+  department        Department? @relation(fields: [departmentId], references: [id])
+  teamId            String?     @map("team_id")
+  teamData          Team?       @relation(fields: [teamId], references: [id])
+  hireDate          DateTime    @map("hire_date")
+  role              String      @default("staff") // ตัวเลือก: admin, lead, staff, outsource 
+  isActive          Boolean     @default(true) @map("is_active")
+  image             String?
+  gender            String?
+  birthDate         DateTime?   @map("birth_date")
+  phoneNumber       String?     @map("phone_number")
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
+  leaves            Leave[]     @relation("EmployeeLeaves")
+  approvedLeaves    Leave[]     @relation("LeaveApprover")
+  overtimes         Overtime[]  @relation("EmployeeOvertimes")
+  approvedOvertimes Overtime[]  @relation("OvertimeApprover")
 
   @@map("employees")
 }
 
 // โมเดลการลา
 model Leave {
-  id          String    @id @default(uuid())
-  employeeId  String    @map("employee_id")
-  employee    Employee  @relation("EmployeeLeaves", fields: [employeeId], references: [id])
-  leaveType   String    @map("leave_type")
-  startDate   DateTime  @map("start_date")
-  endDate     DateTime  @map("end_date")
-  reason      String
-  status      String    @default("รออนุมัติ")
-  approvedById String?  @map("approved_by_id")
-  approvedBy  Employee? @relation("LeaveApprover", fields: [approvedById], references: [id])
-  approvedAt  DateTime? @map("approved_at")
-  comment     String?
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  id           String    @id @default(uuid())
+  employeeId   String    @map("employee_id")
+  employee     Employee  @relation("EmployeeLeaves", fields: [employeeId], references: [id])
+  leaveType    String    @map("leave_type")
+  startDate    DateTime  @map("start_date")
+  endDate      DateTime  @map("end_date")
+  reason       String
+  status       String    @default("รออนุมัติ")
+  approvedById String?   @map("approved_by_id")
+  approvedBy   Employee? @relation("LeaveApprover", fields: [approvedById], references: [id])
+  approvedAt   DateTime? @map("approved_at")
+  comment      String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
 
   @@map("leaves")
 }
 
 // โมเดลการทำงานล่วงเวลา
 model Overtime {
-  id          String    @id @default(uuid())
-  employeeId  String    @map("employee_id")
-  employee    Employee  @relation("EmployeeOvertimes", fields: [employeeId], references: [id])
-  date        DateTime
-  startTime   String    @map("start_time")
-  endTime     String    @map("end_time")
-  totalHours  Float     @map("total_hours")
-  reason      String
-  status      String    @default("รออนุมัติ")
-  approvedById String?  @map("approved_by_id")
-  approvedBy  Employee? @relation("OvertimeApprover", fields: [approvedById], references: [id])
-  approvedAt  DateTime? @map("approved_at")
-  comment     String?
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  id           String    @id @default(uuid())
+  employeeId   String    @map("employee_id")
+  employee     Employee  @relation("EmployeeOvertimes", fields: [employeeId], references: [id])
+  date         DateTime
+  startTime    String    @map("start_time")
+  endTime      String    @map("end_time")
+  totalHours   Float     @map("total_hours")
+  reason       String
+  status       String    @default("รออนุมัติ")
+  approvedById String?   @map("approved_by_id")
+  approvedBy   Employee? @relation("OvertimeApprover", fields: [approvedById], references: [id])
+  approvedAt   DateTime? @map("approved_at")
+  comment      String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
 
   @@map("overtimes")
 }
 
 // โมเดลทีม
 model Team {
-  id        String     @id @default(uuid())
-  name      String     @unique
-  createdAt DateTime   @default(now()) @map("created_at")
-  updatedAt DateTime   @updatedAt @map("updated_at")
-  employees Employee[]
+  id          String     @id @default(uuid())
+  code        String     @unique // รหัสทีม เช่น BO, OB, QA, PM, AD
+  name        String     @unique // ชื่อทีม เช่น Banking Operation, Open Banking
+  description String? // คำอธิบายเพิ่มเติม
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  employees   Employee[]
 
   @@map("teams")
+}
+
+// โมเดลแผนก
+model Department {
+  id          String     @id @default(uuid())
+  code        String     @unique // รหัสแผนก เช่น IT, ITDG, BUDG
+  name        String     @unique // ชื่อแผนก เช่น IT, IT - Digital, BU - Digital
+  description String? // คำอธิบายเพิ่มเติม
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  employees   Employee[]
+
+  @@map("departments")
+}
+
+// โมเดลตำแหน่ง
+model Position {
+  id          String   @id @default(uuid())
+  code        String   @unique // รหัสตำแหน่ง เช่น PM, BA, QA, DEV
+  name        String   @unique // ชื่อตำแหน่ง เช่น Project Manager, Business Analyst
+  category    String // หมวดหมู่ เช่น management, development, design
+  description String? // คำอธิบายเพิ่มเติม
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("positions")
+}
+
+// โมเดลระดับตำแหน่ง
+model PositionLevel {
+  id          String   @id @default(uuid())
+  code        String   @unique // รหัสระดับ เช่น JR, SR, LEAD
+  name        String   @unique // ชื่อระดับ เช่น Junior, Senior, Lead
+  level       Int // ลำดับระดับ เช่น 1, 2, 3, 4, 5
+  description String? // คำอธิบายเพิ่มเติม
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("position_levels")
 }

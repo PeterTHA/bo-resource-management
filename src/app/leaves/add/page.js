@@ -41,13 +41,13 @@ export default function AddLeavePage() {
       }
     };
     
-    if (session && (session.user.role === 'admin' || session.user.role === 'manager')) {
+    if (session && (session.user.role === 'admin' || session.user.role === 'supervisor')) {
       fetchEmployees();
     }
   }, [session]);
 
   useEffect(() => {
-    if (session && session.user.role === 'employee') {
+    if (session && (session.user.role === 'permanent' || session.user.role === 'temporary')) {
       setFormData(prev => ({
         ...prev,
         employee: session.user.id,
@@ -136,7 +136,7 @@ export default function AddLeavePage() {
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/30 p-6">
         <form onSubmit={handleSubmit}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {(session.user.role === 'admin' || session.user.role === 'manager') && (
+            {(session.user.role === 'admin' || session.user.role === 'supervisor') && (
               <div>
                 <label htmlFor="employee" className="block text-gray-700 dark:text-gray-200 font-medium mb-2">
                   พนักงาน

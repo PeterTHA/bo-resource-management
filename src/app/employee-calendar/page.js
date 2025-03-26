@@ -35,11 +35,21 @@ export default function EmployeeCalendarPage() {
         const employeesRes = await fetch('/api/employees');
         const employeesData = await employeesRes.json();
 
-        if (employeesData.success) {
+        if (employeesData.data && Array.isArray(employeesData.data)) {
           setEmployees(employeesData.data);
           
           // ดึงรายชื่อแผนก
-          const uniqueDepartments = [...new Set(employeesData.data.map(emp => emp.department))];
+          const uniqueDepartments = [...new Set(employeesData.data.map(emp => {
+            return typeof emp.department === 'object' ? emp.department.name : emp.department;
+          }))];
+          setDepartments(uniqueDepartments);
+        } else if (Array.isArray(employeesData)) {
+          setEmployees(employeesData);
+          
+          // ดึงรายชื่อแผนก
+          const uniqueDepartments = [...new Set(employeesData.map(emp => {
+            return typeof emp.department === 'object' ? emp.department.name : emp.department;
+          }))];
           setDepartments(uniqueDepartments);
         } else {
           setError('ไม่สามารถดึงข้อมูลพนักงานได้');
@@ -207,7 +217,10 @@ export default function EmployeeCalendarPage() {
   // กรองพนักงานตามแผนก
   const filteredEmployees = selectedDepartment === 'all'
     ? employees
-    : employees.filter(emp => emp.department === selectedDepartment);
+    : employees.filter(emp => {
+        const deptName = typeof emp.department === 'object' ? emp.department.name : emp.department;
+        return deptName === selectedDepartment;
+      });
 
   if (status === 'loading' || loading) {
     return (
@@ -357,7 +370,7 @@ export default function EmployeeCalendarPage() {
                               {employee.firstName || ''} {employee.lastName || ''}
                             </div>
                             <div className="text-xs text-gray-500 dark:text-gray-400">
-                              {employee.position || ''} • {employee.department || ''}
+                              {employee.position || ''} • {typeof employee.department === 'object' ? employee.department.name : (employee.department || '')}
                             </div>
                           </div>
                         </div>

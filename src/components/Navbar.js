@@ -42,7 +42,8 @@ export default function Navbar() {
 
   const navLinks = [
     { href: '/dashboard', label: 'แดชบอร์ด', icon: <FiHome className="w-5 h-5" /> },
-    { href: '/employees', label: 'พนักงาน', icon: <FiUsers className="w-5 h-5" /> },
+    { href: '/employees', label: 'พนักงาน (ปกติ)', icon: <FiUsers className="w-5 h-5" /> },
+    { href: '/employee-list', label: 'พนักงาน (ทดสอบ)', icon: <FiUsers className="w-5 h-5" /> },
     { href: '/leaves', label: 'การลา', icon: <FiCalendar className="w-5 h-5" /> },
     { href: '/overtime', label: 'ทำงานล่วงเวลา', icon: <FiClock className="w-5 h-5" /> },
     { href: '/reports', label: 'รายงาน', icon: <FiBarChart2 className="w-5 h-5" /> },

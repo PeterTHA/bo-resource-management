@@ -9,22 +9,31 @@ import { FiUser, FiLock, FiMail, FiInfo, FiSave, FiArrowLeft, FiUpload, FiX, FiC
 import { LoadingPage, LoadingButton } from '../../components/ui/LoadingSpinner';
 import ErrorMessage from '../../components/ui/ErrorMessage';
 
+// เพิ่มฟังก์ชันตรวจสอบว่าเป็นรูปภาพจาก mock-images หรือไม่
+const isMockImage = (src) => {
+  return src && typeof src === 'string' && (src.startsWith('/mock-images/') || src.startsWith('./mock-images/'));
+};
+
 export default function ProfilePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [employee, setEmployee] = useState(null);
   const [teams, setTeams] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
     email: '',
     position: '',
-    department: '',
+    departmentId: '',
     teamId: '',
     hireDate: '',
     currentPassword: '',
     newPassword: '',
     confirmPassword: '',
+    gender: 'male',
+    birthDate: '',
+    phoneNumber: '',
   });
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
@@ -50,39 +59,59 @@ export default function ProfilePage() {
         const data = await res.json();
 
         if (data.success) {
-          setEmployee(data.data);
+          const employeeData = data.data || data;
+          setEmployee(employeeData);
           
           // แปลง hireDate ให้ถูกต้อง
           let formattedHireDate = '';
           try {
-            if (data.data.hireDate) {
-              const hireDate = new Date(data.data.hireDate);
+            if (employeeData.hireDate) {
+              const hireDate = new Date(employeeData.hireDate);
               formattedHireDate = hireDate.toISOString().split('T')[0];
             }
           } catch (error) {
             console.error('Error formatting hire date:', error);
           }
           
+          // แปลง birthDate ให้ถูกต้อง
+          let formattedBirthDate = '';
+          try {
+            if (employeeData.birthDate) {
+              const birthDate = new Date(employeeData.birthDate);
+              formattedBirthDate = birthDate.toISOString().split('T')[0];
+            }
+          } catch (error) {
+            console.error('Error formatting birth date:', error);
+          }
+          
           setFormData({
-            firstName: data.data.firstName || '',
-            lastName: data.data.lastName || '',
-            email: data.data.email || '',
-            position: data.data.position || '',
-            department: data.data.department || '',
-            teamId: data.data.teamId || '',
+            firstName: employeeData.firstName || '',
+            lastName: employeeData.lastName || '',
+            email: employeeData.email || '',
+            position: employeeData.position || '',
+            departmentId: employeeData.departmentId || '',
+            teamId: employeeData.teamId || '',
             hireDate: formattedHireDate,
             currentPassword: '',
             newPassword: '',
             confirmPassword: '',
+            gender: employeeData.gender || 'male',
+            birthDate: formattedBirthDate,
+            phoneNumber: employeeData.phoneNumber || '',
           });
           
           // ตั้งค่าภาพตัวอย่างถ้ามีรูปภาพ
-          if (data.data.image) {
-            setImagePreview(data.data.image);
+          if (employeeData.image) {
+            console.log('Profile image from API:', employeeData.image);
+            setImagePreview(employeeData.image);
+          } else {
+            console.log('No profile image available');
+            setImagePreview(null);
           }
 
-          // ดึงข้อมูลทีม
+          // ดึงข้อมูลทีมและแผนก
           fetchTeams();
+          fetchDepartments();
         } else {
           setError(data.message || 'เกิดข้อผิดพลาดในการดึงข้อมูลพนักงาน');
         }
@@ -107,6 +136,22 @@ export default function ProfilePage() {
         }
       } catch (error) {
         console.error('Error fetching teams:', error);
+      }
+    };
+
+    // เพิ่มฟังก์ชันดึงข้อมูลแผนก
+    const fetchDepartments = async () => {
+      try {
+        const res = await fetch('/api/departments');
+        const data = await res.json();
+        
+        if (data.success) {
+          setDepartments(data.data || []);
+        } else {
+          console.error('Error fetching departments:', data.message);
+        }
+      } catch (error) {
+        console.error('Error fetching departments:', error);
       }
     };
 
@@ -206,10 +251,13 @@ export default function ProfilePage() {
         lastName: formData.lastName,
         email: formData.email,
         position: formData.position,
-        department: formData.department,
+        departmentId: formData.departmentId,
         teamId: formData.teamId,
         hireDate: formData.hireDate,
         image: imageUrl,
+        gender: formData.gender,
+        birthDate: formData.birthDate,
+        phoneNumber: formData.phoneNumber,
       };
 
       const res = await fetch(`/api/employees/${session.user.id}`, {
@@ -223,8 +271,9 @@ export default function ProfilePage() {
       const data = await res.json();
 
       if (data.success) {
+        const updatedEmployee = data.data;
+        setEmployee(updatedEmployee);
         setSuccess('อัปเดตข้อมูลส่วนตัวเรียบร้อยแล้ว');
-        setEmployee(data.data);
       } else {
         setError(data.message || 'เกิดข้อผิดพลาดในการอัปเดตข้อมูล');
       }
@@ -232,6 +281,7 @@ export default function ProfilePage() {
       setError('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์');
       console.error(error);
     } finally {
+      setUploadingImage(false);
       setUpdating(false);
     }
   };
@@ -295,28 +345,41 @@ export default function ProfilePage() {
       return;
     }
 
+    if (!employee || !employee.id) {
+      setError('ไม่พบข้อมูลพนักงาน');
+      return;
+    }
+
     setUpdating(true);
     setError('');
     setSuccess('');
 
     try {
-      const res = await fetch(`/api/employees/${session.user.id}/reset-password`, {
-        method: 'POST',
+      console.log(`กำลังรีเซ็ตรหัสผ่านสำหรับพนักงาน ID: ${employee.id}`);
+
+      const res = await fetch(`/api/employees/${employee.id}/reset-password`, {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         }
       });
 
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('API Error Response:', errorText);
+        throw new Error(`API responded with status ${res.status}: ${errorText || 'No response body'}`);
+      }
+
       const data = await res.json();
 
       if (data.success) {
-        setSuccess(`รีเซ็ตรหัสผ่านเรียบร้อยแล้ว รหัสผ่านใหม่คือ: ${data.password}`);
+        setSuccess(`รีเซ็ตรหัสผ่านเรียบร้อยแล้ว ${data.emailSent ? 'และได้ส่งอีเมลรหัสผ่านใหม่ให้ผู้ใช้แล้ว' : 'แต่ไม่สามารถส่งอีเมลได้'}`);
       } else {
-        setError(data.message || 'เกิดข้อผิดพลาดในการรีเซ็ตรหัสผ่าน');
+        setError(data.message || data.error || 'เกิดข้อผิดพลาดในการรีเซ็ตรหัสผ่าน');
       }
     } catch (error) {
-      setError('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์');
-      console.error(error);
+      setError('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์: ' + error.message);
+      console.error('Reset password error:', error);
     } finally {
       setUpdating(false);
     }
@@ -327,10 +390,12 @@ export default function ProfilePage() {
     switch (role) {
       case 'admin':
         return 'ผู้ดูแลระบบ';
-      case 'manager':
-        return 'ผู้จัดการ';
-      case 'employee':
-        return 'พนักงาน';
+      case 'supervisor':
+        return 'หัวหน้างาน';
+      case 'permanent':
+        return 'พนักงานประจำ';
+      case 'temporary':
+        return 'พนักงานชั่วคราว';
       default:
         return role;
     }
@@ -378,6 +443,7 @@ export default function ProfilePage() {
                     fill
                     sizes="96px"
                     className="object-cover" 
+                    unoptimized={isMockImage(imagePreview)}
                   />
                 </div>
               ) : (
@@ -395,7 +461,7 @@ export default function ProfilePage() {
               <p className="text-gray-600 dark:text-gray-400">{employee.position}</p>
               <div className="flex flex-wrap gap-2 mt-2 justify-center sm:justify-start">
                 <span className="px-2 py-1 text-xs rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300">
-                  {employee.department}
+                  {typeof employee.department === 'object' ? employee.department.name : employee.department}
                 </span>
                 <span className="px-2 py-1 text-xs rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300">
                   {getRoleDisplay(employee.role)}
@@ -449,6 +515,7 @@ export default function ProfilePage() {
                       fill
                       sizes="112px"
                       className="object-cover" 
+                      unoptimized={isMockImage(imagePreview)}
                     />
                     <button
                       type="button"
@@ -512,6 +579,54 @@ export default function ProfilePage() {
                 </div>
                 
                 <div>
+                  <label htmlFor="gender" className="block text-gray-700 dark:text-gray-200 font-medium mb-2">
+                    เพศ <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    id="gender"
+                    name="gender"
+                    value={formData.gender}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    required
+                  >
+                    <option value="male">ชาย</option>
+                    <option value="female">หญิง</option>
+                    <option value="other">อื่นๆ</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label htmlFor="birthDate" className="block text-gray-700 dark:text-gray-200 font-medium mb-2">
+                    วันเกิด
+                  </label>
+                  <input
+                    type="date"
+                    id="birthDate"
+                    name="birthDate"
+                    value={formData.birthDate}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  />
+                </div>
+                
+                <div>
+                  <label htmlFor="phoneNumber" className="block text-gray-700 dark:text-gray-200 font-medium mb-2">
+                    เบอร์โทรศัพท์
+                  </label>
+                  <input
+                    type="tel"
+                    id="phoneNumber"
+                    name="phoneNumber"
+                    value={formData.phoneNumber}
+                    onChange={handleChange}
+                    placeholder="0812345678"
+                    pattern="[0-9]{9,10}"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  />
+                </div>
+                
+                <div>
                   <label htmlFor="email" className="block text-gray-700 dark:text-gray-200 font-medium mb-2">
                     อีเมล <span className="text-red-500">*</span>
                   </label>
@@ -541,19 +656,25 @@ export default function ProfilePage() {
                   />
                 </div>
                 
-                <div>
-                  <label htmlFor="department" className="block text-gray-700 dark:text-gray-200 font-medium mb-2">
-                    แผนก <span className="text-red-500">*</span>
+                <div className="mb-4">
+                  <label htmlFor="departmentId" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    แผนก
                   </label>
-                  <input
-                    type="text"
-                    id="department"
-                    name="department"
-                    value={formData.department}
+                  <select
+                    id="departmentId"
+                    name="departmentId"
+                    value={formData.departmentId}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                    required
-                  />
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    disabled={session?.user.role !== 'admin'}
+                  >
+                    <option value="">-- เลือกแผนก --</option>
+                    {departments.map((department) => (
+                      <option key={department.id} value={department.id}>
+                        {department.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 
                 <div>

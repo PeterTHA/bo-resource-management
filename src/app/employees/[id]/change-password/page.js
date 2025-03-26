@@ -21,7 +21,6 @@ export default function ChangePasswordPage({ params }) {
     newPassword: '',
     confirmPassword: '',
   });
-  const [randomPassword, setRandomPassword] = useState('');
   const [loading, setLoading] = useState(true);
   const [resetting, setResetting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -121,7 +120,6 @@ export default function ChangePasswordPage({ params }) {
     setResetting(true);
     setError('');
     setSuccess('');
-    setRandomPassword('');
 
     try {
       const res = await fetch(`/api/employees/${employeeId}/reset-password`, {
@@ -134,8 +132,7 @@ export default function ChangePasswordPage({ params }) {
       const data = await res.json();
 
       if (data.success) {
-        setSuccess(`รีเซ็ตรหัสผ่านเรียบร้อยแล้ว รหัสผ่านใหม่คือ: ${data.password}`);
-        setRandomPassword(data.password);
+        setSuccess(`รีเซ็ตรหัสผ่านเรียบร้อยแล้ว ${data.emailSent ? 'และได้ส่งอีเมลรหัสผ่านใหม่ให้ผู้ใช้แล้ว' : 'แต่ไม่สามารถส่งอีเมลได้'}`);
       } else {
         setError(data.message || 'เกิดข้อผิดพลาดในการรีเซ็ตรหัสผ่าน');
       }
@@ -266,20 +263,15 @@ export default function ChangePasswordPage({ params }) {
           </h2>
           <p className="text-gray-600 dark:text-gray-300 mb-6">
             คลิกปุ่มด้านล่างเพื่อรีเซ็ตรหัสผ่านและสร้างรหัสผ่านใหม่แบบสุ่ม 
-            ระบบจะแสดงรหัสผ่านใหม่ให้คุณเห็นหลังจากรีเซ็ต
+            รหัสผ่านใหม่จะถูกส่งไปทางอีเมลของพนักงาน
           </p>
 
-          {randomPassword && (
-            <div className="mb-6 p-4 rounded-lg bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800">
-              <h3 className="font-medium text-green-800 dark:text-green-300 mb-2">รหัสผ่านใหม่:</h3>
-              <div className="bg-white dark:bg-gray-700 p-3 rounded-md font-mono text-lg text-center break-all">
-                {randomPassword}
-              </div>
-              <p className="mt-2 text-sm text-green-700 dark:text-green-400">
-                โปรดแจ้งรหัสผ่านนี้แก่พนักงานผ่านช่องทางที่ปลอดภัย
-              </p>
-            </div>
-          )}
+          <div className="mb-6 p-4 rounded-lg bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800">
+            <h3 className="font-medium text-yellow-800 dark:text-yellow-300 mb-2">หมายเหตุสำคัญ:</h3>
+            <p className="text-sm text-yellow-700 dark:text-yellow-400">
+              กดปุ่มรีเซ็ตรหัสผ่านเฉพาะเมื่อพนักงานลืมรหัสผ่าน ระบบจะส่งรหัสผ่านใหม่ไปยังอีเมลที่ลงทะเบียนไว้
+            </p>
+          </div>
 
           <LoadingButton
             onClick={handleResetPassword}
