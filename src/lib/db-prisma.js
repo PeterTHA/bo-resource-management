@@ -319,10 +319,25 @@ export async function updateEmployeePassword(id, hashedPassword) {
 
 /**
  * ฟังก์ชันสำหรับดึงข้อมูลการลาทั้งหมด
+ * @param {string} employeeId - รหัสพนักงานที่ต้องการดึงข้อมูล (ถ้าไม่ระบุจะดึงทั้งหมด)
+ * @param {string} teamId - รหัสทีมที่ต้องการดึงข้อมูล (ใช้กรณีหัวหน้าทีมต้องการดูข้อมูลพนักงานในทีม)
  */
-export async function getLeaves(employeeId = null) {
+export async function getLeaves(employeeId = null, teamId = null) {
   try {
-    const whereClause = employeeId ? { employeeId } : {};
+    let whereClause = {};
+    
+    // ถ้ามีการระบุ employeeId จะดึงเฉพาะข้อมูลของพนักงานคนนั้น
+    if (employeeId) {
+      whereClause.employeeId = employeeId;
+    } 
+    // ถ้ามีการระบุ teamId จะดึงข้อมูลของพนักงานในทีมนั้น
+    else if (teamId) {
+      whereClause = {
+        employee: {
+          teamId: teamId
+        }
+      };
+    }
     
     const leaves = await prisma.leave.findMany({
       where: whereClause,
@@ -339,9 +354,25 @@ export async function getLeaves(employeeId = null) {
             email: true,
             position: true,
             department: true,
+            image: true,
+            teamId: true,
+            teamData: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
           }
         },
         approvedBy: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            position: true,
+          }
+        },
+        cancelApprovedBy: {
           select: {
             id: true,
             firstName: true,
@@ -373,19 +404,33 @@ export async function getLeaveById(id) {
             employeeId: true,
             firstName: true,
             lastName: true,
-            department: true,
+            email: true,
             position: true,
-          },
+            department: true,
+            role: true,
+            image: true,
+            teamId: true
+          }
         },
         approvedBy: {
           select: {
             id: true,
-            employeeId: true,
             firstName: true,
             lastName: true,
-          },
+            position: true,
+            role: true
+          }
         },
-      },
+        cancelApprovedBy: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            position: true,
+            role: true
+          }
+        }
+      }
     });
     
     if (!leave) {
@@ -422,6 +467,9 @@ export async function createLeave(data) {
         endDate: new Date(data.endDate),
         reason: data.reason,
         status: data.status || 'รออนุมัติ',
+        leaveFormat: data.leaveFormat || 'เต็มวัน',
+        totalDays: data.totalDays || 0,
+        attachments: data.attachments || [],
         approvedById: data.approvedById || null,
         approvedAt: data.approvedAt ? new Date(data.approvedAt) : null,
         comment: data.comment || null,
@@ -435,6 +483,7 @@ export async function createLeave(data) {
             lastName: true,
             department: true,
             position: true,
+            image: true,
           },
         },
         approvedBy: {
@@ -469,7 +518,10 @@ export async function updateLeave(id, data) {
     if (data.endDate !== undefined) updateData.endDate = new Date(data.endDate);
     if (data.reason !== undefined) updateData.reason = data.reason;
     if (data.status !== undefined) updateData.status = data.status;
-    if (data.approvedBy !== undefined) updateData.approvedById = data.approvedBy;
+    if (data.leaveFormat !== undefined) updateData.leaveFormat = data.leaveFormat;
+    if (data.totalDays !== undefined) updateData.totalDays = data.totalDays;
+    if (data.attachments !== undefined) updateData.attachments = data.attachments;
+    if (data.approvedById !== undefined) updateData.approvedById = data.approvedById;
     if (data.comment !== undefined) updateData.comment = data.comment;
     
     // ถ้ามีการอัปเดตสถานะเป็นอนุมัติหรือไม่อนุมัติ ให้บันทึกเวลาที่อนุมัติด้วย
@@ -490,6 +542,8 @@ export async function updateLeave(id, data) {
             lastName: true,
             department: true,
             position: true,
+            image: true,
+            role: true
           },
         },
         approvedBy: {
@@ -498,6 +552,8 @@ export async function updateLeave(id, data) {
             employeeId: true,
             firstName: true,
             lastName: true,
+            position: true,
+            role: true
           },
         },
       },
@@ -519,9 +575,137 @@ export async function deleteLeave(id) {
       where: { id },
     });
     
-    return { success: true, message: 'ลบข้อมูลการลาสำเร็จ' };
+    return { success: true, message: 'ลบข้อมูลการลาเรียบร้อยแล้ว' };
   } catch (error) {
     console.error(`Error deleting leave with ID ${id}:`, error);
+    return { success: false, message: error.message };
+  }
+}
+
+/**
+ * ฟังก์ชันสำหรับขอยกเลิกการลา
+ */
+export async function requestCancelLeave(id, data) {
+  try {
+    // ตรวจสอบว่ามีข้อมูลการลาหรือไม่
+    const existingLeave = await prisma.leave.findUnique({
+      where: { id },
+    });
+    
+    if (!existingLeave) {
+      return { success: false, message: 'ไม่พบข้อมูลการลา' };
+    }
+    
+    // ตรวจสอบว่าเป็นการลาที่อนุมัติแล้วหรือไม่
+    if (existingLeave.status !== 'อนุมัติ') {
+      return { success: false, message: 'สามารถยกเลิกได้เฉพาะการลาที่อนุมัติแล้วเท่านั้น' };
+    }
+    
+    // ตรวจสอบวันที่ลาเทียบกับวันปัจจุบัน
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // กำหนดเวลาเป็น 00:00:00
+    const startDate = new Date(existingLeave.startDate);
+    startDate.setHours(0, 0, 0, 0);
+    
+    // ถ้าวันที่เริ่มลายังไม่ถึง สามารถยกเลิกได้ทันที (ไม่ต้องรออนุมัติ)
+    const isAutoCancel = startDate > today;
+    
+    // อัปเดตข้อมูลการลา
+    const updatedLeave = await prisma.leave.update({
+      where: { id },
+      data: {
+        isCancelled: isAutoCancel,
+        cancelReason: data.reason,
+        cancelRequestedAt: new Date(),
+        cancelStatus: isAutoCancel ? 'อนุมัติ' : 'รออนุมัติ',
+        cancelApprovedById: isAutoCancel ? data.employeeId : null,
+        cancelApprovedAt: isAutoCancel ? new Date() : null,
+      },
+    });
+    
+    return { 
+      success: true, 
+      data: updatedLeave,
+      message: isAutoCancel 
+        ? 'ยกเลิกการลาเรียบร้อยแล้ว' 
+        : 'ส่งคำขอยกเลิกการลาเรียบร้อยแล้ว กรุณารอการอนุมัติ'
+    };
+  } catch (error) {
+    console.error(`Error requesting cancel leave with ID ${id}:`, error);
+    return { success: false, message: error.message };
+  }
+}
+
+/**
+ * ฟังก์ชันสำหรับอนุมัติการยกเลิกการลา
+ */
+export async function approveCancelLeave(id, approverId) {
+  try {
+    // ตรวจสอบว่ามีข้อมูลการลาหรือไม่
+    const existingLeave = await prisma.leave.findUnique({
+      where: { id },
+    });
+    
+    if (!existingLeave) {
+      return { success: false, message: 'ไม่พบข้อมูลการลา' };
+    }
+    
+    // ตรวจสอบว่าเป็นการขอยกเลิกที่รออนุมัติหรือไม่
+    if (existingLeave.cancelStatus !== 'รออนุมัติ') {
+      return { success: false, message: 'ไม่สามารถอนุมัติการยกเลิกนี้ได้ เนื่องจากไม่ได้อยู่ในสถานะรออนุมัติ' };
+    }
+    
+    // อัปเดตข้อมูลการลา
+    const updatedLeave = await prisma.leave.update({
+      where: { id },
+      data: {
+        isCancelled: true,
+        cancelStatus: 'อนุมัติ',
+        cancelApprovedById: approverId,
+        cancelApprovedAt: new Date(),
+      },
+    });
+    
+    return { success: true, data: updatedLeave, message: 'อนุมัติการยกเลิกการลาเรียบร้อยแล้ว' };
+  } catch (error) {
+    console.error(`Error approving cancel leave with ID ${id}:`, error);
+    return { success: false, message: error.message };
+  }
+}
+
+/**
+ * ฟังก์ชันสำหรับไม่อนุมัติการยกเลิกการลา
+ */
+export async function rejectCancelLeave(id, approverId, comment = null) {
+  try {
+    // ตรวจสอบว่ามีข้อมูลการลาหรือไม่
+    const existingLeave = await prisma.leave.findUnique({
+      where: { id },
+    });
+    
+    if (!existingLeave) {
+      return { success: false, message: 'ไม่พบข้อมูลการลา' };
+    }
+    
+    // ตรวจสอบว่าเป็นการขอยกเลิกที่รออนุมัติหรือไม่
+    if (existingLeave.cancelStatus !== 'รออนุมัติ') {
+      return { success: false, message: 'ไม่สามารถปฏิเสธการยกเลิกนี้ได้ เนื่องจากไม่ได้อยู่ในสถานะรออนุมัติ' };
+    }
+    
+    // อัปเดตข้อมูลการลา
+    const updatedLeave = await prisma.leave.update({
+      where: { id },
+      data: {
+        cancelStatus: 'ไม่อนุมัติ',
+        cancelApprovedById: approverId,
+        cancelApprovedAt: new Date(),
+        cancelComment: comment,
+      },
+    });
+    
+    return { success: true, data: updatedLeave, message: 'ปฏิเสธการยกเลิกการลาเรียบร้อยแล้ว' };
+  } catch (error) {
+    console.error(`Error rejecting cancel leave with ID ${id}:`, error);
     return { success: false, message: error.message };
   }
 }
@@ -548,6 +732,7 @@ export async function getOvertimes(employeeId = null) {
             email: true,
             position: true,
             department: true,
+            image: true,
           }
         },
         approvedBy: {
@@ -556,6 +741,25 @@ export async function getOvertimes(employeeId = null) {
             firstName: true,
             lastName: true,
             position: true,
+            image: true,
+          }
+        },
+        cancelRequestBy: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            position: true,
+            image: true,
+          }
+        },
+        cancelledBy: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            position: true,
+            image: true,
           }
         }
       }
@@ -583,7 +787,11 @@ export async function getOvertimeById(id) {
             firstName: true,
             lastName: true,
             department: true,
+            departmentId: true,
             position: true,
+            email: true,
+            image: true,
+            role: true,
           },
         },
         approvedBy: {
@@ -592,6 +800,34 @@ export async function getOvertimeById(id) {
             employeeId: true,
             firstName: true,
             lastName: true,
+            image: true,
+          },
+        },
+        cancelRequestBy: {
+          select: {
+            id: true,
+            employeeId: true,
+            firstName: true,
+            lastName: true,
+            image: true,
+          },
+        },
+        cancelledBy: {
+          select: {
+            id: true,
+            employeeId: true,
+            firstName: true,
+            lastName: true,
+            image: true,
+          },
+        },
+        cancelResponseBy: {
+          select: {
+            id: true,
+            employeeId: true,
+            firstName: true,
+            lastName: true,
+            image: true,
           },
         },
       },
@@ -680,13 +916,27 @@ export async function updateOvertime(id, data) {
     if (data.totalHours !== undefined) updateData.totalHours = parseFloat(data.totalHours);
     if (data.reason !== undefined) updateData.reason = data.reason;
     if (data.status !== undefined) updateData.status = data.status;
-    if (data.approvedBy !== undefined) updateData.approvedById = data.approvedBy;
     if (data.comment !== undefined) updateData.comment = data.comment;
     
-    // ถ้ามีการอัปเดตสถานะเป็นอนุมัติหรือไม่อนุมัติ ให้บันทึกเวลาที่อนุมัติด้วย
-    if (data.status === 'อนุมัติ' || data.status === 'ไม่อนุมัติ') {
-      updateData.approvedAt = new Date();
-    }
+    // ข้อมูลการอนุมัติ
+    if (data.approvedById !== undefined) updateData.approvedById = data.approvedById;
+    if (data.approvedAt !== undefined) updateData.approvedAt = data.approvedAt ? new Date(data.approvedAt) : null;
+    
+    // ข้อมูลการขอยกเลิก
+    if (data.cancelStatus !== undefined) updateData.cancelStatus = data.cancelStatus;
+    if (data.cancelRequestById !== undefined) updateData.cancelRequestById = data.cancelRequestById;
+    if (data.cancelRequestAt !== undefined) updateData.cancelRequestAt = data.cancelRequestAt ? new Date(data.cancelRequestAt) : null;
+    if (data.cancelReason !== undefined) updateData.cancelReason = data.cancelReason;
+    
+    // ข้อมูลการอนุมัติการยกเลิก
+    if (data.isCancelled !== undefined) updateData.isCancelled = data.isCancelled;
+    if (data.cancelledById !== undefined) updateData.cancelledById = data.cancelledById;
+    if (data.cancelledAt !== undefined) updateData.cancelledAt = data.cancelledAt ? new Date(data.cancelledAt) : null;
+    
+    // ข้อมูลการตอบกลับคำขอยกเลิก
+    if (data.cancelResponseById !== undefined) updateData.cancelResponseById = data.cancelResponseById;
+    if (data.cancelResponseAt !== undefined) updateData.cancelResponseAt = data.cancelResponseAt ? new Date(data.cancelResponseAt) : null;
+    if (data.cancelResponseComment !== undefined) updateData.cancelResponseComment = data.cancelResponseComment;
     
     // อัปเดตข้อมูลการทำงานล่วงเวลา
     const updatedOvertime = await prisma.overtime.update({
@@ -700,10 +950,37 @@ export async function updateOvertime(id, data) {
             firstName: true,
             lastName: true,
             department: true,
+            departmentId: true,
             position: true,
+            email: true,
+            role: true,
           },
         },
         approvedBy: {
+          select: {
+            id: true,
+            employeeId: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+        cancelRequestBy: {
+          select: {
+            id: true,
+            employeeId: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+        cancelledBy: {
+          select: {
+            id: true,
+            employeeId: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+        cancelResponseBy: {
           select: {
             id: true,
             employeeId: true,
@@ -738,101 +1015,146 @@ export async function deleteOvertime(id) {
 }
 
 /**
- * ฟังก์ชันสำหรับดึงข้อมูลสถิติ
+ * ฟังก์ชันสำหรับดึงสถิติสำหรับหน้า Dashboard
  */
 export async function getStatistics() {
   try {
-    // จำนวนพนักงานทั้งหมด
-    const totalEmployees = await prisma.employee.count({
-      where: { isActive: true },
-    });
-    
-    // จำนวนการลาที่รออนุมัติ
-    const pendingLeaves = await prisma.leave.count({
-      where: { status: 'รออนุมัติ' },
-    });
-    
-    // จำนวนการทำงานล่วงเวลาที่รออนุมัติ
-    const pendingOvertimes = await prisma.overtime.count({
-      where: { status: 'รออนุมัติ' },
-    });
-    
-    // จำนวนพนักงานแยกตามแผนก - ปรับปรุงวิธีการนับ
-    const employeesByDepartment = await prisma.employee.findMany({
-      where: { isActive: true },
-      select: {
-        departmentId: true,
-        department: {
-          select: {
-            name: true
-          }
-        }
-      }
-    });
-    
-    // นับจำนวนพนักงานแยกตามแผนก
-    const departmentStats = [];
-    const departmentCount = {};
-    
-    employeesByDepartment.forEach(employee => {
-      const deptName = employee.department?.name || 'ไม่ระบุแผนก';
-      if (!departmentCount[deptName]) {
-        departmentCount[deptName] = 0;
-      }
-      departmentCount[deptName]++;
-    });
-    
-    // แปลงเป็นรูปแบบที่ต้องการ
-    for (const [department, count] of Object.entries(departmentCount)) {
-      departmentStats.push({ department, count });
+    // ตรวจสอบการเชื่อมต่อกับฐานข้อมูล
+    try {
+      await prisma.$connect();
+    } catch (connectionError) {
+      console.error('Database connection error:', connectionError);
+      return { 
+        success: false, 
+        message: 'ไม่สามารถเชื่อมต่อกับฐานข้อมูลได้', 
+        connectionError: true 
+      };
     }
-    
-    // จำนวนการลาในเดือนปัจจุบัน
-    const currentDate = new Date();
-    const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-    const lastDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-    
-    const leavesThisMonth = await prisma.leave.count({
+
+    // ดึงจำนวนพนักงานทั้งหมด
+    const totalEmployees = await prisma.employee.count({
       where: {
-        startDate: {
-          gte: firstDayOfMonth,
-          lte: lastDayOfMonth,
-        },
-      },
+        isActive: true
+      }
     });
     
-    // จำนวนชั่วโมงการทำงานล่วงเวลาในเดือนปัจจุบัน
-    const overtimesThisMonth = await prisma.overtime.findMany({
+    // ดึงจำนวนคำขอลาที่รออนุมัติ
+    const pendingLeaves = await prisma.leave.count({
       where: {
-        date: {
-          gte: firstDayOfMonth,
-          lte: lastDayOfMonth,
-        },
-        status: 'อนุมัติ',
-      },
-      select: {
-        totalHours: true,
-      },
+        status: 'รออนุมัติ'
+      }
     });
     
-    const totalOvertimeHours = overtimesThisMonth.reduce(
-      (total, overtime) => total + overtime.totalHours,
-      0
-    );
+    // ดึงจำนวนคำขอทำงานล่วงเวลาที่รออนุมัติ
+    const pendingOvertimes = await prisma.overtime.count({
+      where: {
+        status: 'รออนุมัติ'
+      }
+    });
     
     return {
       success: true,
       data: {
         totalEmployees,
         pendingLeaves,
-        pendingOvertimes,
-        departmentStats,
-        leavesThisMonth,
-        totalOvertimeHours,
+        pendingOvertimes
+      }
+    };
+  } catch (error) {
+    console.error('Error getting statistics:', error);
+    return {
+      success: false,
+      message: 'เกิดข้อผิดพลาดในการดึงข้อมูลสถิติ',
+      error: true
+    };
+  } finally {
+    // ปิดการเชื่อมต่อกับฐานข้อมูล
+    await prisma.$disconnect();
+  }
+}
+
+/**
+ * ฟังก์ชันสำหรับดึงข้อมูลปฏิทินพนักงาน
+ */
+export async function getEmployeeCalendarData(startDate, endDate) {
+  try {
+    // ดึงข้อมูลพนักงานทั้งหมด
+    const employees = await prisma.employee.findMany({
+      where: {
+        isActive: true,
+      },
+      select: {
+        id: true,
+        employeeId: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        position: true,
+        department: true,
+        role: true,
+        image: true,
+      },
+      orderBy: {
+        firstName: 'asc',
+      },
+    });
+    
+    // ดึงข้อมูลการลาในช่วงเวลาที่กำหนด
+    const leaves = await prisma.leave.findMany({
+      where: {
+        startDate: {
+          lte: new Date(endDate),
+        },
+        endDate: {
+          gte: new Date(startDate),
+        },
+      },
+      include: {
+        employee: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            position: true,
+            department: true,
+            image: true,
+          },
+        },
+      },
+    });
+    
+    // ดึงข้อมูลการทำงานล่วงเวลาในช่วงเวลาที่กำหนด
+    const overtimes = await prisma.overtime.findMany({
+      where: {
+        date: {
+          gte: new Date(startDate),
+          lte: new Date(endDate),
+        },
+      },
+      include: {
+        employee: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            position: true,
+            department: true,
+            image: true,
+          },
+        },
+      },
+    });
+    
+    return {
+      success: true,
+      data: {
+        employees,
+        leaves,
+        overtimes,
       },
     };
   } catch (error) {
-    console.error('Error fetching statistics:', error);
-    return { success: false, message: error.message, connectionError: true };
+    console.error('Error fetching employee calendar data:', error);
+    return { success: false, message: error.message };
   }
 } 

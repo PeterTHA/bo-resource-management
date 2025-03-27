@@ -1,15 +1,16 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { signIn } from 'next-auth/react';
+import { signIn, signOut, useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { FiMail, FiLock, FiLogIn, FiHelpCircle } from 'react-icons/fi';
 import ErrorMessage from '../../components/ui/ErrorMessage';
-import { LoadingButton } from '../../components/ui/LoadingSpinner';
+import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { data: session, status } = useSession();
   const searchParams = useSearchParams();
   const [formData, setFormData] = useState({
     email: '',
@@ -17,6 +18,37 @@ export default function LoginPage() {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // ตรวจสอบว่าผู้ใช้ล็อกอินอยู่แล้วหรือไม่
+  useEffect(() => {
+    // ถ้ามี session อยู่แล้ว ให้ redirect ไปที่ dashboard ทันที
+    if (session) {
+      console.log('มี session อยู่แล้ว นำทางไปยังหน้า dashboard...');
+      router.replace('/dashboard');
+    }
+  }, [session, router]);
+
+  // ตรวจสอบว่ามีการออกจากระบบโดยตั้งใจหรือไม่
+  useEffect(() => {
+    // ล้าง session เฉพาะเมื่อมีพารามิเตอร์ logout หรือต้องการล้าง session เท่านั้น
+    const shouldLogout = searchParams.get('logout') === 'true';
+    const errorType = searchParams.get('error');
+    
+    if (shouldLogout || errorType) {
+      // ทำการออกจากระบบเมื่อมีพารามิเตอร์ logout หรือมีข้อผิดพลาด
+      signOut({ redirect: false });
+      
+      // ล้าง local/session storage ที่เกี่ยวข้อง
+      localStorage.removeItem('nextauth.message');
+      localStorage.removeItem('auth_success');
+      sessionStorage.removeItem('nextauth.message');
+    }
+    
+    // ถ้ามี query string ให้เปลี่ยนเส้นทางไปที่หน้า login โดยไม่มี query string
+    if (window.location.search) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [searchParams]);
 
   // ตรวจสอบ URL parameters เมื่อโหลดหน้า
   useEffect(() => {
@@ -48,22 +80,26 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const res = await signIn('credentials', {
+      // ใช้ redirect: false เพื่อจัดการการนำทางเอง
+      const result = await signIn('credentials', {
         redirect: false,
         email: formData.email,
         password: formData.password,
       });
-
-      if (!res) {
+      
+      if (!result) {
         setError('เกิดข้อผิดพลาดในการเข้าสู่ระบบ กรุณาลองใหม่อีกครั้ง');
-      } else if (res.error) {
-        if (res.error === 'ServerRestarted') {
-          setError('เซิร์ฟเวอร์มีการรีสตาร์ท กรุณาเข้าสู่ระบบอีกครั้ง');
-        } else {
-          setError('อีเมลหรือรหัสผ่านไม่ถูกต้อง');
-        }
-      } else {
-        router.push('/dashboard');
+      } else if (result.error) {
+        setError('อีเมลหรือรหัสผ่านไม่ถูกต้อง');
+        console.error('Login error:', result.error);
+      } else if (result.ok) {
+        console.log('ล็อกอินสำเร็จ กำลังเปลี่ยนเส้นทางไปยัง dashboard...');
+        
+        // สร้าง timestamp เพื่อป้องกันการแคชหน้า
+        const timestamp = new Date().getTime();
+        
+        // ใช้การนำทางแบบบังคับโดยเพิ่ม timestamp เป็น hash fragment
+        window.location.href = `/dashboard#${timestamp}`;
       }
     } catch (error) {
       console.error('Login error:', error);
@@ -82,7 +118,7 @@ export default function LoginPage() {
         </div>
         <div className="card flex-shrink-0 w-full max-w-sm shadow-2xl bg-base-100">
           <div className="card-body">
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} method="POST">
               {error && <ErrorMessage message={error} />}
               
               <div className="form-control">
@@ -102,6 +138,7 @@ export default function LoginPage() {
                     value={formData.email}
                     onChange={handleChange}
                     required
+                    autoComplete="email"
                   />
                 </div>
               </div>
@@ -123,6 +160,7 @@ export default function LoginPage() {
                     value={formData.password}
                     onChange={handleChange}
                     required
+                    autoComplete="current-password"
                   />
                 </div>
                 <div className="flex justify-end mt-1">
@@ -134,13 +172,20 @@ export default function LoginPage() {
               </div>
               
               <div className="form-control mt-6">
-                <LoadingButton 
+                <button 
                   type="submit" 
-                  className="btn-primary"
-                  loading={loading}
+                  className="btn btn-primary"
+                  disabled={loading}
                 >
-                  เข้าสู่ระบบ
-                </LoadingButton>
+                  {loading ? (
+                    <LoadingSpinner size="sm" />
+                  ) : (
+                    <>
+                      <FiLogIn className="mr-2" />
+                      <span>เข้าสู่ระบบ</span>
+                    </>
+                  )}
+                </button>
               </div>
             </form>
           </div>

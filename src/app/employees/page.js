@@ -10,6 +10,7 @@ import { Card, CardHeader, CardContent } from '../../components/ui/Card';
 import ErrorMessage, { ConnectionErrorMessage } from '../../components/ui/ErrorMessage';
 import { LoadingPage, LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { hasPermission } from '@/lib/permissions';
+import ProfileImage from '../../components/ui/ProfileImage';
 
 export default function EmployeesPage() {
   const { data: session, status } = useSession();
@@ -384,27 +385,15 @@ export default function EmployeesPage() {
 
   // ฟังก์ชันสำหรับแสดงรูปโปรไฟล์หรือตัวอักษรย่อ
   const getProfileDisplay = (employee) => {
-    if (employee.image) {
-      return (
-        <div className="flex-shrink-0 h-10 w-10 relative rounded-full overflow-hidden border-2 border-purple-200 dark:border-purple-900">
-          <Image
-            src={employee.image}
-            alt={`${employee.firstName} ${employee.lastName}`}
-            fill
-            sizes="40px"
-            className="object-cover"
-            priority
-          />
-        </div>
-      );
-    }
-    
     return (
-      <div className="flex-shrink-0 h-10 w-10 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center transition-colors duration-300 border-2 border-purple-200 dark:border-purple-900">
-        <span className="text-purple-600 dark:text-purple-400 font-medium transition-colors duration-300">
-          {employee.firstName?.charAt(0) || ''}{employee.lastName?.charAt(0) || ''}
-        </span>
-      </div>
+      <ProfileImage 
+        src={employee.image}
+        alt={`${employee.firstName} ${employee.lastName}`}
+        size="sm"
+        fallbackText={`${employee.firstName} ${employee.lastName}`}
+        withBorder={true}
+        className="transition-transform duration-300"
+      />
     );
   };
 

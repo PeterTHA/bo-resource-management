@@ -5,6 +5,13 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { FiChevronLeft, FiChevronRight, FiCalendar, FiClock, FiUser, FiFilter } from 'react-icons/fi';
 import { LoadingPage } from '../../components/ui/LoadingSpinner';
+import Image from 'next/image';
+import ProfileImage from '../../components/ui/ProfileImage';
+
+// เพิ่มฟังก์ชันตรวจสอบว่าเป็นรูปภาพจาก mock-images หรือไม่
+const isMockImage = (src) => {
+  return src && typeof src === 'string' && (src.startsWith('/mock-images/') || src.startsWith('./mock-images/'));
+};
 
 export default function EmployeeCalendarPage() {
   const { data: session, status } = useSession();
@@ -31,51 +38,31 @@ export default function EmployeeCalendarPage() {
 
       setLoading(true);
       try {
-        // ดึงข้อมูลพนักงาน
-        const employeesRes = await fetch('/api/employees');
-        const employeesData = await employeesRes.json();
-
-        if (employeesData.data && Array.isArray(employeesData.data)) {
-          setEmployees(employeesData.data);
-          
-          // ดึงรายชื่อแผนก
-          const uniqueDepartments = [...new Set(employeesData.data.map(emp => {
-            return typeof emp.department === 'object' ? emp.department.name : emp.department;
-          }))];
-          setDepartments(uniqueDepartments);
-        } else if (Array.isArray(employeesData)) {
-          setEmployees(employeesData);
-          
-          // ดึงรายชื่อแผนก
-          const uniqueDepartments = [...new Set(employeesData.map(emp => {
-            return typeof emp.department === 'object' ? emp.department.name : emp.department;
-          }))];
-          setDepartments(uniqueDepartments);
-        } else {
-          setError('ไม่สามารถดึงข้อมูลพนักงานได้');
-        }
-
-        // ดึงข้อมูลการลา
+        // คำนวณช่วงวันที่
         const startDate = getStartDate();
         const endDate = getEndDate();
         
-        const leavesRes = await fetch(`/api/leaves?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`);
-        const leavesData = await leavesRes.json();
+        // ดึงข้อมูลทั้งหมดจาก API เดียว
+        const calendarRes = await fetch(`/api/employee-calendar?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`);
+        const calendarData = await calendarRes.json();
 
-        if (leavesData.success) {
-          setLeaves(leavesData.data);
+        if (calendarData.success) {
+          // อัปเดตข้อมูลพนักงาน
+          setEmployees(calendarData.data.employees);
+          
+          // ดึงรายชื่อแผนก
+          const uniqueDepartments = [...new Set(calendarData.data.employees.map(emp => {
+            return typeof emp.department === 'object' ? emp.department.name : emp.department;
+          }))];
+          setDepartments(uniqueDepartments);
+          
+          // อัปเดตข้อมูลการลา
+          setLeaves(calendarData.data.leaves);
+          
+          // อัปเดตข้อมูลการทำงานล่วงเวลา
+          setOvertimes(calendarData.data.overtimes);
         } else {
-          console.error('ไม่สามารถดึงข้อมูลการลาได้');
-        }
-
-        // ดึงข้อมูลการทำงานล่วงเวลา
-        const overtimesRes = await fetch(`/api/overtime?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`);
-        const overtimesData = await overtimesRes.json();
-
-        if (overtimesData.success) {
-          setOvertimes(overtimesData.data);
-        } else {
-          console.error('ไม่สามารถดึงข้อมูลการทำงานล่วงเวลาได้');
+          setError('ไม่สามารถดึงข้อมูลปฏิทินพนักงานได้');
         }
       } catch (err) {
         console.error('เกิดข้อผิดพลาดในการดึงข้อมูล:', err);
@@ -184,7 +171,9 @@ export default function EmployeeCalendarPage() {
     const employeeLeaves = leaves.filter(leave => 
       leave.employeeId === employeeId &&
       new Date(leave.startDate) <= date &&
-      new Date(leave.endDate) >= date
+      new Date(leave.endDate) >= date &&
+      leave.status !== 'ยกเลิก' &&
+      (!leave.isCancelled || leave.cancelStatus === 'รออนุมัติ' || leave.cancelStatus === 'ไม่อนุมัติ')
     );
     
     if (employeeLeaves.length > 0) {
@@ -199,7 +188,9 @@ export default function EmployeeCalendarPage() {
     // ตรวจสอบการทำงานล่วงเวลา
     const employeeOvertimes = overtimes.filter(overtime => 
       overtime.employeeId === employeeId &&
-      new Date(overtime.date).toISOString().split('T')[0] === dateStr
+      new Date(overtime.date).toISOString().split('T')[0] === dateStr &&
+      overtime.status !== 'ยกเลิก' &&
+      (!overtime.isCancelled || overtime.cancelStatus === 'รออนุมัติ' || overtime.cancelStatus === 'ไม่อนุมัติ')
     );
     
     if (employeeOvertimes.length > 0) {
@@ -360,10 +351,13 @@ export default function EmployeeCalendarPage() {
                     <tr key={employee.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                       <td className="px-6 py-4 whitespace-nowrap sticky left-0 bg-white dark:bg-gray-800 z-10 border-r border-gray-200 dark:border-gray-700">
                         <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10 bg-primary-100 dark:bg-primary-900 rounded-full flex items-center justify-center">
-                            <span className="text-primary-600 dark:text-primary-300 font-medium">
-                              {employee.firstName?.charAt(0) || ''}{employee.lastName?.charAt(0) || ''}
-                            </span>
+                          <div className="flex-shrink-0">
+                            <ProfileImage 
+                              src={employee.image}
+                              alt={`${employee.firstName || ''} ${employee.lastName || ''}`}
+                              size="sm"
+                              fallbackText={`${employee.firstName || ''} ${employee.lastName || ''}`}
+                            />
                           </div>
                           <div className="ml-4">
                             <div className="text-sm font-medium">

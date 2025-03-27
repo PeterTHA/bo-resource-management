@@ -8,6 +8,7 @@ import Image from 'next/image';
 import { FiUser, FiLock, FiMail, FiInfo, FiSave, FiArrowLeft, FiUpload, FiX, FiCalendar, FiBriefcase, FiRefreshCw } from 'react-icons/fi';
 import { LoadingPage, LoadingButton } from '../../components/ui/LoadingSpinner';
 import ErrorMessage from '../../components/ui/ErrorMessage';
+import ProfileImage from '../../components/ui/ProfileImage';
 
 // เพิ่มฟังก์ชันตรวจสอบว่าเป็นรูปภาพจาก mock-images หรือไม่
 const isMockImage = (src) => {
@@ -587,24 +588,13 @@ export default function ProfilePage() {
           <div className="absolute top-0 right-0 w-32 h-32 bg-purple-100/50 dark:bg-purple-900/20 rounded-bl-full -translate-y-8 translate-x-8"></div>
           <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 relative z-10">
             <div className="relative mb-2 sm:mb-0">
-              {imagePreview ? (
-                <div className="relative h-28 w-28 rounded-full overflow-hidden border-4 border-purple-200 dark:border-purple-900 shadow-md">
-                  <Image 
-                    src={imagePreview} 
-                    alt={`${employee.firstName} ${employee.lastName}`}
-                    fill
-                    sizes="112px"
-                    className="object-cover" 
-                    unoptimized={isMockImage(imagePreview)}
-                  />
-                </div>
-              ) : (
-                <div className="h-28 w-28 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center border-4 border-purple-200 dark:border-purple-900 shadow-md">
-                  <span className="text-purple-600 dark:text-purple-400 text-3xl font-medium">
-                    {employee.firstName?.charAt(0) || ''}{employee.lastName?.charAt(0) || ''}
-                  </span>
-                </div>
-              )}
+              <ProfileImage 
+                src={imagePreview}
+                alt={`${employee.firstName} ${employee.lastName}`}
+                size="xl"
+                fallbackText={`${employee.firstName} ${employee.lastName}`}
+                className="shadow-md"
+              />
             </div>
             <div className="text-center sm:text-left">
               <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
@@ -692,20 +682,13 @@ export default function ProfilePage() {
               {/* รูปโปรไฟล์ */}
               <div className="flex flex-col items-center gap-4">
                 <div className="relative h-28 w-28 rounded-full overflow-hidden mb-4">
-                  {imagePreview ? (
-                    <Image 
-                      src={imagePreview} 
-                      alt="รูปโปรไฟล์" 
-                      width={112} 
-                      height={112}
-                      className="object-cover rounded-full"
-                      unoptimized={isMockImage(imagePreview)}
-                    />
-                  ) : (
-                    <div className="h-28 w-28 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center">
-                      <FiUser size={40} className="text-gray-400 dark:text-gray-500" />
-                    </div>
-                  )}
+                  <ProfileImage 
+                    src={imagePreview}
+                    alt="รูปโปรไฟล์"
+                    size="lg"
+                    fallbackText={`${employee?.firstName} ${employee?.lastName}`}
+                    clickable={false}
+                  />
                   {imagePreview && (
                     <button
                       type="button"

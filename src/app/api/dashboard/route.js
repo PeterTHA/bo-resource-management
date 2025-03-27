@@ -6,11 +6,18 @@ import { getStatistics } from '../../../lib/db-prisma';
 // GET - ดึงข้อมูลสถิติสำหรับหน้า Dashboard
 export async function GET(request) {
   try {
+    // ตรวจสอบสิทธิ์การเข้าถึง API
     const session = await getServerSession(authOptions);
+    console.log('Dashboard API - Session:', session ? 'มีข้อมูล session' : 'ไม่มีข้อมูล session');
     
+    // ต้องมี session จึงจะสามารถเข้าถึงข้อมูลได้
     if (!session) {
       return NextResponse.json(
-        { success: false, message: 'กรุณาเข้าสู่ระบบ' },
+        { 
+          success: false, 
+          message: 'กรุณาเข้าสู่ระบบเพื่อเข้าถึงข้อมูล',
+          notAuthenticated: true 
+        },
         { status: 401 }
       );
     }
@@ -20,7 +27,11 @@ export async function GET(request) {
     
     if (!result.success) {
       return NextResponse.json(
-        { success: false, message: result.message || 'เกิดข้อผิดพลาดในการดึงข้อมูลสถิติ', connectionError: result.connectionError },
+        {
+          success: false, 
+          message: result.message || 'เกิดข้อผิดพลาดในการดึงข้อมูลสถิติ', 
+          connectionError: result.connectionError
+        },
         { status: 500 }
       );
     }
@@ -29,7 +40,7 @@ export async function GET(request) {
   } catch (error) {
     console.error('Error in GET /api/dashboard:', error);
     return NextResponse.json(
-      { success: false, message: error.message },
+      { success: false, message: error.message || 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์' },
       { status: 500 }
     );
   }

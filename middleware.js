@@ -1,89 +1,106 @@
 import { NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 
-// กำหนดเวลาเริ่มต้น server
-if (!global.SERVER_START_TIME) {
-  global.SERVER_START_TIME = Date.now();
-  console.log(`SERVER_START_TIME กำหนดเป็น: ${new Date(global.SERVER_START_TIME).toISOString()}`);
+// กำหนดเส้นทางที่ไม่จำเป็นต้องล็อกอิน (ไม่ต้องตรวจสอบ)
+const publicPaths = [
+  '/login',
+  '/api/auth',
+  '/forgot-password',
+  '/reset-password',
+  '/terms',
+  '/privacy',
+  '/_next',
+  '/favicon.ico',
+  '/images',
+  '/static',
+];
+
+// ตรวจสอบว่าเส้นทางปัจจุบันเป็น public หรือไม่
+function isPublicPath(path) {
+  return publicPaths.some(publicPath => path.startsWith(publicPath));
 }
 
-export async function middleware(request) {
-  const { pathname, search } = request.nextUrl;
-  
-  console.log('Middleware processing path:', pathname, 'with query:', search);
-  
-  // ไม่ตรวจสอบสำหรับเส้นทางดังต่อไปนี้
-  if (
-    pathname.startsWith('/_next') ||
-    pathname.startsWith('/api') ||
-    pathname.startsWith('/login') ||
-    pathname.startsWith('/forgot-password') ||
-    pathname === '/'
-  ) {
+// บางเส้นทางที่ต้องการเข้าถึงเฉพาะ admin
+const adminPaths = ['/admin', '/api/admin'];
+
+export async function middleware(req) {
+  const { pathname } = req.nextUrl;
+
+  // เส้นทางสาธารณะให้ผ่านไปเลย
+  if (isPublicPath(pathname)) {
+    console.log(`[Middleware] Public path: ${pathname}, allowing access`);
     return NextResponse.next();
   }
-  
+
   try {
-    // ตรวจสอบว่ามีการกำหนด NEXTAUTH_SECRET หรือไม่
-    if (!process.env.NEXTAUTH_SECRET) {
-      console.error('NEXTAUTH_SECRET is not defined!');
-      const loginUrl = new URL('/login', request.url);
-      loginUrl.searchParams.set('error', 'ConfigError');
-      return NextResponse.redirect(loginUrl);
-    }
-    
-    // ตรวจสอบ token ปัจจุบัน
+    // ดึงข้อมูล token
     const token = await getToken({ 
-      req: request,
-      secret: process.env.NEXTAUTH_SECRET 
+      req,
+      secret: process.env.NEXTAUTH_SECRET
     });
     
-    // ถ้าไม่มี token หรือ token หมดอายุให้ redirect ไปที่หน้า login
-    if (!token) {
-      const loginUrl = new URL('/login', request.url);
-      loginUrl.searchParams.set('error', 'SessionExpired');
-      return NextResponse.redirect(loginUrl);
+    console.log(`[Middleware] Token check for ${pathname}: ${token ? 'Found' : 'Not found'}`);
+    
+    // หน้าแรก (/)
+    if (pathname === '/') {
+      if (token) {
+        console.log('[Middleware] Root path with token, redirecting to dashboard');
+        return NextResponse.redirect(new URL('/dashboard', req.url));
+      }
+      console.log('[Middleware] Root path without token, redirecting to login');
+      return NextResponse.redirect(new URL('/login', req.url));
     }
-    
-    // ตรวจสอบว่า server ได้ restart หรือไม่
-    // ตรวจสอบว่ามีค่า serverStartTime และไม่ตรงกับ global.SERVER_START_TIME ปัจจุบัน
-    const currentServerTime = global.SERVER_START_TIME || Date.now();
-    
-    if (token.serverStartTime && token.serverStartTime !== currentServerTime) {
-      console.log(`Token server time (${token.serverStartTime}) ไม่ตรงกับ current (${currentServerTime})`);
-      
-      // Redirect to login page with error parameter
-      const loginUrl = new URL('/login', request.url);
-      loginUrl.searchParams.set('error', 'ServerRestarted');
-      return NextResponse.redirect(loginUrl);
-    }
-    
-    // เมื่อผ่านการตรวจสอบ ให้ response ถูกส่งต่อไปพร้อมกับ query parameters เดิม
-    const response = NextResponse.next();
 
-    // เพิ่มการบันทึกข้อมูลการเข้าถึง
-    console.log(`User ${token.email || token.id} accessed ${pathname}${search}`);
-    
-    return response;
+    // ถ้าไม่มี token และไม่ใช่หน้าสาธารณะ
+    if (!token) {
+      console.log(`[Middleware] No token for protected path: ${pathname}`);
+      
+      // สำหรับ API endpoint
+      if (pathname.startsWith('/api/')) {
+        return new NextResponse(
+          JSON.stringify({ success: false, message: 'กรุณาเข้าสู่ระบบ' }),
+          { status: 401, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      
+      // สำหรับหน้าทั่วไป
+      return NextResponse.redirect(new URL('/login', req.url));
+    }
+
+    // สำหรับ admin path แต่ผู้ใช้ไม่ใช่ admin
+    if (token.role !== 'admin' && adminPaths.some(path => pathname.startsWith(path))) {
+      console.log(`[Middleware] Non-admin access to admin path: ${pathname}`);
+      
+      if (pathname.startsWith('/api/')) {
+        return new NextResponse(
+          JSON.stringify({ success: false, message: 'ไม่มีสิทธิ์เข้าถึง' }),
+          { status: 403, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      
+      return NextResponse.redirect(new URL('/dashboard', req.url));
+    }
+
+    // ผ่านการตรวจสอบทั้งหมด
+    console.log(`[Middleware] Access granted for: ${pathname}`);
+    return NextResponse.next();
   } catch (error) {
-    console.error('Middleware error:', error);
-    // กรณีเกิดข้อผิดพลาดในการตรวจสอบ token ให้ redirect ไปที่หน้า login
-    const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('error', 'AuthError');
-    return NextResponse.redirect(loginUrl);
+    console.error(`[Middleware] Error:`, error);
+    
+    // กรณีเกิดข้อผิดพลาดกับ API
+    if (pathname.startsWith('/api/')) {
+      return new NextResponse(
+        JSON.stringify({ success: false, message: 'เกิดข้อผิดพลาด' }),
+        { status: 500, headers: { 'content-type': 'application/json' } }
+      );
+    }
+    
+    // กรณีเกิดข้อผิดพลาดกับหน้าทั่วไป นำทางไปที่หน้าล็อกอิน
+    return NextResponse.redirect(new URL('/login?error=AuthError', req.url));
   }
 }
 
-// กำหนด matcher เพื่อใช้ middleware กับทุก route ยกเว้นที่ระบุ
+// กำหนดเส้นทางที่ต้องการให้ middleware ทำงาน
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except:
-     * 1. /api/auth/* (authentication routes)
-     * 2. /_next/* (Next.js internals)
-     * 3. /static/* (static files)
-     * 4. /favicon.ico, /sitemap.xml (common files)
-     */
-    '/((?!api/auth|_next/static|_next/image|images|favicon.ico|sitemap.xml).*)',
-  ],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 }; 

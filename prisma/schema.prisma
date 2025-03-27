@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,7 +7,6 @@ datasource db {
   url      = env("POSTGRES_PRISMA_URL")
 }
 
-// โมเดลพนักงาน
 model Employee {
   id                String      @id @default(uuid())
   employeeId        String      @unique @map("employee_id")
@@ -22,76 +15,101 @@ model Employee {
   email             String      @unique
   password          String
   position          String
-  positionLevel     String?     @map("position_level")
-  positionTitle     String?     @map("position_title")
   departmentId      String?     @map("department_id")
-  department        Department? @relation(fields: [departmentId], references: [id])
   teamId            String?     @map("team_id")
-  teamData          Team?       @relation(fields: [teamId], references: [id])
   hireDate          DateTime    @map("hire_date")
-  role              String      @default("staff") // ตัวเลือก: admin, lead, staff, outsource 
+  role              String      @default("staff")
   isActive          Boolean     @default(true) @map("is_active")
   image             String?
-  gender            String?
-  birthDate         DateTime?   @map("birth_date")
-  phoneNumber       String?     @map("phone_number")
   createdAt         DateTime    @default(now()) @map("created_at")
   updatedAt         DateTime    @updatedAt @map("updated_at")
-  leaves            Leave[]     @relation("EmployeeLeaves")
+  birthDate         DateTime?   @map("birth_date")
+  gender            String?
+  phoneNumber       String?     @map("phone_number")
+  positionLevel     String?     @map("position_level")
+  positionTitle     String?     @map("position_title")
+  department        Department? @relation(fields: [departmentId], references: [id])
+  teamData          Team?       @relation(fields: [teamId], references: [id])
   approvedLeaves    Leave[]     @relation("LeaveApprover")
-  overtimes         Overtime[]  @relation("EmployeeOvertimes")
+  cancelApprovedLeaves Leave[]  @relation("LeaveCancelApprover")
+  leaves            Leave[]     @relation("EmployeeLeaves")
   approvedOvertimes Overtime[]  @relation("OvertimeApprover")
+  overtimes         Overtime[]  @relation("EmployeeOvertimes")
+  cancelRequestOvertimes Overtime[] @relation("OvertimeCancelRequester")
+  cancelledOvertimes Overtime[] @relation("OvertimeCanceller")
+  cancelResponseOvertimes Overtime[] @relation("OvertimeCancelResponder")
 
   @@map("employees")
 }
 
-// โมเดลการลา
 model Leave {
-  id           String    @id @default(uuid())
-  employeeId   String    @map("employee_id")
-  employee     Employee  @relation("EmployeeLeaves", fields: [employeeId], references: [id])
-  leaveType    String    @map("leave_type")
-  startDate    DateTime  @map("start_date")
-  endDate      DateTime  @map("end_date")
-  reason       String
-  status       String    @default("รออนุมัติ")
-  approvedById String?   @map("approved_by_id")
-  approvedBy   Employee? @relation("LeaveApprover", fields: [approvedById], references: [id])
-  approvedAt   DateTime? @map("approved_at")
-  comment      String?
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
+  id                 String    @id @default(uuid())
+  employeeId         String    @map("employee_id")
+  leaveType          String    @map("leave_type")
+  startDate          DateTime  @map("start_date")
+  endDate            DateTime  @map("end_date")
+  reason             String
+  status             String    @default("รออนุมัติ")
+  approvedById       String?   @map("approved_by_id")
+  approvedAt         DateTime? @map("approved_at")
+  comment            String?
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  attachments        String[]  @default([]) @map("attachments")
+  leaveFormat        String    @default("เต็มวัน") @map("leave_format")
+  totalDays          Float     @default(0) @map("total_days")
+  cancelApprovedAt   DateTime? @map("cancel_approved_at")
+  cancelApprovedById String?   @map("cancel_approved_by_id")
+  cancelComment      String?   @map("cancel_comment")
+  cancelReason       String?   @map("cancel_reason")
+  cancelRequestedAt  DateTime? @map("cancel_requested_at")
+  cancelStatus       String?   @map("cancel_status")
+  isCancelled        Boolean   @default(false) @map("is_cancelled")
+  approvedBy         Employee? @relation("LeaveApprover", fields: [approvedById], references: [id])
+  cancelApprovedBy   Employee? @relation("LeaveCancelApprover", fields: [cancelApprovedById], references: [id])
+  employee           Employee  @relation("EmployeeLeaves", fields: [employeeId], references: [id])
 
   @@map("leaves")
 }
 
-// โมเดลการทำงานล่วงเวลา
 model Overtime {
-  id           String    @id @default(uuid())
-  employeeId   String    @map("employee_id")
-  employee     Employee  @relation("EmployeeOvertimes", fields: [employeeId], references: [id])
-  date         DateTime
-  startTime    String    @map("start_time")
-  endTime      String    @map("end_time")
-  totalHours   Float     @map("total_hours")
-  reason       String
-  status       String    @default("รออนุมัติ")
-  approvedById String?   @map("approved_by_id")
-  approvedBy   Employee? @relation("OvertimeApprover", fields: [approvedById], references: [id])
-  approvedAt   DateTime? @map("approved_at")
-  comment      String?
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
+  id                String    @id @default(uuid())
+  employeeId        String    @map("employee_id")
+  date              DateTime
+  startTime         String    @map("start_time")
+  endTime           String    @map("end_time")
+  totalHours        Float     @map("total_hours")
+  reason            String
+  status            String    @default("รออนุมัติ")
+  approvedById      String?   @map("approved_by_id")
+  approvedAt        DateTime? @map("approved_at")
+  comment           String?
+  cancelRequestById String?   @map("cancel_request_by_id")
+  cancelRequestAt   DateTime? @map("cancel_request_at")
+  cancelReason      String?   @map("cancel_reason")
+  cancelledById     String?   @map("cancelled_by_id")
+  cancelledAt       DateTime? @map("cancelled_at")
+  cancelStatus      String?   @map("cancel_status")
+  isCancelled       Boolean   @default(false) @map("is_cancelled")
+  cancelResponseById String?  @map("cancel_response_by_id")
+  cancelResponseAt  DateTime? @map("cancel_response_at")
+  cancelResponseComment String? @map("cancel_response_comment")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  approvedBy        Employee? @relation("OvertimeApprover", fields: [approvedById], references: [id])
+  employee          Employee  @relation("EmployeeOvertimes", fields: [employeeId], references: [id])
+  cancelRequestBy   Employee? @relation("OvertimeCancelRequester", fields: [cancelRequestById], references: [id])
+  cancelledBy       Employee? @relation("OvertimeCanceller", fields: [cancelledById], references: [id])
+  cancelResponseBy  Employee? @relation("OvertimeCancelResponder", fields: [cancelResponseById], references: [id])
 
   @@map("overtimes")
 }
 
-// โมเดลทีม
 model Team {
   id          String     @id @default(uuid())
-  code        String     @unique // รหัสทีม เช่น BO, OB, QA, PM, AD
-  name        String     @unique // ชื่อทีม เช่น Banking Operation, Open Banking
-  description String? // คำอธิบายเพิ่มเติม
+  code        String     @unique
+  name        String     @unique
+  description String?
   createdAt   DateTime   @default(now()) @map("created_at")
   updatedAt   DateTime   @updatedAt @map("updated_at")
   employees   Employee[]
@@ -99,12 +117,11 @@ model Team {
   @@map("teams")
 }
 
-// โมเดลแผนก
 model Department {
   id          String     @id @default(uuid())
-  code        String     @unique // รหัสแผนก เช่น IT, ITDG, BUDG
-  name        String     @unique // ชื่อแผนก เช่น IT, IT - Digital, BU - Digital
-  description String? // คำอธิบายเพิ่มเติม
+  code        String     @unique
+  name        String     @unique
+  description String?
   createdAt   DateTime   @default(now()) @map("created_at")
   updatedAt   DateTime   @updatedAt @map("updated_at")
   employees   Employee[]
@@ -112,13 +129,12 @@ model Department {
   @@map("departments")
 }
 
-// โมเดลตำแหน่ง
 model Position {
   id          String   @id @default(uuid())
-  code        String   @unique // รหัสตำแหน่ง เช่น PM, BA, QA, DEV
-  name        String   @unique // ชื่อตำแหน่ง เช่น Project Manager, Business Analyst
-  category    String // หมวดหมู่ เช่น management, development, design
-  description String? // คำอธิบายเพิ่มเติม
+  code        String   @unique
+  name        String   @unique
+  category    String
+  description String?
   isActive    Boolean  @default(true) @map("is_active")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
@@ -126,13 +142,12 @@ model Position {
   @@map("positions")
 }
 
-// โมเดลระดับตำแหน่ง
 model PositionLevel {
   id          String   @id @default(uuid())
-  code        String   @unique // รหัสระดับ เช่น JR, SR, LEAD
-  name        String   @unique // ชื่อระดับ เช่น Junior, Senior, Lead
-  level       Int // ลำดับระดับ เช่น 1, 2, 3, 4, 5
-  description String? // คำอธิบายเพิ่มเติม
+  code        String   @unique
+  name        String   @unique
+  level       Int
+  description String?
   isActive    Boolean  @default(true) @map("is_active")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")

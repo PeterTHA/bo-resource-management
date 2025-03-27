@@ -18,36 +18,66 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // ตรวจสอบ hash fragment และตรวจสอบสถานะการล็อกอิน
   useEffect(() => {
+    // ล้าง hash fragment ถ้ามี
+    if (window.location.hash) {
+      console.log('พบ hash fragment, มาจากการล็อกอินโดยตรง');
+      window.history.replaceState(null, document.title, window.location.pathname);
+    }
+
+    console.log('Dashboard Page - Session status:', status);
+    
+    // ตรวจสอบสถานะการล็อกอิน
+    if (status === 'loading') {
+      return; // รอจนกว่าสถานะจะพร้อม
+    }
+    
+    // ถ้าไม่ได้ล็อกอิน ให้เปลี่ยนเส้นทางไปยังหน้าล็อกอิน
     if (status === 'unauthenticated') {
-      router.push('/login');
+      console.log('Dashboard Page - Not authenticated, redirecting to login...');
+      router.replace('/login');
+      return;
+    }
+
+    // มีการล็อกอินแล้ว ดึงข้อมูลสถิติ
+    if (status === 'authenticated') {
+      console.log('Dashboard Page - Authenticated, fetching data...');
+      fetchDashboardStats();
     }
   }, [status, router]);
 
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const res = await fetch('/api/dashboard');
-        const data = await res.json();
+  // ฟังก์ชันดึงข้อมูลสถิติสำหรับ dashboard
+  const fetchDashboardStats = async () => {
+    try {
+      setLoading(true);
+      console.log('Dashboard Page - Fetching stats data...');
+      
+      const res = await fetch('/api/dashboard');
+      const data = await res.json();
+      
+      if (data.success) {
+        setStats(data.data);
+        console.log('Dashboard Page - Stats data loaded successfully');
+        setError('');
+      } else {
+        console.error('Dashboard Page - Error loading stats:', data.message);
+        setError(data.message || 'เกิดข้อผิดพลาดในการดึงข้อมูลสถิติ');
         
-        if (data.success) {
-          setStats(data.data);
-        } else {
-          setError(data.message || 'เกิดข้อผิดพลาดในการดึงข้อมูลสถิติ');
+        // ถ้าไม่ได้ล็อกอิน ให้ไปหน้าล็อกอิน
+        if (data.notAuthenticated) {
+          router.replace('/login');
         }
-      } catch (error) {
-        setError('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์');
-        console.error(error);
-      } finally {
-        setLoading(false);
       }
-    };
-    
-    if (session) {
-      fetchStats();
+    } catch (error) {
+      console.error('Dashboard Page - Error connecting to server:', error);
+      setError('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์');
+    } finally {
+      setLoading(false);
     }
-  }, [session]);
+  };
 
+  // กำลังตรวจสอบสถานะ session หรือกำลังโหลดข้อมูล
   if (status === 'loading' || loading) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -56,11 +86,21 @@ export default function DashboardPage() {
     );
   }
 
-  if (!session) {
-    return null;
+  // ถ้าไม่ได้ล็อกอิน แต่ยังไม่ได้เปลี่ยนเส้นทาง
+  if (status === 'unauthenticated') {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md mb-6 shadow-sm">
+          <p>กรุณาเข้าสู่ระบบเพื่อเข้าถึงหน้านี้</p>
+          <Link href="/login" className="text-blue-600 hover:underline mt-2 inline-block">
+            ไปที่หน้าเข้าสู่ระบบ
+          </Link>
+        </div>
+      </div>
+    );
   }
 
-  const isAdmin = session.user.role === 'admin';
+  const isAdmin = session?.user?.role === 'admin';
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -113,7 +153,7 @@ export default function DashboardPage() {
       <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-100 transition-colors duration-300">ทางลัด</h2>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        {(isAdmin || session.user.role === 'supervisor') && (
+        {(isAdmin || session?.user?.role === 'supervisor') && (
           <Link href="/employees/add" className="block">
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-300">
               <div className="p-6 flex items-center">

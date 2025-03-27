@@ -14,6 +14,7 @@ export const authOptions = {
       async authorize(credentials) {
         try {
           if (!credentials?.email || !credentials?.password) {
+            console.log('ไม่ได้ระบุอีเมลหรือรหัสผ่าน');
             return null;
           }
 
@@ -45,6 +46,8 @@ export const authOptions = {
             return null;
           }
           
+          console.log('ล็อกอินสำเร็จสำหรับ:', user.email);
+          
           // ส่งข้อมูลผู้ใช้กลับไป (ไม่รวมรหัสผ่าน)
           return {
             id: user.id,
@@ -70,12 +73,12 @@ export const authOptions = {
   ],
   callbacks: {
     async jwt({ token, user }) {
-      // ตรวจสอบและกำหนดค่า SERVER_START_TIME ถ้ายังไม่มีการกำหนด
-      const currentServerTime = global.SERVER_START_TIME || Date.now();
-      
       if (user) {
+        console.log('การสร้าง JWT token ใหม่สำหรับผู้ใช้:', user.email);
+        
         // เมื่อสร้าง token ใหม่ (login ครั้งแรก)
         token.id = user.id;
+        token.email = user.email;
         token.role = user.role;
         token.firstName = user.firstName;
         token.lastName = user.lastName;
@@ -88,16 +91,6 @@ export const authOptions = {
         token.image = user.image;
         // เพิ่ม timestamp เพื่อเช็คเวอร์ชันของ token
         token.tokenVersion = Date.now();
-        // Server restart timestamp - เปลี่ยนเมื่อมีการ restart server
-        token.serverStartTime = currentServerTime;
-      }
-      
-      // ตรวจสอบว่า server ได้ restart หรือไม่โดยเทียบ serverStartTime
-      // ใช้เงื่อนไขป้องกันกรณีที่ไม่มีค่า token.serverStartTime
-      if (token.serverStartTime && token.serverStartTime !== currentServerTime) {
-        // Server ได้ restart แล้ว, บังคับให้ logout
-        console.log('Server restarted, token invalidated');
-        return { ...token, error: 'ServerRestarted' };
       }
       
       return token;
@@ -112,6 +105,7 @@ export const authOptions = {
         // ตรวจสอบและกำหนดค่าให้กับ session.user ถ้า token มีข้อมูล
         session.user = session.user || {};
         session.user.id = token.id;
+        session.user.email = token.email;
         session.user.role = token.role;
         session.user.firstName = token.firstName;
         session.user.lastName = token.lastName;
@@ -130,14 +124,16 @@ export const authOptions = {
   pages: {
     signIn: '/login',
     error: '/login',
+    signOut: '/login?logout=true'
   },
   session: {
     strategy: 'jwt',
-    maxAge: 30 * 60, // 30 นาที
-    updateAge: 5 * 60, // refresh token ทุก 5 นาที
+    maxAge: 24 * 60 * 60, // 24 ชั่วโมง (1 วัน)
+    updateAge: 1 * 60 * 60, // อัปเดต session ทุก 1 ชั่วโมง
   },
   jwt: {
-    maxAge: 60 * 60, // 1 ชั่วโมง
+    maxAge: 24 * 60 * 60, // 24 ชั่วโมง (1 วัน)
   },
   secret: process.env.NEXTAUTH_SECRET,
+  debug: process.env.NODE_ENV === 'development',
 }; 
