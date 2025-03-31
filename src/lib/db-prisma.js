@@ -440,8 +440,8 @@ export async function getLeaves(employeeId = null, teamId = null) {
       if (transformed.cancelStatus === 'อนุมัติ') {
         transformed.cancelStatus = 'ยกเลิกแล้ว';
       } else if (transformed.cancelStatus === 'ไม่อนุมัติ') {
-        // ถ้าเป็นการปฏิเสธการยกเลิก ยังคงแสดงสถานะ 'รออนุมัติ' เพื่อให้สามารถอนุมัติหรือปฏิเสธการยกเลิกได้
-        transformed.cancelStatus = 'รออนุมัติ';
+        // ถ้าเป็นการปฏิเสธการยกเลิก ให้กำหนดเป็น null เพื่อซ่อนปุ่มอนุมัติ/ปฏิเสธการยกเลิก
+        transformed.cancelStatus = null;
       } else if (transformed.cancelStatus === 'รอยกเลิก') {
         transformed.cancelStatus = 'รออนุมัติ';
       }
@@ -556,8 +556,8 @@ export async function getLeaveById(id) {
     if (transformed.cancelStatus === 'อนุมัติ') {
       transformed.cancelStatus = 'ยกเลิกแล้ว';
     } else if (transformed.cancelStatus === 'ไม่อนุมัติ') {
-      // ถ้าเป็นการปฏิเสธการยกเลิก ยังคงแสดงสถานะ 'รออนุมัติ' เพื่อให้สามารถอนุมัติหรือปฏิเสธการยกเลิกได้
-      transformed.cancelStatus = 'รออนุมัติ';
+      // ถ้าเป็นการปฏิเสธการยกเลิก ให้กำหนดเป็น null เพื่อซ่อนปุ่มอนุมัติ/ปฏิเสธการยกเลิก
+      transformed.cancelStatus = null;
     } else if (transformed.cancelStatus === 'รอยกเลิก') {
       transformed.cancelStatus = 'รออนุมัติ';
     }
