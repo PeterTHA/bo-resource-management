@@ -95,8 +95,7 @@ export default function LeavesPage() {
           const counts = {
             all: data.data.length,
             pending: data.data.filter(leave => 
-              leave.status === 'รออนุมัติ' || 
-              (leave.status === 'อนุมัติ' && leave.cancelStatus === 'รออนุมัติ')
+              leave.status === 'รออนุมัติ'
             ).length,
             approved: data.data.filter(leave => 
               leave.status === 'อนุมัติ' && 
