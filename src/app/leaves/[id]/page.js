@@ -537,15 +537,14 @@ export default function LeaveDetailPage() {
                   </div>
                   
                   {/* แสดงสถานะการยกเลิก */}
-                  {leave.cancelStatus && (
-                    <div className={`badge ${
-                      leave.cancelStatus === 'อนุมัติ' ? 'badge-info' : 
-                      leave.cancelStatus === 'ไม่อนุมัติ' ? 'badge-error' : 
-                      'badge-warning'
-                    } badge-lg`}>
-                      {leave.cancelStatus === 'อนุมัติ' ? 'ยกเลิกแล้ว' : 
-                      leave.cancelStatus === 'ไม่อนุมัติ' ? 'ปฏิเสธการยกเลิก' : 
-                      'รอยกเลิก'}
+                  {leave.cancelStatus === 'อนุมัติ' && (
+                    <div className="badge badge-info badge-lg">
+                      ยกเลิกแล้ว
+                    </div>
+                  )}
+                  {leave.cancelStatus === 'รออนุมัติ' && (
+                    <div className="badge badge-warning badge-lg">
+                      รอยกเลิก
                     </div>
                   )}
                 </h2>
