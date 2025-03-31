@@ -211,7 +211,8 @@ export default function AddOvertimePage() {
                   value={formData.date}
                   onChange={handleChange}
                   required
-                  className="input input-bordered w-full"
+                  className="input input-bordered w-full cursor-pointer"
+                  onClick={(e) => e.target.showPicker()}
                 />
               </div>
               

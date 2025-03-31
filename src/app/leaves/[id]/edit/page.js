@@ -351,7 +351,8 @@ export default function EditLeavePage() {
                     value={formData.startDate}
                     onChange={handleInputChange}
                     required
-                    className="input input-bordered w-full"
+                    className="input input-bordered w-full cursor-pointer"
+                    onClick={(e) => e.target.showPicker()}
                   />
                 </div>
 
@@ -368,9 +369,10 @@ export default function EditLeavePage() {
                     value={formData.endDate}
                     onChange={handleInputChange}
                     required
-                    className="input input-bordered w-full"
+                    className="input input-bordered w-full cursor-pointer"
                     min={formData.startDate}
                     disabled={formData.leaveFormat.includes('ครึ่งวัน')}
+                    onClick={(e) => !formData.leaveFormat.includes('ครึ่งวัน') && e.target.showPicker()}
                   />
                 </div>
 

@@ -1078,6 +1078,16 @@ export async function getStatistics() {
  */
 export async function getEmployeeCalendarData(startDate, endDate) {
   try {
+    // แปลงวันที่ให้เป็น UTC เพื่อป้องกันปัญหา timezone
+    const startUTC = new Date(startDate);
+    const endUTC = new Date(endDate);
+    
+    // สร้าง date object ให้ถูกต้องเพื่อการค้นหา
+    const start = new Date(startUTC.getUTCFullYear(), startUTC.getUTCMonth(), startUTC.getUTCDate(), 0, 0, 0);
+    const end = new Date(endUTC.getUTCFullYear(), endUTC.getUTCMonth(), endUTC.getUTCDate(), 23, 59, 59);
+    
+    console.log('Calendar range - start:', start.toISOString(), 'end:', end.toISOString());
+    
     // ดึงข้อมูลพนักงานทั้งหมด
     const employees = await prisma.employee.findMany({
       where: {
@@ -1093,6 +1103,7 @@ export async function getEmployeeCalendarData(startDate, endDate) {
         department: true,
         role: true,
         image: true,
+        teamId: true,
       },
       orderBy: {
         firstName: 'asc',
@@ -1103,10 +1114,10 @@ export async function getEmployeeCalendarData(startDate, endDate) {
     const leaves = await prisma.leave.findMany({
       where: {
         startDate: {
-          lte: new Date(endDate),
+          lte: end,
         },
         endDate: {
-          gte: new Date(startDate),
+          gte: start,
         },
       },
       include: {
@@ -1118,6 +1129,7 @@ export async function getEmployeeCalendarData(startDate, endDate) {
             position: true,
             department: true,
             image: true,
+            teamId: true,
           },
         },
       },
@@ -1127,8 +1139,8 @@ export async function getEmployeeCalendarData(startDate, endDate) {
     const overtimes = await prisma.overtime.findMany({
       where: {
         date: {
-          gte: new Date(startDate),
-          lte: new Date(endDate),
+          gte: start,
+          lte: end,
         },
       },
       include: {
@@ -1140,6 +1152,37 @@ export async function getEmployeeCalendarData(startDate, endDate) {
             position: true,
             department: true,
             image: true,
+            teamId: true,
+          },
+        },
+      },
+    });
+    
+    // ดึงข้อมูลสถานะการทำงาน (WFH)
+    const workStatuses = await prisma.workStatus.findMany({
+      where: {
+        date: {
+          gte: start,
+          lte: end,
+        },
+      },
+      include: {
+        employee: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            position: true,
+            department: true,
+            image: true,
+            teamId: true,
+          },
+        },
+        createdBy: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
           },
         },
       },
@@ -1151,10 +1194,195 @@ export async function getEmployeeCalendarData(startDate, endDate) {
         employees,
         leaves,
         overtimes,
+        workStatuses,
       },
     };
   } catch (error) {
     console.error('Error fetching employee calendar data:', error);
+    return { success: false, message: error.message };
+  }
+}
+
+/**
+ * ฟังก์ชันสำหรับดึงข้อมูลสถานะการทำงาน (WFH)
+ */
+export async function getWorkStatuses(employeeId = null, date = null) {
+  try {
+    const whereClause = {};
+    
+    if (employeeId) {
+      whereClause.employeeId = employeeId;
+    }
+    
+    if (date) {
+      whereClause.date = new Date(date);
+    }
+    
+    const workStatuses = await prisma.workStatus.findMany({
+      where: whereClause,
+      include: {
+        employee: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            position: true,
+            teamId: true,
+            teamData: true,
+            department: true,
+            image: true,
+          },
+        },
+        createdBy: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+      },
+      orderBy: {
+        date: 'desc',
+      },
+    });
+    
+    return {
+      success: true,
+      data: workStatuses,
+    };
+  } catch (error) {
+    console.error('Error fetching work statuses:', error);
+    return { success: false, message: error.message };
+  }
+}
+
+/**
+ * ฟังก์ชันสำหรับดึงข้อมูลสถานะการทำงาน (WFH) ตาม ID
+ */
+export async function getWorkStatusById(id) {
+  try {
+    const workStatus = await prisma.workStatus.findUnique({
+      where: { id },
+      include: {
+        employee: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            position: true,
+            department: true,
+            image: true,
+          },
+        },
+        createdBy: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+      },
+    });
+    
+    if (!workStatus) {
+      return { success: false, message: 'ไม่พบข้อมูลสถานะการทำงาน' };
+    }
+    
+    return {
+      success: true,
+      data: workStatus,
+    };
+  } catch (error) {
+    console.error('Error fetching work status by ID:', error);
+    return { success: false, message: error.message };
+  }
+}
+
+/**
+ * ฟังก์ชันสำหรับสร้างหรืออัปเดตสถานะการทำงาน (WFH)
+ */
+export async function createOrUpdateWorkStatus(data) {
+  try {
+    const { employeeId, date, status, note, createdById } = data;
+    
+    // แปลงวันที่จากสตริงเป็น Date object ถ้าจำเป็น
+    const dateObj = new Date(date);
+    
+    // แก้ไขการเตรียมวันที่ให้ถูกต้องตาม timezone
+    // เปลี่ยนจากการใช้ UTC เป็นการใช้วันที่เหมือนกับที่เลือกจริงๆ โดยการตัดเวลาออก
+    // สร้างวันที่ใหม่ โดยใช้เฉพาะส่วนของวันที่ เดือน ปี แบบ local time เพื่อป้องกันการคลาดเคลื่อนจาก timezone
+    const localDateStr = dateObj.toLocaleDateString('en-CA'); // ใช้ format YYYY-MM-DD เช่น 2023-09-15
+    const formattedDate = new Date(localDateStr + 'T00:00:00.000Z');
+    
+    console.log('Saving work status for date:', date);
+    console.log('Input date as string:', date);
+    console.log('Input date as object:', dateObj.toISOString());
+    console.log('Local date string:', localDateStr);
+    console.log('Formatted date to save:', formattedDate.toISOString());
+    
+    // ค้นหาว่ามีข้อมูลอยู่แล้วหรือไม่
+    const existingWorkStatus = await prisma.workStatus.findFirst({
+      where: {
+        employeeId,
+        date: formattedDate,
+      },
+    });
+    
+    // ถ้ามีข้อมูลอยู่แล้ว ให้อัปเดต
+    if (existingWorkStatus) {
+      const updatedWorkStatus = await prisma.workStatus.update({
+        where: { id: existingWorkStatus.id },
+        data: {
+          status,
+          note,
+          createdById,
+        },
+      });
+      
+      return {
+        success: true,
+        data: updatedWorkStatus,
+        message: 'อัปเดตสถานะการทำงานสำเร็จ',
+      };
+    }
+    
+    // ถ้ายังไม่มีข้อมูล ให้สร้างใหม่
+    const newWorkStatus = await prisma.workStatus.create({
+      data: {
+        employeeId,
+        date: formattedDate,
+        status,
+        note,
+        createdById,
+      },
+    });
+    
+    return {
+      success: true,
+      data: newWorkStatus,
+      message: 'สร้างสถานะการทำงานสำเร็จ',
+    };
+  } catch (error) {
+    console.error('Error creating/updating work status:', error);
+    return { success: false, message: error.message };
+  }
+}
+
+/**
+ * ฟังก์ชันสำหรับลบสถานะการทำงาน (WFH)
+ */
+export async function deleteWorkStatus(id) {
+  try {
+    await prisma.workStatus.delete({
+      where: { id },
+    });
+    
+    return {
+      success: true,
+      message: 'ลบสถานะการทำงานสำเร็จ',
+    };
+  } catch (error) {
+    console.error('Error deleting work status:', error);
     return { success: false, message: error.message };
   }
 } 

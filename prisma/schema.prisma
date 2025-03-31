@@ -38,6 +38,8 @@ model Employee {
   cancelRequestOvertimes Overtime[] @relation("OvertimeCancelRequester")
   cancelledOvertimes Overtime[] @relation("OvertimeCanceller")
   cancelResponseOvertimes Overtime[] @relation("OvertimeCancelResponder")
+  workStatuses      WorkStatus[] @relation("EmployeeWorkStatuses")
+  createdWorkStatuses WorkStatus[] @relation("WorkStatusCreator")
 
   @@map("employees")
 }
@@ -153,4 +155,21 @@ model PositionLevel {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@map("position_levels")
+}
+
+model WorkStatus {
+  id          String    @id @default(uuid())
+  employeeId  String    @map("employee_id")
+  date        DateTime
+  status      String    @default("OFFICE") // OFFICE, WFH, MIXED
+  note        String?
+  createdById String    @map("created_by_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  
+  employee    Employee  @relation("EmployeeWorkStatuses", fields: [employeeId], references: [id])
+  createdBy   Employee  @relation("WorkStatusCreator", fields: [createdById], references: [id])
+
+  @@unique([employeeId, date])
+  @@map("work_statuses")
 }
