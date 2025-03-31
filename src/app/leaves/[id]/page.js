@@ -434,10 +434,7 @@ export default function LeaveDetailPage() {
           setLeave(data.data);
         }
         
-        // รอสักครู่แล้วนำทางไปหน้ารายการลา
-        setTimeout(() => {
-          router.push('/leaves');
-        }, 1500);
+        // ไม่นำทางไปหน้าอื่นเพื่อให้ผู้ใช้สามารถขอยกเลิกซ้ำได้
       } else {
         setError(data.message || 'เกิดข้อผิดพลาดในการปฏิเสธการขอยกเลิกการลา');
       }
