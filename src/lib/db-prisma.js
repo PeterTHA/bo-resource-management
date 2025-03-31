@@ -689,32 +689,16 @@ export async function requestCancelLeave(id, data) {
       return { success: false, message: 'สามารถยกเลิกได้เฉพาะการลาที่อนุมัติแล้วเท่านั้น' };
     }
     
-    // อัปเดตสถานะการลาและสร้าง approval record
-    const [updatedLeave, newApproval] = await prisma.$transaction([
-      prisma.leave.update({
-        where: { id },
-        data: {
-          status: 'canceled',
-        },
-      }),
-      prisma.leaveApproval.create({
-        data: {
-          leaveId: id,
-          employeeId: data.employeeId,
-          type: 'request_cancel',
-          status: 'completed',
-          reason: data.reason,
-        },
-      }),
-      prisma.leaveApproval.create({
-        data: {
-          leaveId: id,
-          employeeId: data.employeeId,
-          type: 'approve_cancel',
-          status: 'completed',
-        },
-      })
-    ]);
+    // บันทึกคำขอยกเลิกการลาในตาราง LeaveApproval โดยไม่เปลี่ยนสถานะหลักของการลา
+    const newApproval = await prisma.leaveApproval.create({
+      data: {
+        leaveId: id,
+        employeeId: data.employeeId,
+        type: 'request_cancel',
+        status: 'completed',
+        reason: data.reason,
+      },
+    });
     
     // ดึงข้อมูลการลาที่อัปเดตแล้วพร้อมข้อมูลเพิ่มเติม
     const fullLeave = await getLeaveById(id);
@@ -722,10 +706,10 @@ export async function requestCancelLeave(id, data) {
     return { 
       success: true, 
       data: fullLeave.data,
-      message: 'ยกเลิกการลาเรียบร้อยแล้ว'
+      message: 'ส่งคำขอยกเลิกการลาเรียบร้อยแล้ว กรุณารอการอนุมัติ'
     };
   } catch (error) {
-    console.error(`Error canceling leave with ID ${id}:`, error);
+    console.error(`Error requesting cancel leave with ID ${id}:`, error);
     return { success: false, message: error.message };
   }
 }
@@ -822,6 +806,108 @@ export async function rejectLeave(id, approverId, comment = null) {
     return { success: true, data: fullLeave.data, message: 'ปฏิเสธการลาเรียบร้อยแล้ว' };
   } catch (error) {
     console.error(`Error rejecting leave with ID ${id}:`, error);
+    return { success: false, message: error.message };
+  }
+}
+
+/**
+ * ฟังก์ชันสำหรับอนุมัติการยกเลิกการลา
+ */
+export async function approveCancelLeave(id, approverId, comment = null) {
+  try {
+    // ตรวจสอบว่ามีข้อมูลการลาหรือไม่
+    const existingLeave = await prisma.leave.findUnique({
+      where: { id },
+      include: {
+        approvals: {
+          where: { type: 'request_cancel', status: 'completed' },
+          orderBy: { createdAt: 'desc' },
+          take: 1
+        }
+      }
+    });
+    
+    if (!existingLeave) {
+      return { success: false, message: 'ไม่พบข้อมูลการลา' };
+    }
+    
+    // ตรวจสอบว่ามีการขอยกเลิกหรือไม่
+    if (existingLeave.approvals.length === 0) {
+      return { success: false, message: 'ไม่พบคำขอยกเลิกการลานี้' };
+    }
+    
+    // อัปเดตสถานะการลาและสร้าง approval record
+    const [updatedLeave, newApproval] = await prisma.$transaction([
+      prisma.leave.update({
+        where: { id },
+        data: {
+          status: 'canceled',
+        },
+      }),
+      prisma.leaveApproval.create({
+        data: {
+          leaveId: id,
+          employeeId: approverId,
+          type: 'approve_cancel',
+          status: 'completed',
+          comment: comment,
+        },
+      })
+    ]);
+    
+    // ดึงข้อมูลการลาที่อัปเดตแล้วพร้อมข้อมูลเพิ่มเติม
+    const fullLeave = await getLeaveById(id);
+    
+    return { success: true, data: fullLeave.data, message: 'อนุมัติการยกเลิกการลาเรียบร้อยแล้ว' };
+  } catch (error) {
+    console.error(`Error approving cancel leave with ID ${id}:`, error);
+    return { success: false, message: error.message };
+  }
+}
+
+/**
+ * ฟังก์ชันสำหรับไม่อนุมัติการยกเลิกการลา
+ */
+export async function rejectCancelLeave(id, approverId, comment = null) {
+  try {
+    // ตรวจสอบว่ามีข้อมูลการลาหรือไม่
+    const existingLeave = await prisma.leave.findUnique({
+      where: { id },
+      include: {
+        approvals: {
+          where: { type: 'request_cancel', status: 'completed' },
+          orderBy: { createdAt: 'desc' },
+          take: 1
+        }
+      }
+    });
+    
+    if (!existingLeave) {
+      return { success: false, message: 'ไม่พบข้อมูลการลา' };
+    }
+    
+    // ตรวจสอบว่ามีการขอยกเลิกหรือไม่
+    if (existingLeave.approvals.length === 0) {
+      return { success: false, message: 'ไม่พบคำขอยกเลิกการลานี้' };
+    }
+    
+    // สร้าง approval record สำหรับการปฏิเสธการยกเลิก (คงสถานะ approved ไว้เหมือนเดิม)
+    const newApproval = await prisma.leaveApproval.create({
+      data: {
+        leaveId: id,
+        employeeId: approverId,
+        type: 'reject_cancel',
+        status: 'completed',
+        comment: comment,
+      },
+    });
+    
+    // ดึงข้อมูลการลาที่อัปเดตแล้วพร้อมข้อมูลเพิ่มเติม
+    const fullLeave = await getLeaveById(id);
+    
+    return { success: true, data: fullLeave.data, message: 'ปฏิเสธการยกเลิกการลาเรียบร้อยแล้ว' };
+  } catch (error) {
+    console.error(`Error rejecting cancel leave with ID ${id}:`, error);
     return { success: false, message: error.message };
   }
 }

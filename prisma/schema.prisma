@@ -66,7 +66,7 @@ model LeaveApproval {
   id                 String    @id @default(uuid())
   leaveId            String    @map("leave_id")
   employeeId         String    @map("employee_id")
-  type               String    // approve, reject, cancel
+  type               String    // approve, reject, request_cancel, approve_cancel, reject_cancel
   status             String    // completed, pending
   reason             String?
   comment            String?
