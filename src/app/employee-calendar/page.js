@@ -200,6 +200,11 @@ export default function EmployeeCalendarPage() {
     // ปรับรูปแบบวันที่ให้เป็น YYYY-MM-DD โดยไม่มีเวลา
     const localDateStr = date.toISOString().split('T')[0];
     
+    console.log('พนักงาน ID:', employeeId, 'วันที่:', localDateStr);
+    console.log('จำนวนข้อมูลการลาทั้งหมด:', leaves.length);
+    console.log('จำนวนข้อมูลการทำงานล่วงเวลาทั้งหมด:', overtimes.length);
+    console.log('จำนวนข้อมูลสถานะการทำงานทั้งหมด:', workStatuses.length);
+    
     // ตรวจสอบสถานะการทำงาน (WFH) โดยเทียบวันที่ในรูปแบบ YYYY-MM-DD
     const employeeWorkStatus = workStatuses.find(workStatus => {
       const wsDate = new Date(workStatus.date);
@@ -218,21 +223,33 @@ export default function EmployeeCalendarPage() {
       const compareDate = new Date(date);
       compareDate.setHours(12, 0, 0, 0); // ตั้งให้เป็นเวลาเที่ยงเพื่อป้องกันปัญหา timezone
       
-      return leave.employeeId === employeeId && 
+      const isMatch = leave.employeeId === employeeId && 
              startDate <= compareDate && 
-             endDate >= compareDate &&
-             leave.status === 'อนุมัติ' &&
-             (!leave.isCancelled || leave.cancelStatus !== 'อนุมัติ');
+             endDate >= compareDate;
+      
+      if (isMatch) {
+        console.log('พบข้อมูลการลาที่ตรงกับวันที่:', leave);
+      }
+      
+      return isMatch;
     });
+    
+    console.log('ข้อมูลการลาที่พบ:', employeeLeaves.length);
     
     // ตรวจสอบการทำงานล่วงเวลา
     const employeeOvertimes = overtimes.filter(overtime => {
       const otDate = new Date(overtime.date);
       const otDateStr = otDate.toISOString().split('T')[0];
-      return overtime.employeeId === employeeId &&
+      const isMatch = overtime.employeeId === employeeId &&
              otDateStr === localDateStr &&
              overtime.status !== 'ยกเลิก' &&
              (!overtime.isCancelled || overtime.cancelStatus === 'รออนุมัติ' || overtime.cancelStatus === 'ไม่อนุมัติ');
+      
+      if (isMatch) {
+        console.log('พบข้อมูลการทำงานล่วงเวลาที่ตรงกับวันที่:', overtime);
+      }
+      
+      return isMatch;
     });
     
     // สร้างอาเรย์ของสถานะทั้งหมดที่พบ
@@ -279,6 +296,8 @@ export default function EmployeeCalendarPage() {
     
     // จัดเรียงสถานะตามความสำคัญ (เลขยิ่งมาก ยิ่งสำคัญ)
     allStatuses.sort((a, b) => b.priority - a.priority);
+    
+    console.log('สถานะที่พบทั้งหมด:', allStatuses);
     
     // คืนค่าสถานะที่มีความสำคัญสูงสุด และแนบสถานะอื่นๆ ไปด้วย
     const primaryStatus = { ...allStatuses[0], relatedStatuses: allStatuses.slice(1) };
