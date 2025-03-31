@@ -411,6 +411,18 @@ export async function getLeaves(employeeId = null, teamId = null) {
         cancelComment: approveCancelAction?.comment || rejectCancelAction?.comment || null,
         cancelApprovedBy: approveCancelAction?.employee || rejectCancelAction?.employee || null,
         isCancelled: !!approveCancelAction,
+        
+        // เพิ่มข้อมูล transaction logs สำหรับหน้ารายละเอียด
+        transactionLogs: leave.approvals.map(approval => ({
+          id: approval.id,
+          type: approval.type,
+          status: approval.status,
+          reason: approval.reason || null,
+          comment: approval.comment || null,
+          createdAt: approval.createdAt,
+          updatedAt: approval.updatedAt,
+          employee: approval.employee
+        })),
       };
       
       // แปลงสถานะใหม่ให้เป็นสถานะเดิมเพื่อความเข้ากันได้
@@ -422,6 +434,15 @@ export async function getLeaves(employeeId = null, teamId = null) {
         transformed.status = 'ไม่อนุมัติ';
       } else if (transformed.status === 'canceled') {
         transformed.status = 'ยกเลิกแล้ว';
+      }
+      
+      // แปลงสถานะการยกเลิกตามที่ต้องการบนหน้าจอ
+      if (transformed.cancelStatus === 'อนุมัติ') {
+        transformed.cancelStatus = 'ยกเลิกแล้ว';
+      } else if (transformed.cancelStatus === 'ไม่อนุมัติ') {
+        transformed.cancelStatus = null; // ไม่แสดงบนหน้าจอ แต่ยังคงอยู่ในประวัติ transaction
+      } else if (transformed.cancelStatus === 'รออนุมัติ') {
+        transformed.cancelStatus = 'รอยกเลิก';
       }
       
       return transformed;
@@ -505,6 +526,18 @@ export async function getLeaveById(id) {
       cancelComment: approveCancelAction?.comment || rejectCancelAction?.comment || null,
       cancelApprovedBy: approveCancelAction?.employee || rejectCancelAction?.employee || null,
       isCancelled: !!approveCancelAction,
+      
+      // เพิ่มข้อมูล transaction logs สำหรับหน้ารายละเอียด
+      transactionLogs: leave.approvals.map(approval => ({
+        id: approval.id,
+        type: approval.type,
+        status: approval.status,
+        reason: approval.reason || null,
+        comment: approval.comment || null,
+        createdAt: approval.createdAt,
+        updatedAt: approval.updatedAt,
+        employee: approval.employee
+      })),
     };
     
     // แปลงสถานะใหม่ให้เป็นสถานะเดิมเพื่อความเข้ากันได้
@@ -516,6 +549,15 @@ export async function getLeaveById(id) {
       transformed.status = 'ไม่อนุมัติ';
     } else if (transformed.status === 'canceled') {
       transformed.status = 'ยกเลิกแล้ว';
+    }
+    
+    // แปลงสถานะการยกเลิกตามที่ต้องการบนหน้าจอ
+    if (transformed.cancelStatus === 'อนุมัติ') {
+      transformed.cancelStatus = 'ยกเลิกแล้ว';
+    } else if (transformed.cancelStatus === 'ไม่อนุมัติ') {
+      transformed.cancelStatus = null; // ไม่แสดงบนหน้าจอ แต่ยังคงอยู่ในประวัติ transaction
+    } else if (transformed.cancelStatus === 'รออนุมัติ') {
+      transformed.cancelStatus = 'รอยกเลิก';
     }
     
     return { success: true, data: transformed };
@@ -672,12 +714,6 @@ export async function requestCancelLeave(id, data) {
       where: { id },
       include: {
         approvals: {
-          where: { 
-            OR: [
-              { type: 'request_cancel', status: 'completed' },
-              { type: 'reject_cancel', status: 'completed' }
-            ]
-          },
           orderBy: { createdAt: 'desc' }
         },
         employee: true
@@ -693,19 +729,7 @@ export async function requestCancelLeave(id, data) {
       return { success: false, message: 'สามารถยกเลิกได้เฉพาะการลาที่อนุมัติแล้วเท่านั้น' };
     }
     
-    // ตรวจสอบว่ามีการขอยกเลิกที่ถูกปฏิเสธหรือไม่
-    const existingRequest = existingLeave.approvals.find(a => a.type === 'request_cancel');
-    const existingReject = existingLeave.approvals.find(a => a.type === 'reject_cancel');
-    
-    // ถ้ามีการขอยกเลิกและถูกปฏิเสธไปแล้ว ให้ลบบันทึกเหล่านั้นออกก่อน
-    if (existingRequest && existingReject) {
-      await prisma.$transaction([
-        prisma.leaveApproval.delete({ where: { id: existingRequest.id } }),
-        prisma.leaveApproval.delete({ where: { id: existingReject.id } })
-      ]);
-    }
-    
-    // บันทึกคำขอยกเลิกการลาในตาราง LeaveApproval โดยไม่เปลี่ยนสถานะหลักของการลา
+    // บันทึกคำขอยกเลิกการลาในตาราง LeaveApproval โดยไม่เปลี่ยนสถานะหลักของการลาและไม่ลบรายการเดิม
     const newApproval = await prisma.leaveApproval.create({
       data: {
         leaveId: id,

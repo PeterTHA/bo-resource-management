@@ -1023,6 +1023,64 @@ export default function LeaveDetailPage() {
           </div>
         </div>
       )}
+      
+      {/* ส่วนแสดงข้อมูลสถานะทั้งหมดของการลา (Transaction Logs) */}
+      {leave && leave.transactionLogs && leave.transactionLogs.length > 0 && (
+        <div className="mt-8">
+          <div className="card bg-base-100 shadow-xl">
+            <div className="card-body">
+              <h2 className="card-title text-xl mb-4">ประวัติการทำรายการ</h2>
+              
+              <div className="overflow-x-auto">
+                <table className="table table-zebra w-full">
+                  <thead>
+                    <tr>
+                      <th>วันที่</th>
+                      <th>ประเภทรายการ</th>
+                      <th>ผู้ดำเนินการ</th>
+                      <th>สถานะ</th>
+                      <th>รายละเอียด</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {leave.transactionLogs.map(log => (
+                      <tr key={log.id}>
+                        <td className="whitespace-nowrap">{formatDateTime(log.createdAt)}</td>
+                        <td>
+                          {log.type === 'approve' ? 'อนุมัติ' : 
+                           log.type === 'reject' ? 'ไม่อนุมัติ' : 
+                           log.type === 'request_cancel' ? 'ขอยกเลิก' : 
+                           log.type === 'approve_cancel' ? 'อนุมัติการยกเลิก' : 
+                           log.type === 'reject_cancel' ? 'ปฏิเสธการยกเลิก' : log.type}
+                        </td>
+                        <td className="whitespace-nowrap">
+                          {log.employee ? 
+                            `${log.employee.firstName || ''} ${log.employee.lastName || ''}` : 
+                            'ไม่ระบุ'}
+                        </td>
+                        <td>
+                          <div className={`badge ${
+                            log.status === 'completed' ? 'badge-success' : 'badge-warning'
+                          } badge-sm`}>
+                            {log.status === 'completed' ? 'สำเร็จ' : 'รอดำเนินการ'}
+                          </div>
+                        </td>
+                        <td>
+                          {(log.reason || log.comment) && (
+                            <div className="max-w-xs truncate">
+                              {log.reason || log.comment}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 
