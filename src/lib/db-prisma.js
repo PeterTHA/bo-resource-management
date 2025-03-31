@@ -440,9 +440,10 @@ export async function getLeaves(employeeId = null, teamId = null) {
       if (transformed.cancelStatus === 'อนุมัติ') {
         transformed.cancelStatus = 'ยกเลิกแล้ว';
       } else if (transformed.cancelStatus === 'ไม่อนุมัติ') {
-        transformed.cancelStatus = null; // ไม่แสดงบนหน้าจอ แต่ยังคงอยู่ในประวัติ transaction
-      } else if (transformed.cancelStatus === 'รออนุมัติ') {
-        transformed.cancelStatus = 'รอยกเลิก';
+        // ถ้าเป็นการปฏิเสธการยกเลิก ยังคงแสดงสถานะ 'รออนุมัติ' เพื่อให้สามารถอนุมัติหรือปฏิเสธการยกเลิกได้
+        transformed.cancelStatus = 'รออนุมัติ';
+      } else if (transformed.cancelStatus === 'รอยกเลิก') {
+        transformed.cancelStatus = 'รออนุมัติ';
       }
       
       return transformed;
@@ -555,9 +556,10 @@ export async function getLeaveById(id) {
     if (transformed.cancelStatus === 'อนุมัติ') {
       transformed.cancelStatus = 'ยกเลิกแล้ว';
     } else if (transformed.cancelStatus === 'ไม่อนุมัติ') {
-      transformed.cancelStatus = null; // ไม่แสดงบนหน้าจอ แต่ยังคงอยู่ในประวัติ transaction
-    } else if (transformed.cancelStatus === 'รออนุมัติ') {
-      transformed.cancelStatus = 'รอยกเลิก';
+      // ถ้าเป็นการปฏิเสธการยกเลิก ยังคงแสดงสถานะ 'รออนุมัติ' เพื่อให้สามารถอนุมัติหรือปฏิเสธการยกเลิกได้
+      transformed.cancelStatus = 'รออนุมัติ';
+    } else if (transformed.cancelStatus === 'รอยกเลิก') {
+      transformed.cancelStatus = 'รออนุมัติ';
     }
     
     return { success: true, data: transformed };
@@ -1415,9 +1417,10 @@ export async function getEmployeeCalendarData(startDate, endDate) {
             firstName: true,
             lastName: true,
             position: true,
+            teamId: true,
+            teamData: true,
             department: true,
             image: true,
-            teamId: true,
           },
         },
         createdBy: {
@@ -1427,6 +1430,9 @@ export async function getEmployeeCalendarData(startDate, endDate) {
             lastName: true,
           },
         },
+      },
+      orderBy: {
+        date: 'desc',
       },
     });
     
