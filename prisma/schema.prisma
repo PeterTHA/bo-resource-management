@@ -30,9 +30,8 @@ model Employee {
   positionTitle     String?     @map("position_title")
   department        Department? @relation(fields: [departmentId], references: [id])
   teamData          Team?       @relation(fields: [teamId], references: [id])
-  approvedLeaves    Leave[]     @relation("LeaveApprover")
-  cancelApprovedLeaves Leave[]  @relation("LeaveCancelApprover")
   leaves            Leave[]     @relation("EmployeeLeaves")
+  leaveApprovals    LeaveApproval[] @relation("EmployeeLeaveApprovals")
   approvedOvertimes Overtime[]  @relation("OvertimeApprover")
   overtimes         Overtime[]  @relation("EmployeeOvertimes")
   cancelRequestOvertimes Overtime[] @relation("OvertimeCancelRequester")
@@ -51,27 +50,32 @@ model Leave {
   startDate          DateTime  @map("start_date")
   endDate            DateTime  @map("end_date")
   reason             String
-  status             String    @default("รออนุมัติ")
-  approvedById       String?   @map("approved_by_id")
-  approvedAt         DateTime? @map("approved_at")
-  comment            String?
+  status             String    @default("waiting_for_approve")
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")
   attachments        String[]  @default([]) @map("attachments")
   leaveFormat        String    @default("เต็มวัน") @map("leave_format")
   totalDays          Float     @default(0) @map("total_days")
-  cancelApprovedAt   DateTime? @map("cancel_approved_at")
-  cancelApprovedById String?   @map("cancel_approved_by_id")
-  cancelComment      String?   @map("cancel_comment")
-  cancelReason       String?   @map("cancel_reason")
-  cancelRequestedAt  DateTime? @map("cancel_requested_at")
-  cancelStatus       String?   @map("cancel_status")
-  isCancelled        Boolean   @default(false) @map("is_cancelled")
-  approvedBy         Employee? @relation("LeaveApprover", fields: [approvedById], references: [id])
-  cancelApprovedBy   Employee? @relation("LeaveCancelApprover", fields: [cancelApprovedById], references: [id])
   employee           Employee  @relation("EmployeeLeaves", fields: [employeeId], references: [id])
+  approvals          LeaveApproval[] @relation("LeaveApprovals")
 
   @@map("leaves")
+}
+
+model LeaveApproval {
+  id                 String    @id @default(uuid())
+  leaveId            String    @map("leave_id")
+  employeeId         String    @map("employee_id")
+  type               String    // approve, reject, request_cancel, approve_cancel, reject_cancel
+  status             String    // completed, pending
+  reason             String?
+  comment            String?
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  leave              Leave     @relation("LeaveApprovals", fields: [leaveId], references: [id])
+  employee           Employee  @relation("EmployeeLeaveApprovals", fields: [employeeId], references: [id])
+
+  @@map("leave_approvals")
 }
 
 model Overtime {
