@@ -205,13 +205,6 @@ export default function EmployeeCalendarPage() {
     console.log('จำนวนข้อมูลการทำงานล่วงเวลาทั้งหมด:', overtimes.length);
     console.log('จำนวนข้อมูลสถานะการทำงานทั้งหมด:', workStatuses.length);
     
-    // ตรวจสอบสถานะการทำงาน (WFH) โดยเทียบวันที่ในรูปแบบ YYYY-MM-DD
-    const employeeWorkStatus = workStatuses.find(workStatus => {
-      const wsDate = new Date(workStatus.date);
-      const wsDateStr = wsDate.toISOString().split('T')[0];
-      return workStatus.employeeId === employeeId && wsDateStr === localDateStr;
-    });
-    
     // ตรวจสอบการลา
     const employeeLeaves = leaves.filter(leave => {
       // แปลงวันที่ให้เป็น Date Object ที่สามารถเปรียบเทียบได้
@@ -236,6 +229,39 @@ export default function EmployeeCalendarPage() {
     
     console.log('ข้อมูลการลาที่พบ:', employeeLeaves.length);
     
+    // ถ้ามีการลา ให้แสดงเฉพาะข้อมูลการลา
+    if (employeeLeaves.length > 0) {
+      const leaveStatus = employeeLeaves[0];
+      return {
+        type: 'leave',
+        status: leaveStatus.status,
+        leaveType: leaveStatus.leaveType,
+        data: leaveStatus,
+        priority: leaveStatus.status === 'อนุมัติ' ? 5 : 3,
+        relatedStatuses: [] // ไม่แสดงสถานะอื่นๆ เมื่อมีการลา
+      };
+    }
+    
+    // สร้างอาเรย์ของสถานะทั้งหมดที่พบ
+    const allStatuses = [];
+    
+    // ตรวจสอบสถานะการทำงาน (WFH) โดยเทียบวันที่ในรูปแบบ YYYY-MM-DD
+    const employeeWorkStatus = workStatuses.find(workStatus => {
+      const wsDate = new Date(workStatus.date);
+      const wsDateStr = wsDate.toISOString().split('T')[0];
+      return workStatus.employeeId === employeeId && wsDateStr === localDateStr;
+    });
+    
+    // เพิ่มข้อมูลสถานะการทำงาน (WFH)
+    if (employeeWorkStatus) {
+      allStatuses.push({
+        type: 'workStatus',
+        status: employeeWorkStatus.status,
+        data: employeeWorkStatus,
+        priority: 2 // ความสำคัญระดับกลาง
+      });
+    }
+    
     // ตรวจสอบการทำงานล่วงเวลา
     const employeeOvertimes = overtimes.filter(overtime => {
       const otDate = new Date(overtime.date);
@@ -251,32 +277,6 @@ export default function EmployeeCalendarPage() {
       
       return isMatch;
     });
-    
-    // สร้างอาเรย์ของสถานะทั้งหมดที่พบ
-    const allStatuses = [];
-    
-    // เพิ่มข้อมูลสถานะการทำงาน (WFH)
-    if (employeeWorkStatus) {
-      allStatuses.push({
-        type: 'workStatus',
-        status: employeeWorkStatus.status,
-        data: employeeWorkStatus,
-        priority: 2 // ความสำคัญระดับกลาง
-      });
-    }
-    
-    // เพิ่มข้อมูลการลา
-    if (employeeLeaves.length > 0) {
-      // ให้การลาที่อนุมัติแล้วมีความสำคัญสูงสุด
-      const leaveStatus = employeeLeaves[0];
-      allStatuses.push({
-        type: 'leave',
-        status: leaveStatus.status,
-        leaveType: leaveStatus.leaveType,
-        data: leaveStatus,
-        priority: leaveStatus.status === 'อนุมัติ' ? 5 : 3 // การลาที่อนุมัติแล้วมีความสำคัญสูงสุด
-      });
-    }
     
     // เพิ่มข้อมูลการทำงานล่วงเวลา
     if (employeeOvertimes.length > 0) {
@@ -310,13 +310,6 @@ export default function EmployeeCalendarPage() {
     dateObj.setHours(12, 0, 0, 0); // ตั้งเวลาเป็นเที่ยงวันเพื่อป้องกันปัญหา timezone
     const localDateStr = dateObj.toISOString().split('T')[0]; // รูปแบบ YYYY-MM-DD
     
-    // ตรวจสอบว่ามีข้อมูลสถานะการทำงานอยู่แล้วหรือไม่ โดยใช้รูปแบบวันที่เดียวกับที่ใช้ตรวจสอบในฟังก์ชัน getEmployeeStatusForDate
-    const existingWorkStatus = workStatuses.find(ws => {
-      const wsDate = new Date(ws.date);
-      const wsDateStr = wsDate.toISOString().split('T')[0];
-      return ws.employeeId === employee.id && wsDateStr === localDateStr;
-    });
-    
     // ตรวจสอบว่ามีข้อมูลการลาในวันนี้หรือไม่
     const leaveData = leaves.find(leave => {
       const startDate = new Date(leave.startDate);
@@ -325,9 +318,29 @@ export default function EmployeeCalendarPage() {
       endDate.setHours(23, 59, 59, 999);
       return leave.employeeId === employee.id && 
              startDate <= dateObj && 
-             endDate >= dateObj &&
-             leave.status === 'อนุมัติ' &&
-             (!leave.isCancelled || leave.cancelStatus !== 'อนุมัติ');
+             endDate >= dateObj;
+    });
+    
+    // ถ้ามีการลาในวันนี้ ให้แสดงเฉพาะข้อมูลการลา
+    if (leaveData) {
+      setSelectedEmployee(employee);
+      setSelectedDate(dateObj);
+      setSelectedWorkStatus(null);
+      
+      setIsWorkStatusModalOpen({ 
+        isOpen: true, 
+        viewOnly: true, // กำหนดเป็น view-only mode เมื่อมีการลา
+        leaveData: leaveData,
+        overtimeData: null
+      });
+      return;
+    }
+    
+    // ตรวจสอบว่ามีข้อมูลสถานะการทำงานอยู่แล้วหรือไม่ โดยใช้รูปแบบวันที่เดียวกับที่ใช้ตรวจสอบในฟังก์ชัน getEmployeeStatusForDate
+    const existingWorkStatus = workStatuses.find(ws => {
+      const wsDate = new Date(ws.date);
+      const wsDateStr = wsDate.toISOString().split('T')[0];
+      return ws.employeeId === employee.id && wsDateStr === localDateStr;
     });
     
     // ตรวจสอบว่ามีข้อมูล OT ในวันนี้หรือไม่
@@ -352,7 +365,7 @@ export default function EmployeeCalendarPage() {
     setIsWorkStatusModalOpen({ 
       isOpen: true, 
       viewOnly: isViewOnlyMode,
-      leaveData: leaveData || null,
+      leaveData: null,
       overtimeData: overtimeData || null
     });
   };
