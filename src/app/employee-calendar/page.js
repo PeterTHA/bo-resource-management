@@ -221,8 +221,8 @@ export default function EmployeeCalendarPage() {
       return leave.employeeId === employeeId && 
              startDate <= compareDate && 
              endDate >= compareDate &&
-             leave.status !== 'ยกเลิก' &&
-             (!leave.isCancelled || leave.cancelStatus === 'รออนุมัติ' || leave.cancelStatus === 'ไม่อนุมัติ');
+             leave.status === 'อนุมัติ' &&
+             (!leave.isCancelled || leave.cancelStatus !== 'อนุมัติ');
     });
     
     // ตรวจสอบการทำงานล่วงเวลา
@@ -306,7 +306,9 @@ export default function EmployeeCalendarPage() {
       endDate.setHours(23, 59, 59, 999);
       return leave.employeeId === employee.id && 
              startDate <= dateObj && 
-             endDate >= dateObj;
+             endDate >= dateObj &&
+             leave.status === 'อนุมัติ' &&
+             (!leave.isCancelled || leave.cancelStatus !== 'อนุมัติ');
     });
     
     // ตรวจสอบว่ามีข้อมูล OT ในวันนี้หรือไม่

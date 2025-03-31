@@ -41,6 +41,8 @@ export default function LeavesPage() {
   const [selectedLeaveId, setSelectedLeaveId] = useState(null);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  const [showApproveModal, setShowApproveModal] = useState(false);
+  const [approveReason, setApproveReason] = useState('');
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -165,14 +167,12 @@ export default function LeavesPage() {
     }
   };
 
-  const handleApprove = async (id) => {
-    if (!confirm('คุณต้องการอนุมัติการลานี้ใช่หรือไม่?')) {
-      return;
-    }
+  const handleApprove = async () => {
+    if (!selectedLeaveId) return;
     
     try {
       setActionLoading(true);
-      const res = await fetch(`/api/leaves/${id}`, {
+      const res = await fetch(`/api/leaves/${selectedLeaveId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -180,7 +180,7 @@ export default function LeavesPage() {
         body: JSON.stringify({ 
           status: 'อนุมัติ',
           approvedById: session.user.id,
-          comment: null
+          comment: approveReason || null
         }),
       });
       
@@ -189,7 +189,7 @@ export default function LeavesPage() {
       if (data.success) {
         // อัปเดตข้อมูลในรายการ
         setLeaves(leaves.map(leave => 
-          leave.id === id ? { 
+          leave.id === selectedLeaveId ? { 
             ...leave, 
             status: 'อนุมัติ',
             approvedBy: {
@@ -197,7 +197,8 @@ export default function LeavesPage() {
               firstName: session.user.firstName || session.user.name?.split(' ')[0] || '',
               lastName: session.user.lastName || session.user.name?.split(' ')[1] || '',
             },
-            approvedAt: new Date().toISOString()
+            approvedAt: new Date().toISOString(),
+            comment: approveReason || null
           } : leave
         ));
         
@@ -209,6 +210,11 @@ export default function LeavesPage() {
           pending: prev.pending - 1,
           approved: prev.approved + 1
         }));
+        
+        // ปิด modal
+        setShowApproveModal(false);
+        setSelectedLeaveId(null);
+        setApproveReason('');
       } else {
         setError(data.message || 'เกิดข้อผิดพลาดในการอัปเดตสถานะการลา');
       }
@@ -218,6 +224,12 @@ export default function LeavesPage() {
     } finally {
       setActionLoading(false);
     }
+  };
+
+  const openApproveModal = (id) => {
+    setSelectedLeaveId(id);
+    setApproveReason('');
+    setShowApproveModal(true);
   };
 
   const openRejectModal = (id) => {
@@ -714,7 +726,7 @@ export default function LeavesPage() {
                       className="btn btn-success btn-sm"
                       onClick={(e) => {
                         e.stopPropagation(); // ป้องกันการนำทางเมื่อคลิกปุ่ม
-                        handleApprove(leave.id);
+                        openApproveModal(leave.id);
                       }}
                       disabled={actionLoading}
                     >
@@ -812,6 +824,68 @@ export default function LeavesPage() {
                 <button
                   type="button"
                   onClick={() => setShowRejectModal(false)}
+                  disabled={actionLoading}
+                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-gray-800 text-base font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                >
+                  ยกเลิก
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Modal สำหรับระบุเหตุผลการอนุมัติ */}
+      {showApproveModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+              <div className="absolute inset-0 bg-gray-500 dark:bg-gray-900 opacity-75"></div>
+            </div>
+            
+            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            
+            <div className="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+              <div className="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div className="sm:flex sm:items-start">
+                  <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-green-100 dark:bg-green-900/30 sm:mx-0 sm:h-10 sm:w-10">
+                    <FiCheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
+                  </div>
+                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                    <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-gray-100" id="modal-title">
+                      อนุมัติการลา
+                    </h3>
+                    <div className="mt-2">
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        กรุณาระบุเหตุผลหรือบันทึกเพิ่มเติม (ไม่บังคับ)
+                      </p>
+                      <div className="mt-2">
+                        <textarea
+                          rows="3"
+                          className="field-input"
+                          placeholder="ระบุบันทึกเพิ่มเติม"
+                          value={approveReason}
+                          onChange={(e) => setApproveReason(e.target.value)}
+                        ></textarea>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <LoadingButton
+                  type="button"
+                  onClick={handleApprove}
+                  loading={actionLoading}
+                  disabled={actionLoading}
+                  className="btn btn-success w-full sm:w-auto sm:ml-3"
+                >
+                  <FiCheckCircle className="mr-1.5 h-4 w-4" />
+                  <span>อนุมัติ</span>
+                </LoadingButton>
+                <button
+                  type="button"
+                  onClick={() => setShowApproveModal(false)}
                   disabled={actionLoading}
                   className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-gray-800 text-base font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                 >

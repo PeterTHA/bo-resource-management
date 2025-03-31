@@ -33,7 +33,22 @@ export function LoadingPage({ message = 'กำลังโหลด...' }) {
 }
 
 export function LoadingButton({ loading, children, className = '', textClass = '', ...props }) {
-  return loading ? <LoadingSpinner size="sm" /> : children;
+  return (
+    <button
+      className={`${className} ${loading ? 'relative' : ''}`}
+      disabled={loading}
+      {...props}
+    >
+      {loading ? (
+        <>
+          <span className="opacity-0">{children}</span>
+          <span className="absolute inset-0 flex items-center justify-center">
+            <LoadingSpinner size="sm" />
+          </span>
+        </>
+      ) : children}
+    </button>
+  );
 }
 
 export default LoadingSpinner; 
