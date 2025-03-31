@@ -385,6 +385,9 @@ export async function getLeaves(employeeId = null, teamId = null) {
     
     // แปลงข้อมูลเพื่อความเข้ากันได้กับโค้ดเดิม
     const transformedLeaves = leaves.map(leave => {
+      // เรียงลำดับ approvals ตาม createdAt ใหม่ ให้ล่าสุดอยู่ก่อน
+      leave.approvals.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      
       // ค้นหา approval ล่าสุดตามประเภท
       const lastApproval = leave.approvals[0] || null;
       const approveAction = leave.approvals.find(a => a.type === 'approve' && a.status === 'completed');
@@ -392,6 +395,11 @@ export async function getLeaves(employeeId = null, teamId = null) {
       const requestCancelAction = leave.approvals.find(a => a.type === 'request_cancel' && a.status === 'completed');
       const approveCancelAction = leave.approvals.find(a => a.type === 'approve_cancel' && a.status === 'completed');
       const rejectCancelAction = leave.approvals.find(a => a.type === 'reject_cancel' && a.status === 'completed');
+      
+      // ตรวจสอบสถานะล่าสุดจาก transaction log
+      // หากมีการขอยกเลิกล่าสุด แต่ไม่พบ approveCancelAction หรือ rejectCancelAction
+      // แสดงว่ายังอยู่ในสถานะรออนุมัติการยกเลิก
+      const isLatestRequestCancel = lastApproval && lastApproval.type === 'request_cancel';
       
       // สร้างเวอร์ชันของข้อมูลที่เข้ากันได้กับโค้ดเดิม
       const transformed = {
@@ -405,7 +413,8 @@ export async function getLeaves(employeeId = null, teamId = null) {
         // สำหรับการยกเลิก
         cancelRequestedAt: requestCancelAction?.createdAt || null,
         cancelReason: requestCancelAction?.reason || null,
-        cancelStatus: approveCancelAction ? 'อนุมัติ' : (rejectCancelAction ? 'ไม่อนุมัติ' : (requestCancelAction ? 'รออนุมัติ' : null)),
+        cancelStatus: isLatestRequestCancel && !approveCancelAction && !rejectCancelAction ? 'รออนุมัติ' : 
+                      (approveCancelAction ? 'อนุมัติ' : (rejectCancelAction ? 'ไม่อนุมัติ' : null)),
         cancelApprovedById: approveCancelAction?.employeeId || rejectCancelAction?.employeeId || null,
         cancelApprovedAt: approveCancelAction?.createdAt || rejectCancelAction?.createdAt || null,
         cancelComment: approveCancelAction?.comment || rejectCancelAction?.comment || null,
@@ -503,11 +512,20 @@ export async function getLeaveById(id) {
     
     // แปลงข้อมูลเพื่อความเข้ากันได้กับโค้ดเดิม
     // ค้นหา approval ล่าสุดตามประเภท
+    // เรียงลำดับ approvals ตาม createdAt ใหม่ ให้ล่าสุดอยู่ก่อน
+    leave.approvals.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    
+    const lastApproval = leave.approvals[0] || null;
     const approveAction = leave.approvals.find(a => a.type === 'approve' && a.status === 'completed');
     const rejectAction = leave.approvals.find(a => a.type === 'reject' && a.status === 'completed');
     const requestCancelAction = leave.approvals.find(a => a.type === 'request_cancel' && a.status === 'completed');
     const approveCancelAction = leave.approvals.find(a => a.type === 'approve_cancel' && a.status === 'completed');
     const rejectCancelAction = leave.approvals.find(a => a.type === 'reject_cancel' && a.status === 'completed');
+    
+    // ตรวจสอบสถานะล่าสุดจาก transaction log
+    // หากมีการขอยกเลิกล่าสุด แต่ไม่พบ approveCancelAction หรือ rejectCancelAction
+    // แสดงว่ายังอยู่ในสถานะรออนุมัติการยกเลิก
+    const isLatestRequestCancel = lastApproval && lastApproval.type === 'request_cancel';
     
     // สร้างเวอร์ชันของข้อมูลที่เข้ากันได้กับโค้ดเดิม
     const transformed = {
@@ -521,7 +539,8 @@ export async function getLeaveById(id) {
       // สำหรับการยกเลิก
       cancelRequestedAt: requestCancelAction?.createdAt || null,
       cancelReason: requestCancelAction?.reason || null,
-      cancelStatus: approveCancelAction ? 'อนุมัติ' : (rejectCancelAction ? 'ไม่อนุมัติ' : (requestCancelAction ? 'รออนุมัติ' : null)),
+      cancelStatus: isLatestRequestCancel && !approveCancelAction && !rejectCancelAction ? 'รออนุมัติ' : 
+                   (approveCancelAction ? 'อนุมัติ' : (rejectCancelAction ? 'ไม่อนุมัติ' : null)),
       cancelApprovedById: approveCancelAction?.employeeId || rejectCancelAction?.employeeId || null,
       cancelApprovedAt: approveCancelAction?.createdAt || rejectCancelAction?.createdAt || null,
       cancelComment: approveCancelAction?.comment || rejectCancelAction?.comment || null,
