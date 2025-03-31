@@ -672,9 +672,13 @@ export async function requestCancelLeave(id, data) {
       where: { id },
       include: {
         approvals: {
-          where: { type: 'approve', status: 'completed' },
-          orderBy: { createdAt: 'desc' },
-          take: 1
+          where: { 
+            OR: [
+              { type: 'request_cancel', status: 'completed' },
+              { type: 'reject_cancel', status: 'completed' }
+            ]
+          },
+          orderBy: { createdAt: 'desc' }
         },
         employee: true
       }
@@ -687,6 +691,18 @@ export async function requestCancelLeave(id, data) {
     // ตรวจสอบว่าเป็นการลาที่อนุมัติแล้วหรือไม่
     if (existingLeave.status !== 'approved') {
       return { success: false, message: 'สามารถยกเลิกได้เฉพาะการลาที่อนุมัติแล้วเท่านั้น' };
+    }
+    
+    // ตรวจสอบว่ามีการขอยกเลิกที่ถูกปฏิเสธหรือไม่
+    const existingRequest = existingLeave.approvals.find(a => a.type === 'request_cancel');
+    const existingReject = existingLeave.approvals.find(a => a.type === 'reject_cancel');
+    
+    // ถ้ามีการขอยกเลิกและถูกปฏิเสธไปแล้ว ให้ลบบันทึกเหล่านั้นออกก่อน
+    if (existingRequest && existingReject) {
+      await prisma.$transaction([
+        prisma.leaveApproval.delete({ where: { id: existingRequest.id } }),
+        prisma.leaveApproval.delete({ where: { id: existingReject.id } })
+      ]);
     }
     
     // บันทึกคำขอยกเลิกการลาในตาราง LeaveApproval โดยไม่เปลี่ยนสถานะหลักของการลา
