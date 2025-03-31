@@ -428,6 +428,12 @@ export default function LeaveDetailPage() {
       if (data.success) {
         setSuccess(data.message || 'ปฏิเสธการขอยกเลิกการลาเรียบร้อยแล้ว');
         setShowCancelRejectModal(false);
+        
+        // อัปเดตข้อมูลการลาในหน้าเว็บ ทำให้ปุ่มขอยกเลิกปรากฏ
+        if (data.data) {
+          setLeave(data.data);
+        }
+        
         // รอสักครู่แล้วนำทางไปหน้ารายการลา
         setTimeout(() => {
           router.push('/leaves');
