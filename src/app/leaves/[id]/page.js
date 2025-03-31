@@ -324,7 +324,7 @@ export default function LeaveDetailPage() {
     const isAdminOrSupervisor = session.user.role === 'admin' || session.user.role === 'supervisor';
     
     // ต้องเป็นการลาที่ขอยกเลิกและรออนุมัติ
-    const isPendingCancelRequest = leave.cancelStatus === 'รอยกเลิก';
+    const isPendingCancelRequest = leave.cancelStatus === 'รออนุมัติ';
     
     return isAdminOrSupervisor && isPendingCancelRequest;
   };
