@@ -1414,6 +1414,9 @@ export async function getEmployeeCalendarData(startDate, endDate) {
         endDate: {
           gte: start,
         },
+        status: 'อนุมัติ',
+        isCancelled: false,
+        cancelStatus: null
       },
       include: {
         employee: {
