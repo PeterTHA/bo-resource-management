@@ -309,9 +309,11 @@ export default function LeaveDetailPage() {
     const isOwnerOrAdmin = session.user.id === leave.employeeId || session.user.role === 'admin';
     
     // ต้องเป็นการลาที่อนุมัติแล้ว และยังไม่ได้ยกเลิก
+    // กรณีที่ cancelStatus เป็น null หมายความว่าไม่เคยขอยกเลิกหรือถูกปฏิเสธการยกเลิกและถูกซ่อนสถานะแล้ว (รวมถึงกรณีถูกปฏิเสธการยกเลิก) ก็สามารถขอยกเลิกใหม่ได้
     const isApprovedNotCancelled = leave.status === 'อนุมัติ' && 
                                   !leave.isCancelled && 
-                                  leave.cancelStatus !== 'รออนุมัติ';
+                                  leave.cancelStatus !== 'รออนุมัติ' && 
+                                  leave.cancelStatus !== 'ยกเลิกแล้ว';
     
     return isOwnerOrAdmin && isApprovedNotCancelled;
   };
