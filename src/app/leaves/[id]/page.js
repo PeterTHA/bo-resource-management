@@ -393,10 +393,11 @@ export default function LeaveDetailPage() {
       
       if (data.success) {
         setSuccess(data.message || 'อนุมัติการยกเลิกการลาเรียบร้อยแล้ว');
-        // รอสักครู่แล้วนำทางไปหน้ารายการลา
-        setTimeout(() => {
-          router.push('/leaves');
-        }, 1500);
+        
+        // อัปเดตข้อมูลการลาในหน้าเว็บ แสดงสถานะ "ยกเลิกแล้ว"
+        if (data.data) {
+          setLeave(data.data);
+        }
       } else {
         setError(data.message || 'เกิดข้อผิดพลาดในการอนุมัติการยกเลิกการลา');
       }
