@@ -51,13 +51,15 @@ export function LeaveSummaryCard() {
               };
             }
             
-            byType[type].total++;
-            byType[type].totalDays += leave.totalDays || 0;
-            
+            // เพิ่มเข้าไปใน arrays ตามสถานะ
             if (leave.status === 'waiting_for_approve') {
               byType[type].waiting_for_approve.push(leave);
+              byType[type].total++;  // นับเฉพาะ waiting และ approved
+              byType[type].totalDays += leave.totalDays || 0;  // นับวันเฉพาะ waiting และ approved
             } else if (leave.status === 'approved') {
               byType[type].approved.push(leave);
+              byType[type].total++;  // นับเฉพาะ waiting และ approved
+              byType[type].totalDays += leave.totalDays || 0;  // นับวันเฉพาะ waiting และ approved
             } else if (leave.status === 'rejected') {
               byType[type].rejected.push(leave);
             } else if (leave.status === 'canceled') {
@@ -136,37 +138,21 @@ export function LeaveSummaryCard() {
     fetchLeaveData();
   }, []);
 
-  // สร้างข้อมูลสำหรับ Pie Chart แสดงสัดส่วนตามประเภทการลา (เฉพาะที่อนุมัติแล้ว)
-  const chartData = useMemo(() => {
-    if (!leaveData || leaveData.length === 0) return [];
-    
-    // กรองเฉพาะข้อมูลที่สถานะเป็น approved
-    const approvedLeaves = leaveData.filter(leave => leave.status === 'approved');
-    
-    // ถ้าไม่มีข้อมูลที่อนุมัติแล้ว ให้คืนค่าอาร์เรย์ว่าง
-    if (approvedLeaves.length === 0) return [];
-    
-    const typeTotalDays = {};
-    
-    approvedLeaves.forEach(leave => {
-      const type = leave.leaveType || 'ไม่ระบุ';
-      if (!typeTotalDays[type]) {
-        typeTotalDays[type] = 0;
-      }
-      typeTotalDays[type] += leave.totalDays || 0;
-    });
-    
-    return Object.entries(typeTotalDays).map(([type, days]) => ({
-      name: type,
-      value: days,
-      fill: COLORS[type] || COLORS.default
-    }));
-  }, [leaveData]);
+  // คำนวณจำนวนรวมของวันลาทั้งหมด
+  const totalLeaveDays = useMemo(() => {
+    if (!leavesByType) return 0;
+    return Object.values(leavesByType).reduce((total, data) => total + data.totalDays, 0);
+  }, [leavesByType]);
 
   // คำนวณจำนวนรวมของวันลาที่อนุมัติแล้ว
   const totalApprovedDays = useMemo(() => {
-    return chartData.reduce((acc, curr) => acc + curr.value, 0);
-  }, [chartData]);
+    if (!leavesByType) return 0;
+    return Object.values(leavesByType).reduce((total, data) => {
+      // คำนวณจำนวนวันลาที่อนุมัติของแต่ละประเภท
+      const approvedDays = data.approved.reduce((sum, leave) => sum + (leave.totalDays || 0), 0);
+      return total + approvedDays;
+    }, 0);
+  }, [leavesByType]);
 
   // คำนวณเปอร์เซ็นต์การเปลี่ยนแปลงเทียบกับเดือนที่แล้ว (สมมติว่าเพิ่มขึ้น 10%)
   const trendPercentage = 10;
@@ -175,11 +161,11 @@ export function LeaveSummaryCard() {
     return (
       <Card className="border shadow-sm bg-white">
         <CardHeader
-          title="สัดส่วนวันลาที่อนุมัติแล้ว"
+          title="สถิติการลาแยกประเภท"
           subtitle="กำลังโหลดข้อมูล..."
         />
         <CardContent className="pb-0">
-          <div className="mx-auto aspect-square max-h-[250px] flex items-center justify-center">
+          <div className="mx-auto flex items-center justify-center h-40">
             <LoadingSpinner />
           </div>
         </CardContent>
@@ -191,7 +177,7 @@ export function LeaveSummaryCard() {
     return (
       <Card className="border shadow-sm bg-white">
         <CardHeader
-          title="สัดส่วนวันลาที่อนุมัติแล้ว"
+          title="สถิติการลาแยกประเภท"
         />
         <CardContent>
           <ErrorMessage message={error} />
@@ -205,77 +191,59 @@ export function LeaveSummaryCard() {
   return (
     <Card className="border shadow-sm bg-white">
       <CardHeader 
-        title="สัดส่วนวันลาที่อนุมัติแล้ว"
+        title="สถิติการลาแยกประเภท"
         subtitle={`ปี ${currentYear}`}
         className="items-center pb-0 pt-5"
       />
       
       <CardContent className="flex-1 pb-0 px-4">
-        <div className="mx-auto aspect-square max-h-[280px] relative">
-          {chartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={chartData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={90}
-                  paddingAngle={2}
-                  dataKey="value"
-                  strokeWidth={5}
-                  stroke="#fff"
-                >
-                  {chartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.fill} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  formatter={(value) => [`${value} วัน`, 'จำนวน']}
-                  contentStyle={{
-                    backgroundColor: 'white',
-                    border: '1px solid #eee',
-                    borderRadius: '8px',
-                    padding: '8px',
-                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                  }}
-                />
-                <Legend 
-                  layout="horizontal" 
-                  verticalAlign="bottom" 
-                  align="center"
-                  iconType="circle"
-                  formatter={(value) => <span style={{ color: '#333', fontSize: 12 }}>{value}</span>}
-                />
-                <text 
-                  x="50%" 
-                  y="50%" 
-                  textAnchor="middle" 
-                  dominantBaseline="middle"
-                  fill="#333"
-                  style={{ fontSize: '32px', fontWeight: 'bold' }}
-                >
-                  {totalApprovedDays}
-                </text>
-                <text 
-                  x="50%" 
-                  y="50%"
-                  dy={24}
-                  textAnchor="middle" 
-                  dominantBaseline="middle"
-                  fill="#64748b"
-                  style={{ fontSize: '14px' }}
-                >
-                  วัน
-                </text>
-              </PieChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="flex items-center justify-center h-full">
-              <p className="text-gray-500">ไม่มีข้อมูลวันลาที่อนุมัติแล้ว</p>
-            </div>
-          )}
-        </div>
+        {/* สถิติการลาแยกประเภท */}
+        {leavesByType && Object.keys(leavesByType).length > 0 ? (
+          <div className="space-y-3">
+            {Object.entries(leavesByType).map(([type, data], index) => (
+              <div key={index} className="border rounded-md p-4 hover:bg-muted/50 transition-colors">
+                <div className="flex items-center mb-2">
+                  <div
+                    className="h-3 w-3 rounded-full mr-2"
+                    style={{ backgroundColor: COLORS[type] || COLORS.default }}
+                  ></div>
+                  <span className="font-medium">{type}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">จำนวนครั้ง:</span>
+                    <span className="font-medium">{data.total} ครั้ง</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">จำนวนวัน:</span>
+                    <span className="font-medium">{data.totalDays} วัน</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">อนุมัติแล้ว:</span>
+                    <span className="font-medium">{data.approved.length} ครั้ง</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">รออนุมัติ:</span>
+                    <span className="font-medium">{data.waiting_for_approve.length} ครั้ง</span>
+                  </div>
+                </div>
+                <div className="mt-3 w-full bg-gray-200 rounded-full h-1.5">
+                  <div 
+                    className="h-1.5 rounded-full" 
+                    style={{ 
+                      width: `${Math.min(100, (data.totalDays / (totalLeaveDays || 1)) * 100)}%`,
+                      backgroundColor: COLORS[type] || COLORS.default
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex items-center justify-center py-10">
+            <p className="text-gray-500">ไม่มีข้อมูลการลา</p>
+          </div>
+        )}
         
         {/* สถิติรายเดือน */}
         {monthlyStats && monthlyStats.length > 0 && (
@@ -317,7 +285,7 @@ export function LeaveSummaryCard() {
           <TrendingUp className="h-4 w-4 text-green-500" />
         </div>
         <div className="leading-none text-muted-foreground">
-          แสดงจำนวนวันลาทั้งปีที่ได้รับการอนุมัติแล้ว
+          แสดงข้อมูลการลาทั้งหมดในปี {currentYear}
         </div>
       </CardFooter>
     </Card>
