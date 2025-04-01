@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { FiChevronLeft, FiChevronRight, FiCalendar, FiClock, FiUser, FiFilter, FiHome, FiBriefcase, FiRefreshCw, FiCheck, FiX } from 'react-icons/fi';
@@ -15,6 +15,164 @@ import useFormatDate from '@/hooks/useFormatDate';
 import { useUser } from '@/hooks/useUser';
 import WorkStatusModal from '@/components/work-status/WorkStatusModal';
 import OvertimeBadge from '@/components/overtime/OvertimeBadge';
+
+// ฟังก์ชันสำหรับแสดงไอคอนตามประเภทการลา
+const LeaveTypeIcon = ({ leaveType, className = "h-5 w-5" }) => {
+  switch (leaveType) {
+    case 'ลาพักร้อน':
+      return (
+        <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      );
+    case 'ลากิจ':
+      return (
+        <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      );
+    case 'ลาป่วย':
+      return (
+        <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+        </svg>
+      );
+    default:
+      return (
+        <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      );
+  }
+};
+
+// ฟังก์ชันสำหรับแสดงไอคอนสถานะการทำงาน
+const getWorkStatusIcon = (status) => {
+  switch (status) {
+    case 'WFH':
+      return (
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+            d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+        </svg>
+      );
+    case 'WFO':
+      return (
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+            d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+        </svg>
+      );
+    default:
+      return (
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+            d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+        </svg>
+      );
+  }
+};
+
+// ฟังก์ชันสำหรับแสดงไอคอน OT
+const getOvertimeIcon = () => {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+};
+
+// ฟังก์ชันสำหรับแสดงคำอธิบายสัญลักษณ์ต่างๆ
+const renderLegend = () => (
+  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm">
+    <h3 className="text-lg font-semibold mb-3">คำอธิบาย</h3>
+    <div className="grid grid-cols-1 gap-4">
+      {/* ส่วนการลา */}
+      <div>
+        <h4 className="font-medium mb-2">ประเภทการลา</h4>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+          <div className="flex items-center">
+            <div className="w-8 h-8 rounded-md bg-orange-50 border-2 border-orange-200 mr-2 flex items-center justify-center">
+              <LeaveTypeIcon leaveType="ลาพักร้อน" className="h-5 w-5 text-emerald-600" />
+            </div>
+            <span className="text-sm">ลาพักร้อน</span>
+          </div>
+          <div className="flex items-center">
+            <div className="w-8 h-8 rounded-md bg-orange-50 border-2 border-orange-200 mr-2 flex items-center justify-center">
+              <LeaveTypeIcon leaveType="ลากิจ" className="h-5 w-5 text-amber-600" />
+            </div>
+            <span className="text-sm">ลากิจ</span>
+          </div>
+          <div className="flex items-center">
+            <div className="w-8 h-8 rounded-md bg-orange-50 border-2 border-orange-200 mr-2 flex items-center justify-center">
+              <LeaveTypeIcon leaveType="ลาป่วย" className="h-5 w-5 text-red-600" />
+            </div>
+            <span className="text-sm">ลาป่วย</span>
+          </div>
+          <div className="flex items-center">
+            <div className="w-8 h-8 rounded-md bg-orange-50 border-2 border-orange-200 mr-2 flex items-center justify-center">
+              <LeaveTypeIcon leaveType="อื่นๆ" className="h-5 w-5 text-purple-600" />
+            </div>
+            <span className="text-sm">ลาอื่นๆ</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ส่วน OT */}
+      <div>
+        <h4 className="font-medium mb-2">การทำงานล่วงเวลา (OT)</h4>
+        <div className="flex items-center">
+          <div className="w-8 h-8 rounded-md bg-purple-50 mr-2 flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <span className="text-sm">OT ที่อนุมัติแล้ว</span>
+        </div>
+      </div>
+
+      {/* ส่วนสถานะการทำงาน */}
+      <div>
+        <h4 className="font-medium mb-2">สถานะการทำงาน</h4>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+          <div className="flex items-center">
+            <div className="w-8 h-8 rounded-md bg-blue-50 mr-2 flex items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+            </div>
+            <span className="text-sm">ทำงานที่ออฟฟิศ</span>
+          </div>
+          <div className="flex items-center">
+            <div className="w-8 h-8 rounded-md bg-blue-50 mr-2 flex items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+              </svg>
+            </div>
+            <span className="text-sm">ทำงานที่บ้าน</span>
+          </div>
+          <div className="flex items-center">
+            <div className="w-8 h-8 rounded-md bg-blue-50 mr-2 flex items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+              </svg>
+            </div>
+            <span className="text-sm">ทำงานแบบผสม</span>
+          </div>
+          <div className="flex items-center">
+            <div className="w-8 h-8 rounded-md bg-blue-50 mr-2 flex items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <span className="text-sm">นอกสถานที่</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+);
 
 // เพิ่มฟังก์ชันตรวจสอบว่าเป็นรูปภาพจาก mock-images หรือไม่
 const isMockImage = (src) => {
@@ -34,6 +192,11 @@ export default function EmployeeCalendarPage() {
   const [viewMode, setViewMode] = useState('week'); // 'week', 'month'
   const [selectedDepartment, setSelectedDepartment] = useState('all');
   const [departments, setDepartments] = useState([]);
+  const [isDataFetching, setIsDataFetching] = useState(false);
+  const [hasCheckedPermissions, setHasCheckedPermissions] = useState(false);
+
+  // เพิ่ม ref สำหรับเก็บ AbortController
+  const abortControllerRef = useRef(null);
   
   // Modal สำหรับสถานะการทำงาน
   const [isWorkStatusModalOpen, setIsWorkStatusModalOpen] = useState({ isOpen: false, viewOnly: false });
@@ -41,57 +204,302 @@ export default function EmployeeCalendarPage() {
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedWorkStatus, setSelectedWorkStatus] = useState(null);
 
+  // เพิ่ม state เพื่อเก็บสิทธิ์การแก้ไขของพนักงานแต่ละคน
+  const [employeePermissions, setEmployeePermissions] = useState({});
+  
+  // useEffect สำหรับตรวจสอบสิทธิ์ของพนักงานทุกคน
+  useEffect(() => {
+    if (session && employees.length > 0) {
+      console.log('Computing permissions for all employees...');
+      
+      // สร้าง object เพื่อเก็บข้อมูลการมีสิทธิ์แก้ไขของพนักงานแต่ละคน
+      const permissions = {};
+      
+      // ตรวจสอบสิทธิ์สำหรับพนักงานแต่ละคนและวันปัจจุบัน
+      employees.forEach(employee => {
+        const today = new Date();
+        permissions[employee.id] = canEditEmployeeWorkStatus(employee, today);
+      });
+      
+      console.log('Employee permissions:', permissions);
+      // อัปเดต state เพื่อเก็บสิทธิ์การแก้ไข
+      setEmployeePermissions(permissions);
+      
+      // อัปเดต hasCheckedPermissions เพื่อป้องกันการทำงานซ้ำ
+      setHasCheckedPermissions(true);
+    }
+  }, [session, employees]);
+  
+  // ฟังก์ชันตรวจสอบสิทธิ์การแก้ไขสถานะการทำงานของพนักงาน
+  const canEditEmployeeWorkStatus = (employee, date = null) => {
+    if (!session || !session.user) return false;
+    
+    // สร้างวันปัจจุบันสำหรับตรวจสอบวันที่
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // ใช้ date ที่ส่งเข้ามาหรือใช้ selectedDate ถ้าไม่มีการส่งค่ามา
+    const currentDay = new Date(date || selectedDate || today);
+    currentDay.setHours(0, 0, 0, 0);
+    
+    // อนุญาตให้แก้ไขข้อมูลได้เฉพาะวันปัจจุบันและอนาคตเท่านั้น (ยกเว้น admin)
+    const isValidDate = currentDay >= today;
+    
+    // ตรวจสอบบทบาทของผู้ใช้
+    const isAdmin = session.user.role === 'admin';
+    const isSupervisor = session.user.role === 'supervisor';
+    const isSameUser = session.user.id === employee.id;
+    
+    // แสดงข้อมูลการตรวจสอบ
+    console.log('PERMISSION CHECK:', {
+      user: `${session.user.firstName || ''} ${session.user.lastName || ''}`,
+      role: session.user.role,
+      employee: `${employee.firstName || ''} ${employee.lastName || ''}`,
+      userTeam: session.user.userTeam || session.user.userTeamId,
+      employeeTeam: employee.team || employee.teamId
+    });
+    
+    // 1. กรณีเป็น admin - มีสิทธิ์ทั้งหมด
+    if (isAdmin) {
+      console.log(`✅ ADMIN ACCESS GRANTED`);
+      return true; // admin สามารถแก้ไขได้ทุกวัน แม้จะเป็นวันที่ผ่านมาแล้ว
+    }
+    
+    // 2. กรณีเป็นเจ้าของข้อมูล - แก้ไขตัวเองได้
+    if (isSameUser) {
+      console.log(`✅ SELF ACCESS GRANTED`);
+      return isValidDate; // แก้ไขตัวเองได้เฉพาะวันปัจจุบันและอนาคต
+    }
+    
+    // 3. กรณีเป็น supervisor - สามารถแก้ไขได้เฉพาะคนในทีมตัวเอง
+    if (isSupervisor) {
+      // ดึงและตรวจสอบ team ของ supervisor และพนักงาน
+      let userTeamId = null;
+      let employeeTeamId = null;
+      
+      // ตรวจสอบหาค่า teamId ของ user จากหลายแหล่ง
+      if (session.user.userTeam && typeof session.user.userTeam === 'object') {
+        userTeamId = session.user.userTeam.id;
+      } else if (typeof session.user.userTeam === 'string') {
+        userTeamId = session.user.userTeam;
+      } else if (session.user.userTeamId) {
+        userTeamId = session.user.userTeamId;
+      } else if (session.user.teamId) {
+        userTeamId = session.user.teamId;
+      } else if (session.user.team && typeof session.user.team === 'object') {
+        userTeamId = session.user.team.id;
+      } else if (typeof session.user.team === 'string') {
+        userTeamId = session.user.team;
+      }
+      
+      // ตรวจสอบหาค่า teamId ของ employee จากหลายแหล่ง
+      if (employee.team && typeof employee.team === 'object') {
+        employeeTeamId = employee.team.id;
+      } else if (typeof employee.team === 'string') {
+        employeeTeamId = employee.team;
+      } else if (employee.teamId) {
+        employeeTeamId = employee.teamId;
+      } else if (employee.userTeamId) {
+        employeeTeamId = employee.userTeamId;
+      } else if (employee.userTeam && typeof employee.userTeam === 'object') {
+        employeeTeamId = employee.userTeam.id;
+      } else if (typeof employee.userTeam === 'string') {
+        employeeTeamId = employee.userTeam;
+      }
+      
+      console.log('TEAM CHECK:', {
+        userTeamId,
+        employeeTeamId,
+      });
+      
+      // ตรวจสอบว่าอยู่ในทีมเดียวกันหรือไม่
+      const isSameTeam = userTeamId && employeeTeamId && userTeamId === employeeTeamId;
+      
+      if (isSameTeam) {
+        console.log(`✅ SUPERVISOR ACCESS GRANTED (Same Team)`);
+        return isValidDate;
+      }
+      
+      // ถ้ามีปัญหากับการตรวจสอบ teamId ลองตรวจสอบจากแผนกแทน
+      if (!userTeamId || !employeeTeamId) {
+        const isSameDepartment = session.user.departmentId && 
+                               employee.departmentId && 
+                               session.user.departmentId === employee.departmentId;
+                               
+        if (isSameDepartment) {
+          console.log(`✅ SUPERVISOR ACCESS GRANTED (Same Department - Fallback)`);
+          return isValidDate;
+        }
+      }
+      
+      console.log(`❌ SUPERVISOR ACCESS DENIED - Not in same team`);
+      return false;
+    }
+    
+    // 4. กรณีอื่นๆ (พนักงานทั่วไป) - ไม่มีสิทธิ์แก้ไขข้อมูลคนอื่น
+    console.log(`❌ ACCESS DENIED - Regular employee cannot edit others`);
+    return false;
+  };
+
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/login');
     }
   }, [status, router]);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!session) return;
+  // แยก fetchData ออกมาเป็น function ต่างหาก
+  const fetchCalendarData = async () => {
+    if (!session || isDataFetching) return;
 
-      setLoading(true);
-      try {
-        // คำนวณช่วงวันที่
-        const startDate = getStartDate();
-        const endDate = getEndDate();
-        
-        // ดึงข้อมูลทั้งหมดจาก API เดียว
-        const calendarRes = await fetch(`/api/employee-calendar?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`);
-        const calendarData = await calendarRes.json();
+    try {
+      setIsDataFetching(true);
 
-        if (calendarData.success) {
-          // อัปเดตข้อมูลพนักงาน
-          setEmployees(calendarData.data.employees);
-          
-          // ดึงรายชื่อแผนก
-          const uniqueDepartments = [...new Set(calendarData.data.employees.map(emp => {
-            return typeof emp.department === 'object' ? emp.department.name : emp.department;
-          }))];
-          setDepartments(uniqueDepartments);
-          
-          // อัปเดตข้อมูลการลา
-          setLeaves(calendarData.data.leaves);
-          
-          // อัปเดตข้อมูลการทำงานล่วงเวลา
-          setOvertimes(calendarData.data.overtimes);
-          
-          // อัปเดตข้อมูลสถานะการทำงาน (WFH)
-          setWorkStatuses(calendarData.data.workStatuses || []);
-        } else {
-          setError('ไม่สามารถดึงข้อมูลปฏิทินพนักงานได้');
-        }
-      } catch (err) {
-        console.error('เกิดข้อผิดพลาดในการดึงข้อมูล:', err);
-        setError('เกิดข้อผิดพลาดในการดึงข้อมูล');
-      } finally {
-        setLoading(false);
+      // ยกเลิก request เก่าถ้ามี
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
       }
-    };
 
-    fetchData();
-  }, [session, currentDate, viewMode]);
+      // สร้าง AbortController ใหม่
+      abortControllerRef.current = new AbortController();
+      const signal = abortControllerRef.current.signal;
+
+      // คำนวณช่วงวันที่
+      const startDate = getStartDate();
+      const endDate = getEndDate();
+      
+      console.log('Fetching calendar data for range:', startDate.toISOString(), 'to', endDate.toISOString());
+      
+      // เรียก API ใหม่เพียงครั้งเดียว
+      const response = await fetch(
+        `/api/employee-calendar/all-data?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`,
+        { signal }
+      );
+
+      const data = await response.json();
+
+      if (data.success) {
+        console.log('API response success - Total employees:', data.data.employees?.length || 0);
+        console.log('API response success - Total workStatuses:', data.data.workStatuses?.length || 0);
+        console.log('API response success - Total leaves:', data.data.leaves?.length || 0);
+        console.log('API response success - Total overtimes:', data.data.overtimes?.length || 0);
+        
+        // บันทึกข้อมูลแต่ละประเภทลงใน state
+        setEmployees(data.data.employees || []);
+        setWorkStatuses(data.data.workStatuses || []);
+        setLeaves(data.data.leaves || []);
+        setOvertimes(data.data.overtimes || []);
+
+        // อัปเดตรายชื่อแผนก
+        const uniqueDepartments = [...new Set(data.data.employees.map(emp => {
+          return emp.department?.name || 'ไม่ระบุแผนก';
+        }))];
+        setDepartments(uniqueDepartments);
+        
+        // แสดงข้อมูลทั้งหมดจำแนกตาม teamId เพื่อความสะดวกในการตรวจสอบ
+        const employeesByTeam = {};
+        data.data.employees.forEach(emp => {
+          // ระบุ teamId ที่จะใช้
+          let teamIdentifier = 'no-team';
+          if (emp.teamId) {
+            teamIdentifier = emp.teamId;
+          } else if (emp.team) {
+            if (typeof emp.team === 'string') {
+              teamIdentifier = emp.team;
+            } else if (emp.team.id) {
+              teamIdentifier = emp.team.id;
+            } else if (emp.team.name) {
+              teamIdentifier = emp.team.name;
+            }
+          }
+          
+          // สร้างกลุ่ม team ถ้ายังไม่มี
+          if (!employeesByTeam[teamIdentifier]) {
+            employeesByTeam[teamIdentifier] = [];
+          }
+          
+          // เพิ่มข้อมูลพนักงานในกลุ่ม
+          employeesByTeam[teamIdentifier].push({
+            id: emp.id,
+            name: `${emp.firstName || ''} ${emp.lastName || ''}`,
+            teamId: emp.teamId,
+            team: emp.team,
+            departmentId: emp.departmentId
+          });
+        });
+        
+        console.log('Employees grouped by team:', employeesByTeam);
+        
+        // Log ข้อมูลตัวอย่างของแต่ละประเภท
+        if (data.data.employees?.length > 0) {
+          // แสดงข้อมูลพนักงานตัวอย่าง ที่มี teamId
+          const employeesWithTeam = data.data.employees.filter(emp => emp.teamId || (emp.team && (typeof emp.team === 'string' || emp.team.id)));
+          if (employeesWithTeam.length > 0) {
+            console.log('Sample employee with team:', {
+              id: employeesWithTeam[0].id,
+              name: `${employeesWithTeam[0].firstName || ''} ${employeesWithTeam[0].lastName || ''}`,
+              teamId: employeesWithTeam[0].teamId,
+              team: employeesWithTeam[0].team,
+              teamName: employeesWithTeam[0].teamName,
+              userTeam: employeesWithTeam[0].userTeam,
+              userTeamId: employeesWithTeam[0].userTeamId,
+              departmentId: employeesWithTeam[0].departmentId,
+              department: employeesWithTeam[0].department
+            });
+          } else {
+            console.log('No employees with team data found!');
+          }
+          
+          // แสดงข้อมูลของ session.user
+          console.log('Current session user:', {
+            id: session.user.id,
+            name: `${session.user.firstName || ''} ${session.user.lastName || ''}`,
+            role: session.user.role,
+            teamId: session.user.teamId,
+            userTeamId: session.user.userTeamId,
+            userTeam: session.user.userTeam,
+            team: session.user.team,
+            teamName: session.user.teamName,
+            departmentId: session.user.departmentId
+          });
+        }
+        
+        // ให้ปรับอัพเดตข้อมูล session user ด้วย
+        if (session.user.id) {
+          const currentUserData = data.data.employees.find(emp => emp.id === session.user.id);
+          if (currentUserData) {
+            console.log('Current user data from API:', {
+              id: currentUserData.id,
+              name: `${currentUserData.firstName || ''} ${currentUserData.lastName || ''}`,
+              teamId: currentUserData.teamId,
+              team: currentUserData.team,
+              teamName: currentUserData.teamName,
+              userTeam: currentUserData.userTeam,
+              userTeamId: currentUserData.userTeamId,
+              departmentId: currentUserData.departmentId,
+              department: currentUserData.department
+            });
+          }
+        }
+      } else {
+        console.error('API response failed:', data.message);
+        setError('ไม่สามารถดึงข้อมูลปฏิทินพนักงานได้');
+      }
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        console.error('Error fetching calendar data:', error);
+        setError('เกิดข้อผิดพลาดในการดึงข้อมูล');
+      }
+    } finally {
+      setIsDataFetching(false);
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (session) {
+      fetchCalendarData();
+    }
+  }, [currentDate, session, selectedDepartment]);
 
   // ฟังก์ชันสำหรับการนำทางปฏิทิน
   const goToPrevious = () => {
@@ -197,118 +605,88 @@ export default function EmployeeCalendarPage() {
 
   // ฟังก์ชันสำหรับการตรวจสอบสถานะของพนักงานในแต่ละวัน
   const getEmployeeStatusForDate = (employeeId, date) => {
-    // ปรับรูปแบบวันที่ให้เป็น YYYY-MM-DD โดยไม่มีเวลา
-    const localDateStr = date.toISOString().split('T')[0];
-    
-    console.log('พนักงาน ID:', employeeId, 'วันที่:', localDateStr);
-    console.log('จำนวนข้อมูลการลาทั้งหมด:', leaves.length);
-    console.log('จำนวนข้อมูลการทำงานล่วงเวลาทั้งหมด:', overtimes.length);
-    console.log('จำนวนข้อมูลสถานะการทำงานทั้งหมด:', workStatuses.length);
-    
-    // ตรวจสอบการลา
-    const employeeLeaves = leaves.filter(leave => {
-      // แปลงวันที่ให้เป็น Date Object ที่สามารถเปรียบเทียบได้
+    // ตรวจสอบการลาที่อนุมัติแล้วก่อน เพราะมีความสำคัญสูงสุด
+    const leave = leaves.find(leave => {
       const startDate = new Date(leave.startDate);
       const endDate = new Date(leave.endDate);
-      // ตัดส่วนเวลาออกเพื่อเปรียบเทียบเฉพาะวันที่
+      const targetDate = new Date(date);
       startDate.setHours(0, 0, 0, 0);
       endDate.setHours(23, 59, 59, 999);
-      const compareDate = new Date(date);
-      compareDate.setHours(12, 0, 0, 0); // ตั้งให้เป็นเวลาเที่ยงเพื่อป้องกันปัญหา timezone
-      
-      const isMatch = leave.employeeId === employeeId && 
-             startDate <= compareDate && 
-             endDate >= compareDate;
-      
-      if (isMatch) {
-        console.log('พบข้อมูลการลาที่ตรงกับวันที่:', leave);
-      }
-      
-      return isMatch;
+      targetDate.setHours(12, 0, 0, 0);
+      return leave.employeeId === employeeId && 
+             startDate <= targetDate && 
+             endDate >= targetDate;
     });
-    
-    console.log('ข้อมูลการลาที่พบ:', employeeLeaves.length);
-    
-    // ถ้ามีการลา ให้แสดงเฉพาะข้อมูลการลา
-    if (employeeLeaves.length > 0) {
-      const leaveStatus = employeeLeaves[0];
+
+    // ถ้ามีการลาที่อนุมัติแล้ว ให้แสดงเฉพาะข้อมูลการลา
+    if (leave) {
       return {
         type: 'leave',
-        status: leaveStatus.status,
-        leaveType: leaveStatus.leaveType,
-        data: leaveStatus,
-        priority: leaveStatus.status === 'อนุมัติ' ? 5 : 3,
-        relatedStatuses: [] // ไม่แสดงสถานะอื่นๆ เมื่อมีการลา
+        data: leave,
+        leaveType: leave.leaveType,
+        status: leave.status
       };
     }
+
+    // ถ้าไม่มีการลา ตรวจสอบสถานะการทำงานและ OT
+    const localDateStr = date.toISOString().split('T')[0];
     
-    // สร้างอาเรย์ของสถานะทั้งหมดที่พบ
-    const allStatuses = [];
-    
-    // ตรวจสอบสถานะการทำงาน (WFH) โดยเทียบวันที่ในรูปแบบ YYYY-MM-DD
     const employeeWorkStatus = workStatuses.find(workStatus => {
       const wsDate = new Date(workStatus.date);
       const wsDateStr = wsDate.toISOString().split('T')[0];
       return workStatus.employeeId === employeeId && wsDateStr === localDateStr;
     });
     
-    // เพิ่มข้อมูลสถานะการทำงาน (WFH)
-    if (employeeWorkStatus) {
-      allStatuses.push({
+    const employeeOvertime = overtimes.find(overtime => {
+      const otDate = new Date(overtime.date);
+      const otDateStr = otDate.toISOString().split('T')[0];
+      return overtime.employeeId === employeeId && otDateStr === localDateStr;
+    });
+
+    // ถ้ามีทั้ง work status และ OT
+    if (employeeWorkStatus && employeeOvertime) {
+      return {
         type: 'workStatus',
         status: employeeWorkStatus.status,
         data: employeeWorkStatus,
-        priority: 2 // ความสำคัญระดับกลาง
-      });
+        relatedStatuses: [{
+          type: 'overtime',
+          status: employeeOvertime.status,
+          hours: employeeOvertime.totalHours,
+          data: employeeOvertime
+        }]
+      };
     }
-    
-    // ตรวจสอบการทำงานล่วงเวลา
-    const employeeOvertimes = overtimes.filter(overtime => {
-      const otDate = new Date(overtime.date);
-      const otDateStr = otDate.toISOString().split('T')[0];
-      const isMatch = overtime.employeeId === employeeId &&
-             otDateStr === localDateStr &&
-             overtime.status !== 'ยกเลิก' &&
-             (!overtime.isCancelled || overtime.cancelStatus === 'รออนุมัติ' || overtime.cancelStatus === 'ไม่อนุมัติ');
-      
-      if (isMatch) {
-        console.log('พบข้อมูลการทำงานล่วงเวลาที่ตรงกับวันที่:', overtime);
-      }
-      
-      return isMatch;
-    });
-    
-    // เพิ่มข้อมูลการทำงานล่วงเวลา
-    if (employeeOvertimes.length > 0) {
-      allStatuses.push({
+
+    // ถ้ามีแค่ work status
+    if (employeeWorkStatus) {
+      return {
+        type: 'workStatus',
+        status: employeeWorkStatus.status,
+        data: employeeWorkStatus,
+        relatedStatuses: []
+      };
+    }
+
+    // ถ้ามีแค่ OT
+    if (employeeOvertime) {
+      return {
         type: 'overtime',
-        status: employeeOvertimes[0].status,
-        hours: employeeOvertimes[0].totalHours,
-        data: employeeOvertimes[0],
-        priority: 1 // ความสำคัญต่ำสุด
-      });
+        status: employeeOvertime.status,
+        hours: employeeOvertime.totalHours,
+        data: employeeOvertime,
+        relatedStatuses: []
+      };
     }
-    
-    // ถ้าไม่มีสถานะใดๆ
-    if (allStatuses.length === 0) {
-      return null;
-    }
-    
-    // จัดเรียงสถานะตามความสำคัญ (เลขยิ่งมาก ยิ่งสำคัญ)
-    allStatuses.sort((a, b) => b.priority - a.priority);
-    
-    console.log('สถานะที่พบทั้งหมด:', allStatuses);
-    
-    // คืนค่าสถานะที่มีความสำคัญสูงสุด และแนบสถานะอื่นๆ ไปด้วย
-    const primaryStatus = { ...allStatuses[0], relatedStatuses: allStatuses.slice(1) };
-    return primaryStatus;
+
+    return null;
   };
 
   // ฟังก์ชันสำหรับการเปิด Modal สถานะการทำงาน
   const openWorkStatusModal = (employee, date, viewOnlyMode = false) => {
     const dateObj = new Date(date);
-    dateObj.setHours(12, 0, 0, 0); // ตั้งเวลาเป็นเที่ยงวันเพื่อป้องกันปัญหา timezone
-    const localDateStr = dateObj.toISOString().split('T')[0]; // รูปแบบ YYYY-MM-DD
+    dateObj.setHours(12, 0, 0, 0);
+    const localDateStr = dateObj.toISOString().split('T')[0];
     
     // ตรวจสอบว่ามีข้อมูลการลาในวันนี้หรือไม่
     const leaveData = leaves.find(leave => {
@@ -321,22 +699,7 @@ export default function EmployeeCalendarPage() {
              endDate >= dateObj;
     });
     
-    // ถ้ามีการลาในวันนี้ ให้แสดงเฉพาะข้อมูลการลา
-    if (leaveData) {
-      setSelectedEmployee(employee);
-      setSelectedDate(dateObj);
-      setSelectedWorkStatus(null);
-      
-      setIsWorkStatusModalOpen({ 
-        isOpen: true, 
-        viewOnly: true, // กำหนดเป็น view-only mode เมื่อมีการลา
-        leaveData: leaveData,
-        overtimeData: null
-      });
-      return;
-    }
-    
-    // ตรวจสอบว่ามีข้อมูลสถานะการทำงานอยู่แล้วหรือไม่ โดยใช้รูปแบบวันที่เดียวกับที่ใช้ตรวจสอบในฟังก์ชัน getEmployeeStatusForDate
+    // ตรวจสอบว่ามีข้อมูลสถานะการทำงานอยู่แล้วหรือไม่
     const existingWorkStatus = workStatuses.find(ws => {
       const wsDate = new Date(ws.date);
       const wsDateStr = wsDate.toISOString().split('T')[0];
@@ -354,113 +717,80 @@ export default function EmployeeCalendarPage() {
     setSelectedDate(dateObj);
     setSelectedWorkStatus(existingWorkStatus || null);
     
-    // กำหนดโหมด viewOnly เมื่อเรียกดูข้อมูลวันที่ผ่านไปแล้ว หรือไม่มีสิทธิ์แก้ไข
+    // ตรวจสอบสิทธิ์การแก้ไขสำหรับวันที่เลือก
+    const canEdit = canEditEmployeeWorkStatus(employee, dateObj);
+    
+    // กำหนดโหมด viewOnly เมื่อเรียกดูข้อมูลย้อนหลังและไม่ใช่ admin หรือระบุ viewOnly = true หรือไม่มีสิทธิ์แก้ไข
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const currentDay = new Date(dateObj);
     currentDay.setHours(0, 0, 0, 0);
     
-    // กำหนดเป็น view-only mode หากเป็นการดูข้อมูลย้อนหลังและไม่ใช่ admin หรือระบุ viewOnly = true
-    const isViewOnlyMode = viewOnlyMode || ((currentDay < today) && session.user.role !== 'admin');
+    const isViewOnlyMode = viewOnlyMode || 
+                           ((currentDay < today) && session.user.role !== 'admin') || 
+                           !canEdit;
+    
     setIsWorkStatusModalOpen({ 
       isOpen: true, 
       viewOnly: isViewOnlyMode,
-      leaveData: null,
-      overtimeData: overtimeData || null
+      leaveData: leaveData || null,
+      overtimeData: overtimeData || null,
+      defaultWorkStatus: null // ไม่ต้อง default ค่า
     });
   };
 
-  // ฟังก์ชันตรวจสอบสิทธิ์การแก้ไขข้อมูลพนักงาน
-  const canEditEmployeeWorkStatus = (employee) => {
-    const isAdmin = session.user.role === 'admin';
-    const isTeamLead = session.user.role === 'team_lead' || session.user.role === 'supervisor';
-    const isSameUser = session.user.id === employee.id;
-    
-    // แก้ไขการตรวจสอบทีม
-    const userTeamId = session.user.teamId || (session.user.team?.id || null);
-    const employeeTeamId = employee.teamId || (employee.team?.id || null);
-    const isInSameTeam = isTeamLead && userTeamId && employeeTeamId && userTeamId === employeeTeamId;
-    
-    return isAdmin || isSameUser || isInSameTeam;
-  };
-
   // ฟังก์ชันสำหรับการจัดการเมื่อบันทึกข้อมูลสถานะการทำงาน
-  const handleWorkStatusSave = (newWorkStatus) => {
-    // กรณีมี flag forceRefresh ให้ดึงข้อมูลใหม่ทั้งหมด
-    if (newWorkStatus && newWorkStatus.forceRefresh) {
-      // คำนวณช่วงวันที่
+  const handleWorkStatusSave = async (newWorkStatus) => {
+    // กรณีมี flag forceRefresh หรือมีการอัพเดทหลายรายการ ให้ดึงข้อมูลใหม่ทั้งหมด
+    if (newWorkStatus?.forceRefresh || newWorkStatus?.multipleUpdate) {
       const startDate = getStartDate();
       const endDate = getEndDate();
       
-      // ดึงข้อมูลทั้งหมดใหม่จาก API
-      fetch(`/api/employee-calendar?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`)
-        .then(res => res.json())
-        .then(calendarData => {
-          if (calendarData.success) {
-            // อัปเดตข้อมูลพนักงาน
-            setEmployees(calendarData.data.employees);
-            
-            // อัปเดตข้อมูลการลา
-            setLeaves(calendarData.data.leaves);
-            
-            // อัปเดตข้อมูลการทำงานล่วงเวลา
-            setOvertimes(calendarData.data.overtimes);
-            
-            // อัปเดตข้อมูลสถานะการทำงาน (WFH)
-            setWorkStatuses(calendarData.data.workStatuses || []);
-            
-            toast.success('รีเฟรชข้อมูลสำเร็จ');
-          }
-        })
-        .catch(err => {
-          console.error('เกิดข้อผิดพลาดในการรีเฟรชข้อมูล:', err);
-          toast.error('เกิดข้อผิดพลาดในการรีเฟรชข้อมูล');
-        });
-      
-      return;
-    }
-    
-    // ตรวจสอบว่าเป็นการอัพเดทหลายรายการหรือไม่
-    if (newWorkStatus && newWorkStatus.multipleUpdate) {
-      const { statuses } = newWorkStatus;
-      
-      // สร้าง Map ของสถานะที่มีอยู่แล้วเพื่อช่วยในการอัพเดท
-      const existingWorkStatusMap = new Map(workStatuses.map(ws => [ws.id, ws]));
-      
-      // อัพเดทหรือเพิ่มแต่ละสถานะที่ได้รับ
-      for (const status of statuses) {
-        if (existingWorkStatusMap.has(status.id)) {
-          // อัพเดทสถานะเดิม
-          existingWorkStatusMap.set(status.id, status);
+      try {
+        console.log('Refreshing data after save - fetching from new API');
+        
+        // ใช้ API ใหม่ที่รวมทุกอย่าง
+        const response = await fetch(
+          `/api/employee-calendar/all-data?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`
+        );
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          console.log('API response success after save - Total leaves:', data.data.leaves?.length || 0);
+          
+          setEmployees(data.data.employees || []);
+          setWorkStatuses(data.data.workStatuses || []);
+          setLeaves(data.data.leaves || []);
+          setOvertimes(data.data.overtimes || []);
+          
+          toast.success('อัพเดทข้อมูลสำเร็จ');
         } else {
-          // เพิ่มสถานะใหม่
-          existingWorkStatusMap.set(status.id, status);
+          console.error('API response failed after save:', data.message);
+          toast.error('เกิดข้อผิดพลาดในการรีเฟรชข้อมูล');
         }
+      } catch (error) {
+        console.error('Error refreshing data:', error);
+        toast.error('เกิดข้อผิดพลาดในการรีเฟรชข้อมูล');
       }
-      
-      // อัพเดท state ด้วยค่าใหม่ทั้งหมด
-      setWorkStatuses(Array.from(existingWorkStatusMap.values()));
       return;
     }
-    
-    // ตรวจสอบว่าเป็นการลบหรือไม่
-    if (newWorkStatus === null) {
+
+    // กรณีลบข้อมูล
+    if (newWorkStatus === null && selectedWorkStatus) {
       setWorkStatuses(prev => prev.filter(ws => ws.id !== selectedWorkStatus.id));
       return;
     }
-    
-    // กรณีเป็นการอัพเดทหรือเพิ่มข้อมูลเดียว
+
+    // กรณีอัพเดทหรือเพิ่มข้อมูลเดียว
     setWorkStatuses(prev => {
       const existingIndex = prev.findIndex(ws => ws.id === newWorkStatus.id);
       if (existingIndex !== -1) {
-        // อัพเดทสถานะเดิม
         const updated = [...prev];
         updated[existingIndex] = newWorkStatus;
         return updated;
-      } else {
-        // เพิ่มสถานะใหม่
-        return [...prev, newWorkStatus];
       }
+      return [...prev, newWorkStatus];
     });
   };
 
@@ -468,7 +798,7 @@ export default function EmployeeCalendarPage() {
   const filteredEmployees = selectedDepartment === 'all'
     ? employees
     : employees.filter(emp => {
-        const deptName = typeof emp.department === 'object' ? emp.department.name : emp.department;
+        const deptName = emp.department?.name || 'ไม่ระบุแผนก';
         return deptName === selectedDepartment;
       });
 
@@ -623,7 +953,68 @@ export default function EmployeeCalendarPage() {
                               {employee.firstName || ''} {employee.lastName || ''}
                             </div>
                             <div className="text-xs text-gray-500 dark:text-gray-400">
-                              {employee.position || ''} • {typeof employee.department === 'object' ? employee.department.name : (employee.department || '')}
+                              {employee.position || ''} • {typeof employee.department === 'object' && employee.department !== null ? employee.department.name : (employee.department || 'ไม่ระบุแผนก')}
+                            </div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                              {(() => {
+                                // เตรียมข้อมูลทีมจากทุกแหล่งที่เป็นไปได้
+                                let teamName = null;
+                                let teamId = null;
+                                
+                                // ตรวจสอบจากหลายแหล่งข้อมูล
+                                if (employee.teamName) {
+                                  teamName = employee.teamName;
+                                } else if (employee.team) {
+                                  if (typeof employee.team === 'string') {
+                                    teamName = employee.team;
+                                  } else if (employee.team.name) {
+                                    teamName = employee.team.name;
+                                  } else if (employee.team.id) {
+                                    teamId = employee.team.id;
+                                  }
+                                }
+                                
+                                // ถ้าไม่พบใน team ให้ลองดูใน userTeam
+                                if (!teamName && employee.userTeam) {
+                                  if (typeof employee.userTeam === 'string') {
+                                    teamName = employee.userTeam;
+                                  } else if (employee.userTeam.name) {
+                                    teamName = employee.userTeam.name;
+                                  } else if (employee.userTeam.id) {
+                                    teamId = employee.userTeam.id;
+                                  }
+                                }
+                                
+                                // ถ้าไม่พบในทุกแหล่งข้อมูลแบบนี้ ให้ลองดู teamId
+                                if (!teamName && !teamId) {
+                                  if (employee.teamId) {
+                                    teamId = employee.teamId;
+                                  } else if (employee.userTeamId) {
+                                    teamId = employee.userTeamId;
+                                  }
+                                }
+                                
+                                // แสดงผลทีม
+                                if (teamName || teamId) {
+                                  return (
+                                    <span className="flex items-center">
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                      </svg>
+                                      ทีม: {teamName || (teamId ? (teamId.length > 8 ? teamId.substring(0, 8) + '...' : teamId) : 'ไม่ระบุทีม')}
+                                    </span>
+                                  );
+                                } else {
+                                  return (
+                                    <span className="flex items-center text-gray-400">
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                      </svg>
+                                      ไม่ระบุทีม
+                                    </span>
+                                  );
+                                }
+                              })()}
                             </div>
                           </div>
                         </div>
@@ -631,6 +1022,9 @@ export default function EmployeeCalendarPage() {
                       
                       {daysArray.map((day, index) => {
                         const status = getEmployeeStatusForDate(employee.id, day);
+                        // ตรวจสอบสิทธิ์การแก้ไขสำหรับแต่ละวัน
+                        const canEdit = canEditEmployeeWorkStatus(employee, day);
+                        
                         return (
                           <td
                             key={index}
@@ -643,31 +1037,37 @@ export default function EmployeeCalendarPage() {
                                 ? 'bg-primary-50/30 dark:bg-primary-900/10'
                                 : ''
                             }`}
-                            onClick={() => {
-                              // คลิกเพื่อเปิด Modal และแสดงรายละเอียดหรือแก้ไข
-                              openWorkStatusModal(employee, day, !canEditEmployeeWorkStatus(employee));
-                            }}
                           >
                             {status ? (
-                              <div className="cursor-pointer h-full w-full">
-                                {/* แสดงข้อมูลแบบใหม่ ที่สามารถแสดงหลายสถานะพร้อมกัน */}
+                              <div 
+                                className="cursor-pointer h-full w-full"
+                                onClick={() => openWorkStatusModal(employee, day, !canEdit)}
+                              >
                                 <div className="grid grid-cols-1 gap-1 h-full">
                                   {/* ส่วนสถานะหลัก - แสดงที่ด้านบน */}
-                                  <div className={`rounded-full py-1 w-full h-full flex flex-col items-center justify-center 
-                                   ${status.type === 'leave' && status.status === 'อนุมัติ' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : ''}
-                                   ${status.type === 'leave' && status.status === 'ไม่อนุมัติ' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' : ''}
-                                   ${status.type === 'leave' && status.status === 'รออนุมัติ' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' : ''}
-                                   ${status.type === 'overtime' && status.status === 'อนุมัติ' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200' : ''}
-                                   ${status.type === 'overtime' && status.status === 'ไม่อนุมัติ' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' : ''}
-                                   ${status.type === 'overtime' && status.status === 'รออนุมัติ' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' : ''}
-                                  `}>
+                                  <div className={`rounded-md py-1 w-full h-full flex flex-col items-center justify-center 
+                                    ${status.type === 'leave' ? `
+                                      bg-orange-50 border-2 border-orange-200
+                                      ${status.leaveType === 'ลาพักร้อน' ? 'text-emerald-600' :
+                                         status.leaveType === 'ลากิจ' ? 'text-amber-600' :
+                                         status.leaveType === 'ลาป่วย' ? 'text-red-600' :
+                                         'text-purple-600'}` :
+                                    status.type === 'overtime' ? `
+                                      bg-purple-50 text-purple-600` :
+                                    status.type === 'workStatus' ? `
+                                      ${status.status === 'WFH' ? 'text-green-600' :
+                                       status.status === 'MIXED' ? 'text-purple-600' :
+                                       status.status === 'OFFSITE' ? 'text-gray-600' :
+                                       'text-blue-600'}` :
+                                    ''
+                                  }`}>
                                     {status.type === 'leave' && (
                                       <div className="flex items-center justify-center py-0.5 px-1">
-                                        <FiCalendar className="mr-0.5 h-3 w-3" />
-                                        <span className="truncate text-xs">{status.leaveType === 'ลาพักร้อน' ? 'พักร้อน' : 
+                                        <LeaveTypeIcon leaveType={status.leaveType} className="h-3 w-3" />
+                                        <span className="truncate text-xs ml-1">{status.leaveType === 'ลาพักร้อน' ? 'พักร้อน' : 
                                           status.leaveType === 'ลากิจ' ? 'กิจ' : 
                                           status.leaveType === 'ลาป่วย' ? 'ป่วย' : 
-                                          status.leaveType.substring(0, 4)}</span>
+                                          status.leaveType ? status.leaveType.substring(0, 4) : 'ลา'}</span>
                                       </div>
                                     )}
                                     
@@ -688,27 +1088,22 @@ export default function EmployeeCalendarPage() {
                                   {status.relatedStatuses && status.relatedStatuses.length > 0 && (
                                     <div className="flex items-center justify-center gap-1">
                                       {status.relatedStatuses.map((relatedStatus, idx) => (
-                                        <div key={idx} className={`rounded-full px-1 py-0.5 text-[10px] flex items-center justify-center ${
-                                          relatedStatus.type === 'leave' 
-                                            ? (relatedStatus.status === 'อนุมัติ' 
-                                              ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
-                                              : relatedStatus.status === 'ไม่อนุมัติ' 
-                                              ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' 
-                                              : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200')
-                                            : relatedStatus.type === 'overtime'
-                                            ? (relatedStatus.status === 'อนุมัติ' 
-                                              ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200' 
-                                              : relatedStatus.status === 'ไม่อนุมัติ' 
-                                              ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' 
-                                              : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200')
-                                            : relatedStatus.type === 'workStatus'
-                                            ? (relatedStatus.status === 'WFH' 
-                                              ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
-                                              : relatedStatus.status === 'MIXED' 
-                                              ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' 
-                                              : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200')
-                                            : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
-                                        }`}>
+                                        <div key={idx} className={`rounded-md px-1 py-0.5 text-[10px] flex items-center justify-center ${
+                                          relatedStatus.type === 'leave' ? `
+                                            bg-orange-50 border border-orange-200
+                                            ${relatedStatus.leaveType === 'ลาพักร้อน' ? 'text-emerald-600' :
+                                              relatedStatus.leaveType === 'ลากิจ' ? 'text-amber-600' :
+                                              relatedStatus.leaveType === 'ลาป่วย' ? 'text-red-600' :
+                                              'text-purple-600'}` :
+                                            relatedStatus.type === 'overtime' ? `
+                                              bg-purple-50 text-purple-600` :
+                                            relatedStatus.type === 'workStatus' ? `
+                                              ${relatedStatus.status === 'WFH' ? 'text-green-600' :
+                                                relatedStatus.status === 'MIXED' ? 'text-purple-600' :
+                                                relatedStatus.status === 'OFFSITE' ? 'text-gray-600' :
+                                                'text-blue-600'}` :
+                                            'bg-gray-100 text-gray-800'
+                                          }`}>
                                           {relatedStatus.type === 'leave' && (
                                             <span>ลา</span>
                                           )}
@@ -728,15 +1123,20 @@ export default function EmployeeCalendarPage() {
                                 </div>
                               </div>
                             ) : (
-                              canEditEmployeeWorkStatus(employee) ? (
+                              canEdit ? (
                                 <div
                                   className="flex items-center justify-center h-9 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-600 rounded cursor-pointer transition-colors"
+                                  onClick={() => openWorkStatusModal(employee, day, false)}
                                   title="คลิกเพื่อกำหนดสถานะการทำงาน"
                                 >
                                   <span className="text-lg">+</span>
                                 </div>
                               ) : (
-                                <div className="h-9"></div>
+                                <div 
+                                  className="h-9 cursor-default hover:bg-gray-50 dark:hover:bg-gray-700 rounded transition-colors flex items-center justify-center text-gray-400 text-xs"
+                                >
+                                  ไม่พบข้อมูล
+                                </div>
                               )
                             )}
                           </td>
@@ -760,66 +1160,19 @@ export default function EmployeeCalendarPage() {
           </div>
         </div>
         
-        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm">
-          <h3 className="text-lg font-semibold mb-3">คำอธิบาย</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="flex items-center">
-              <div className="flex items-center justify-center w-4 h-4 rounded-full bg-green-100 dark:bg-green-900 mr-2">
-                <FiCheck className="h-3 w-3 text-green-500" />
-              </div>
-              <span className="text-sm">ลางานที่อนุมัติแล้ว</span>
-            </div>
-            <div className="flex items-center">
-              <div className="flex items-center justify-center w-4 h-4 rounded-full bg-yellow-100 dark:bg-yellow-900 mr-2">
-                <FiClock className="h-3 w-3 text-yellow-500" />
-              </div>
-              <span className="text-sm">ลางานที่รออนุมัติ</span>
-            </div>
-            <div className="flex items-center">
-              <div className="flex items-center justify-center w-4 h-4 rounded-full bg-red-100 dark:bg-red-900 mr-2">
-                <FiX className="h-3 w-3 text-red-500" />
-              </div>
-              <span className="text-sm">ลางานที่ไม่อนุมัติ</span>
-            </div>
-            <div className="flex items-center">
-              <div className="flex items-center justify-center w-4 h-4 rounded-full bg-indigo-100 dark:bg-indigo-900 mr-2">
-                <FiClock className="h-3 w-3 text-indigo-500" />
-              </div>
-              <span className="text-sm">ทำงานล่วงเวลาที่อนุมัติแล้ว</span>
-            </div>
-            <div className="flex items-center">
-              <div className="flex items-center justify-center w-4 h-4 rounded-full bg-yellow-100 dark:bg-yellow-900 mr-2">
-                <FiClock className="h-3 w-3 text-yellow-500" />
-              </div>
-              <span className="text-sm">ทำงานล่วงเวลาที่รออนุมัติ</span>
-            </div>
-            <div className="flex items-center">
-              <div className="flex items-center justify-center w-4 h-4 rounded-full bg-red-100 dark:bg-red-900 mr-2">
-                <FiClock className="h-3 w-3 text-red-500" />
-              </div>
-              <span className="text-sm">ทำงานล่วงเวลาที่ไม่อนุมัติ</span>
-            </div>
-            <div className="flex items-center">
-              <WorkStatusBadge status="OFFICE" size="sm" />
-              <span className="text-sm ml-2">ทำงานที่ออฟฟิศ</span>
-            </div>
-            <div className="flex items-center">
-              <WorkStatusBadge status="WFH" size="sm" />
-              <span className="text-sm ml-2">Work From Home</span>
-            </div>
-            <div className="flex items-center">
-              <WorkStatusBadge status="MIXED" size="sm" />
-              <span className="text-sm ml-2">ทำงานแบบผสม</span>
-            </div>
-          </div>
-        </div>
+        {renderLegend()}
       </div>
       
       {/* Modal สถานะการทำงาน */}
       <WorkStatusModal
         isOpen={isWorkStatusModalOpen}
         onClose={() => setIsWorkStatusModalOpen({ isOpen: false, viewOnly: false })}
-        employee={selectedEmployee}
+        employee={{
+          ...selectedEmployee,
+          department: typeof selectedEmployee?.department === 'object' && selectedEmployee?.department !== null
+            ? selectedEmployee.department.name
+            : (selectedEmployee?.department || 'ไม่ระบุแผนก')
+        }}
         date={selectedDate}
         currentUser={{
           ...session?.user,
@@ -889,77 +1242,6 @@ const EmployeeCalendarDay = ({ date, employee, onClick, onMouseEnter, onMouseLea
       return 'bg-gray-500';
     };
     
-    // ฟังก์ชันสำหรับแสดงไอคอนตามประเภทการลา
-    const getLeaveIcon = (leaveType) => {
-      switch (leaveType) {
-        case 'ลาพักร้อน':
-          return (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          );
-        case 'ลากิจ':
-          return (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-          );
-        case 'ลาป่วย':
-          return (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-            </svg>
-          );
-        default:
-          return (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          );
-      }
-    };
-    
-    // ฟังก์ชันสำหรับแสดงไอคอนสถานะการทำงาน
-    const getWorkStatusIcon = (status) => {
-      switch (status) {
-        case 'WFH':
-          return (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-            </svg>
-          );
-        case 'WFO':
-          return (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
-          );
-        default:
-          return (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-            </svg>
-          );
-      }
-    };
-    
-    // ฟังก์ชันสำหรับแสดงไอคอน OT
-    const getOvertimeIcon = () => {
-      return (
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      );
-    };
-    
     const badgeClasses = `w-full h-full flex items-center justify-center text-xs font-medium text-white rounded ${getStatusColor(statusData.type, statusData.status, statusData.leaveType)}`;
     
     // ข้อความที่จะแสดงบนป้าย
@@ -972,18 +1254,18 @@ const EmployeeCalendarDay = ({ date, employee, onClick, onMouseEnter, onMouseLea
       } else if (statusData.leaveType === 'ลากิจ') {
         badgeText = 'ลากิจ';
       } else if (statusData.leaveType === 'ลาป่วย') {
-        badgeText = 'ลาป่วย';
+        badgeText = 'ป่วย';
       } else {
-        badgeText = statusData.leaveType.substring(0, 4);
+        badgeText = statusData.leaveType ? statusData.leaveType.substring(0, 4) : 'ลา';
       }
       
       if (statusData.status === 'รออนุมัติ') {
         badgeText += ' *';
       }
       
-      badgeIcon = getLeaveIcon(statusData.leaveType);
+      badgeIcon = <LeaveTypeIcon leaveType={statusData.leaveType} className="h-4 w-4 text-current" />;
     } else if (statusData.type === 'workStatus') {
-      badgeText = statusData.status;
+      badgeText = statusData.status || 'ไม่ระบุ';
       badgeIcon = getWorkStatusIcon(statusData.status);
     } else if (statusData.type === 'overtime') {
       const hours = statusData.hours || statusData.totalHours;
@@ -1171,23 +1453,68 @@ const EmployeeCalendarDay = ({ date, employee, onClick, onMouseEnter, onMouseLea
   };
 
   return (
-    <div 
-      className={`border ${isToday ? 'border-blue-500' : 'border-gray-200'} ${isWeekend ? 'bg-gray-50' : 'bg-white'} h-10 p-[2px]`}
+    <div className={`cursor-pointer h-full w-full ${badgeClasses}`} 
+      onClick={handleClick}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}>
+      <div className="flex items-center space-x-1">
+        {badgeIcon}
+        <span>{badgeText}</span>
+      </div>
+    </div>
+  );
+};
+
+const getStatusClasses = (status) => {
+  if (!status) return '';
+  
+  if (status.type === 'leave') {
+    const textColorClass = {
+      'ลาพักร้อน': 'text-emerald-600',
+      'ลากิจ': 'text-amber-600',
+      'ลาป่วย': 'text-red-600',
+      'อื่นๆ': 'text-purple-600'
+    }[status.leaveType] || 'text-purple-600';
+    
+    return `bg-orange-50 border-2 border-orange-200 ${textColorClass}`;
+  }
+  
+  if (status.type === 'overtime') {
+    return 'bg-purple-50 text-purple-600';
+  }
+  
+  // Work status
+  const textColorClass = {
+    'WFH': 'text-green-600',
+    'MIXED': 'text-purple-600',
+    'OFFSITE': 'text-gray-600',
+    'OFFICE': 'text-blue-600'
+  }[status.status] || 'text-blue-600';
+  
+  return `bg-blue-50 ${textColorClass}`;
+};
+
+const renderStatus = (status) => {
+  if (!status) return null;
+  return (
+    <div
+      className={`p-2 rounded-md flex items-center justify-between mb-1 ${getStatusClasses(status)}`}
     >
-      {statusData ? (
-        <div className="h-full w-full relative" title={renderStatusTooltip()}>
-          {renderStatusBadge(statusData)}
-        </div>
-      ) : (
-        <div 
-          className="h-full w-full cursor-pointer hover:bg-gray-100 flex items-center justify-center"
-          onClick={handleClick}
-          onMouseEnter={onMouseEnter}
-          onMouseLeave={onMouseLeave}
-        >
-          <div className="h-2 w-2 rounded-full bg-gray-200 hover:bg-gray-400"></div>
-        </div>
+      <div className="flex items-center space-x-2">
+        {status.type === 'leave' && (
+          <LeaveTypeIcon leaveType={status.leaveType} className="h-5 w-5" />
+        )}
+        {status.type === 'overtime' && (
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        )}
+        {status.type === 'workStatus' && getWorkStatusIcon(status.status)}
+        <span>{status.status}</span>
+      </div>
+      {status.description && (
+        <span className="text-sm text-gray-500">{status.description}</span>
       )}
     </div>
   );
-}; 
+};

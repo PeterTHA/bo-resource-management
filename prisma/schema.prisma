@@ -158,19 +158,24 @@ model PositionLevel {
   @@map("position_levels")
 }
 
-model WorkStatus {
-  id          String    @id @default(uuid())
-  employeeId  String    @map("employee_id")
-  date        DateTime
-  status      String    @default("OFFICE") // OFFICE, WFH, MIXED
-  note        String?
-  createdById String    @map("created_by_id")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-  
-  employee    Employee  @relation("EmployeeWorkStatuses", fields: [employeeId], references: [id])
-  createdBy   Employee  @relation("WorkStatusCreator", fields: [createdById], references: [id])
+enum WorkStatus {
+  OFFICE
+  WFH
+  MIXED
+  OUTSIDE
+}
 
-  @@unique([employeeId, date])
-  @@map("work_statuses")
+model WorkStatusRecord {
+  id          String      @id @default(cuid())
+  employeeId  String
+  date        DateTime
+  status      WorkStatus
+  location    String?
+  description String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  employee    Employee    @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId])
+  @@index([date])
 }

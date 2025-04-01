@@ -1,13 +1,9 @@
 import { PrismaClient } from '@prisma/client';
 
-// สร้าง Prisma Client instance
-const prisma = global.prisma || new PrismaClient();
+const prisma = new PrismaClient();
 
-// ในสภาพแวดล้อมการพัฒนา (development) เก็บ instance ไว้ใน global
-if (process.env.NODE_ENV === 'development') global.prisma = prisma;
-
-// ส่งออก prisma instance เพื่อให้ไฟล์อื่นนำไปใช้ได้
 export { prisma };
+export default prisma;
 
 /**
  * ฟังก์ชันสำหรับดึงข้อมูลพนักงานทั้งหมด
