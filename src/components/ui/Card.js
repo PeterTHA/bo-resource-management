@@ -1,32 +1,42 @@
 export function Card({ children, className = "" }) {
   return (
     <div 
-      className={`card bg-base-100 shadow-md ${className}`}
+      className={`rounded-lg border bg-card text-card-foreground shadow-sm ${className}`}
     >
       {children}
     </div>
   );
 }
 
-export function CardHeader({ title, subtitle, icon }) {
+export function CardTitle({ children, className = "" }) {
+  return (
+    <h3 className={`text-lg font-bold text-gray-800 ${className}`}>
+      {children}
+    </h3>
+  );
+}
+
+export function CardHeader({ children, title, subtitle, icon, className = "" }) {
   return (
     <div 
-      className="card-title p-6 bg-base-200 border-b border-base-300"
+      className={`flex flex-col space-y-1.5 p-6 ${className}`}
     >
-      <div className="flex items-center">
-        {icon && <div className="mr-3 text-primary text-xl">{icon}</div>}
-        <div>
-          <h3 className="text-lg font-bold">{title}</h3>
-          {subtitle && <p className="text-sm opacity-70">{subtitle}</p>}
+      {children || (
+        <div className="flex items-center">
+          {icon && <div className="mr-3 text-primary text-xl">{icon}</div>}
+          <div>
+            {title && <h3 className="text-2xl font-semibold leading-none tracking-tight">{title}</h3>}
+            {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
 
 export function CardContent({ children, className = "" }) {
   return (
-    <div className={`card-body ${className}`}>
+    <div className={`p-6 pt-0 ${className}`}>
       {children}
     </div>
   );
@@ -35,7 +45,7 @@ export function CardContent({ children, className = "" }) {
 export function CardFooter({ children, className = "" }) {
   return (
     <div 
-      className={`card-actions justify-end p-6 bg-base-200 border-t border-base-300 ${className}`}
+      className={`flex items-center p-6 pt-0 ${className}`}
     >
       {children}
     </div>

@@ -138,7 +138,7 @@ export async function GET(request) {
           gte: startDateTime,
           lte: endDateTime
         },
-        status: 'อนุมัติ'
+        status: 'approved'
       },
       select: {
         id: true,

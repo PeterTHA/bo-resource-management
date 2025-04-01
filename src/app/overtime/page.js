@@ -18,16 +18,31 @@ const isMockImage = (src) => {
 };
 
 export default function OvertimePage() {
-  const { data: session, status } = useSession();
   const router = useRouter();
+  const { data: session, status } = useSession({
+    required: true,
+    onUnauthenticated() {
+      redirect('/login');
+    },
+  });
+
   const [overtimes, setOvertimes] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('all');
+  const [employeeFilter, setEmployeeFilter] = useState('all');
+  const [showApproveModal, setShowApproveModal] = useState(false);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showRejectCancelModal, setShowRejectCancelModal] = useState(false);
+  const [selectedOvertimeId, setSelectedOvertimeId] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [cancelReason, setCancelReason] = useState('');
+  const [approveComment, setApproveComment] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [filter, setFilter] = useState('all'); // all, pending, approved, rejected
-  const [employeeFilter, setEmployeeFilter] = useState('all'); // 'all' หรือ employeeId
-  const [employees, setEmployees] = useState([]);
   const [statusCounts, setStatusCounts] = useState({
     all: 0,
     pending: 0,
@@ -36,22 +51,45 @@ export default function OvertimePage() {
     cancelled: 0,
     pendingCancel: 0
   });
-  const [showRejectModal, setShowRejectModal] = useState(false);
-  const [rejectReason, setRejectReason] = useState('');
-  const [selectedOvertimeId, setSelectedOvertimeId] = useState(null);
-  const [showCancelModal, setShowCancelModal] = useState(false);
-  const [showRejectCancelModal, setShowRejectCancelModal] = useState(false);
-  const [cancelReason, setCancelReason] = useState('');
-  const [showApproveModal, setShowApproveModal] = useState(false);
-  const [approveComment, setApproveComment] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/login');
+  // ฟังก์ชันดึงข้อมูลการทำงานล่วงเวลา - ย้ายออกจาก useEffect
+  const fetchOvertimes = async () => {
+    try {
+      const res = await fetch('/api/overtime');
+      const data = await res.json();
+      
+      if (data.success) {
+        setOvertimes(data.data);
+        
+        // คำนวณจำนวนข้อมูลแต่ละสถานะ
+        const counts = {
+          all: data.data.length,
+          pending: data.data.filter(overtime => overtime.status === 'waiting_for_approve').length,
+          approved: data.data.filter(overtime => 
+            overtime.status === 'approved'
+          ).length,
+          rejected: data.data.filter(overtime => overtime.status === 'rejected').length,
+          cancelled: data.data.filter(overtime => 
+            overtime.status === 'canceled' || 
+            overtime.isCancelled === true
+          ).length,
+          pendingCancel: data.data.filter(overtime => 
+            overtime.status === 'approved' && overtime.cancelStatus === 'waiting_for_approve'
+          ).length
+        };
+        setStatusCounts(counts);
+      } else {
+        setError(data.message || 'เกิดข้อผิดพลาดในการดึงข้อมูลการทำงานล่วงเวลา');
+      }
+    } catch (error) {
+      setError('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์');
+      console.error(error);
+    } finally {
+      setLoading(false);
     }
-  }, [status, router]);
+  };
 
+  // ดึงข้อมูลพนักงาน
   useEffect(() => {
     const fetchEmployees = async () => {
       try {
@@ -86,43 +124,8 @@ export default function OvertimePage() {
     }
   }, [session]);
 
+  // ดึงข้อมูลการทำงานล่วงเวลา
   useEffect(() => {
-    const fetchOvertimes = async () => {
-      try {
-        const res = await fetch('/api/overtime');
-        const data = await res.json();
-        
-        if (data.success) {
-          setOvertimes(data.data);
-          
-          // คำนวณจำนวนข้อมูลแต่ละสถานะ
-          const counts = {
-            all: data.data.length,
-            pending: data.data.filter(overtime => overtime.status === 'waiting_for_approve').length,
-            approved: data.data.filter(overtime => 
-              overtime.status === 'approved'
-            ).length,
-            rejected: data.data.filter(overtime => overtime.status === 'rejected').length,
-            cancelled: data.data.filter(overtime => 
-              overtime.status === 'canceled' || 
-              overtime.isCancelled === true
-            ).length,
-            pendingCancel: data.data.filter(overtime => 
-              overtime.status === 'approved' && overtime.cancelStatus === 'waiting_for_approve'
-            ).length
-          };
-          setStatusCounts(counts);
-        } else {
-          setError(data.message || 'เกิดข้อผิดพลาดในการดึงข้อมูลการทำงานล่วงเวลา');
-        }
-      } catch (error) {
-        setError('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์');
-        console.error(error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
     if (session) {
       fetchOvertimes();
     }

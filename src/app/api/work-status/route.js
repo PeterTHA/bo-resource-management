@@ -7,41 +7,66 @@ import {
   createOrUpdateWorkStatus, 
   deleteWorkStatus 
 } from '@/lib/db-prisma';
+import prisma from '@/lib/prisma';
 
 // GET - ดึงข้อมูลสถานะการทำงาน
 export async function GET(request) {
   try {
     const session = await getServerSession(authOptions);
     
-    // ตรวจสอบว่ามีสิทธิ์ในการดูข้อมูลหรือไม่
     if (!session) {
-      return NextResponse.json({ 
-        error: true, 
-        message: 'ไม่ได้รับอนุญาต' 
-      }, { status: 401 });
+      return NextResponse.json(
+        { success: false, message: 'กรุณาเข้าสู่ระบบ' },
+        { status: 401 }
+      );
     }
 
-    // รับพารามิเตอร์จาก URL
+    // รับเดือนและปีจาก query parameters
     const { searchParams } = new URL(request.url);
-    const employeeId = searchParams.get('employeeId');
-    const date = searchParams.get('date');
-    const id = searchParams.get('id');
+    const month = parseInt(searchParams.get('month')) || new Date().getMonth() + 1;
+    const year = parseInt(searchParams.get('year')) || new Date().getFullYear();
 
-    // ถ้ามี ID ให้ดึงข้อมูลตาม ID
-    if (id) {
-      const result = await getWorkStatusById(id);
-      return NextResponse.json(result);
-    }
+    // สร้างวันที่เริ่มต้นและสิ้นสุดของเดือน
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0);
 
-    // ดึงข้อมูลทั้งหมดหรือกรองตามเงื่อนไข
-    const result = await getWorkStatuses(employeeId, date);
-    return NextResponse.json(result);
+    // ดึงข้อมูลสถานะการทำงานของทุกคนในเดือนที่กำหนด
+    const workStatuses = await prisma.workStatus.findMany({
+      where: {
+        date: {
+          gte: startDate,
+          lte: endDate
+        }
+      },
+      select: {
+        id: true,
+        date: true,
+        status: true,
+        employee: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            department: true
+          }
+        }
+      },
+      orderBy: {
+        date: 'asc'
+      }
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: workStatuses
+    });
+
   } catch (error) {
-    console.error('GET /api/work-status error:', error);
-    return NextResponse.json({ 
-      error: true, 
-      message: 'เกิดข้อผิดพลาดในการดึงข้อมูลสถานะการทำงาน' 
-    }, { status: 500 });
+    console.error('Error fetching work status:', error);
+    return NextResponse.json(
+      { success: false, message: 'เกิดข้อผิดพลาดในการดึงข้อมูลสถานะการทำงาน' },
+      { status: 500 }
+    );
   }
 }
 

@@ -25,13 +25,17 @@ export async function GET(request) {
     let result;
     
     // ถ้าเป็น admin หรือ manager สามารถดูข้อมูลการทำงานล่วงเวลาทั้งหมดได้
-    // ถ้าเป็นพนักงานทั่วไป จะบันทึกโอทีให้คนอื่นไม่ได้
+    // ถ้าเป็นพนักงานทั่วไป จะดูได้เฉพาะข้อมูลของตัวเอง
     if (session.user.role === 'permanent' || session.user.role === 'temporary') {
       result = await getOvertimes(session.user.id);
-    } else if (employeeId) {
-      result = await getOvertimes(employeeId);
+    } else if (session.user.role === 'admin' || session.user.role === 'manager') {
+      if (employeeId) {
+        result = await getOvertimes(employeeId);
+      } else {
+        result = await getOvertimes();
+      }
     } else {
-      result = await getOvertimes();
+      result = await getOvertimes(session.user.id);
     }
     
     if (!result.success) {
@@ -61,8 +65,9 @@ export async function GET(request) {
       
       // เฉพาะรายการที่อนุมัติแล้ว และไม่ถูกยกเลิก
       const approvedOvertimes = filteredOvertimes.filter(ot => 
-        (ot.status === 'approved' || ot.status === 'อนุมัติ') && 
-        (!ot.isCancelled)
+        (ot.status === 'approved' || ot.status === 'อนุมัติ' || 
+         ot.status === 'APPROVED' || ot.status?.toLowerCase() === 'approved') && 
+        (!ot.isCancelled && ot.status?.toLowerCase() !== 'cancelled' && ot.status?.toLowerCase() !== 'rejected')
       );
       
       // สร้างข้อมูลเริ่มต้นสำหรับทุกเดือน
