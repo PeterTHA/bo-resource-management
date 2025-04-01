@@ -114,8 +114,7 @@ export default function OvertimeDetailPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ 
-          status: 'อนุมัติ',
-          approvedById: session.user.id,
+          action: 'approve',
           comment: null
         }),
       });
@@ -153,8 +152,7 @@ export default function OvertimeDetailPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ 
-          status: 'ไม่อนุมัติ',
-          approvedById: session.user.id,
+          action: 'reject',
           comment: rejectReason
         }),
       });
@@ -213,12 +211,12 @@ export default function OvertimeDetailPage() {
     if (!session || !overtime) return false;
     
     // แอดมินอนุมัติได้ทุกรายการที่มีสถานะเป็น "รออนุมัติ"
-    if (session.user.role === 'admin' && overtime.status === 'รออนุมัติ') {
+    if (session.user.role === 'admin' && overtime.status === 'waiting_for_approve') {
       return true;
     }
     
     // หัวหน้างานอนุมัติได้ รวมถึงอนุมัติให้กับหัวหน้างานอื่นในทีมเดียวกัน และอนุมัติตัวเองด้วย
-    if (session.user.role === 'supervisor' && overtime.status === 'รออนุมัติ') {
+    if (session.user.role === 'supervisor' && overtime.status === 'waiting_for_approve') {
       // ถ้าเป็นแผนกเดียวกัน อนุมัติได้ ไม่ว่าจะเป็นหัวหน้าหรือพนักงานทั่วไป
       if (overtime.employee?.departmentId === session.user.departmentId) {
         return true;
@@ -234,8 +232,8 @@ export default function OvertimeDetailPage() {
     // สามารถลบได้ถ้าเป็นเจ้าของหรือแอดมิน และสถานะยังเป็น "รออนุมัติ"
     return (
       (session.user.id === overtime.employeeId || session.user.role === 'admin') && 
-      overtime.status === 'รออนุมัติ' &&
-      overtime.cancelStatus !== 'รออนุมัติ'
+      overtime.status === 'waiting_for_approve' &&
+      overtime.cancelStatus !== 'waiting_for_approve'
     );
   };
 
@@ -245,7 +243,7 @@ export default function OvertimeDetailPage() {
     // สามารถแก้ไขได้ถ้าเป็นเจ้าของหรือแอดมิน และสถานะยังเป็น "รออนุมัติ"
     return (
       (session.user.id === overtime.employeeId || session.user.role === 'admin') && 
-      overtime.status === 'รออนุมัติ'
+      overtime.status === 'waiting_for_approve'
     );
   };
 
@@ -263,10 +261,8 @@ export default function OvertimeDetailPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ 
-          cancelStatus: 'รออนุมัติ',
-          cancelRequestById: session.user.id,
-          cancelRequestAt: new Date().toISOString(),
-          cancelReason: cancelReason
+          action: 'request_cancel',
+          reason: cancelReason
         }),
       });
       
@@ -293,12 +289,39 @@ export default function OvertimeDetailPage() {
   const canCancelRequest = () => {
     if (!session || !overtime) return false;
     
-    // เจ้าของสามารถขอยกเลิกได้ถ้าสถานะเป็น 'อนุมัติ' และยังไม่มีการขอยกเลิก หรือการขอยกเลิกถูกปฏิเสธไปแล้ว
-    return (
-      session.user.id === overtime.employeeId && 
-      overtime.status === 'อนุมัติ' && 
-      (!overtime.cancelStatus || overtime.cancelStatus === 'ไม่อนุมัติ')
+    // ตรวจสอบว่ามี approvals ข้อมูลและมีรูปแบบถูกต้อง
+    if (!overtime.approvals || !Array.isArray(overtime.approvals)) return false;
+    
+    // เรียงลำดับตาม createdAt จากใหม่ไปเก่า
+    const sortedApprovals = [...overtime.approvals].sort((a, b) => 
+      new Date(b.createdAt) - new Date(a.createdAt)
     );
+    
+    // หาการกระทำล่าสุดที่เกี่ยวข้องกับการขอยกเลิก (ถ้ามี)
+    const cancelRelatedActions = sortedApprovals.filter(a => 
+      ['request_cancel', 'approve_cancel', 'reject_cancel'].includes(a.type) && 
+      a.status === 'completed'
+    );
+    
+    // สถานะปัจจุบันต้องเป็น approved
+    const isApproved = overtime.status === 'approved';
+    
+    // ถ้าไม่มีคำขอยกเลิกใดๆ และสถานะเป็น approved
+    if (cancelRelatedActions.length === 0 && isApproved) {
+      return session.user.id === overtime.employeeId;
+    }
+    
+    // ถ้ามีคำขอยกเลิก
+    if (cancelRelatedActions.length > 0) {
+      // การกระทำล่าสุดต้องเป็นการปฏิเสธการยกเลิก (reject_cancel)
+      const latestAction = cancelRelatedActions[0];
+      if (latestAction.type === 'reject_cancel' && isApproved) {
+        return session.user.id === overtime.employeeId;
+      }
+    }
+    
+    // กรณีอื่นๆ ไม่สามารถขอยกเลิกได้
+    return false;
   };
 
   // ฟังก์ชันตรวจสอบว่าสามารถจัดการคำขอยกเลิกได้หรือไม่
@@ -311,14 +334,37 @@ export default function OvertimeDetailPage() {
     // ถ้าไม่ใช่แอดมินหรือผู้จัดการ ไม่สามารถจัดการคำขอยกเลิกได้
     if (!isAdmin && !isSupervisor) return false;
     
-    // ต้องมีสถานะการยกเลิกเป็น "รออนุมัติ" เท่านั้น
-    if (overtime.cancelStatus !== 'รออนุมัติ') return false;
+    // ตรวจสอบว่ามี approvals ข้อมูลและมีรูปแบบถูกต้อง
+    if (!overtime.approvals || !Array.isArray(overtime.approvals)) return false;
+    
+    // เรียงลำดับตาม createdAt จากใหม่ไปเก่า
+    const sortedApprovals = [...overtime.approvals].sort((a, b) => 
+      new Date(b.createdAt) - new Date(a.createdAt)
+    );
+    
+    // หาการกระทำล่าสุดที่เกี่ยวข้องกับการขอยกเลิก
+    const cancelRelatedActions = sortedApprovals.filter(a => 
+      ['request_cancel', 'approve_cancel', 'reject_cancel'].includes(a.type) && 
+      a.status === 'completed'
+    );
+    
+    // ถ้าไม่มีคำขอยกเลิกใดๆ
+    if (cancelRelatedActions.length === 0) return false;
+    
+    // การกระทำล่าสุดต้องเป็นการขอยกเลิก (request_cancel)
+    const latestAction = cancelRelatedActions[0];
+    if (latestAction.type !== 'request_cancel') return false;
+    
+    // สถานะปัจจุบันต้องเป็น approved
+    if (overtime.status !== 'approved') return false;
     
     // ถ้าเป็นหัวหน้างาน ตรวจสอบว่าพนักงานอยู่ในแผนกเดียวกัน
     if (isSupervisor) {
-      return session.user.departmentId === overtime.employee?.departmentId;
+      return !overtime.employee?.departmentId || !session.user.departmentId || 
+             overtime.employee?.departmentId === session.user.departmentId;
     }
     
+    // แอดมินสามารถจัดการได้เสมอ
     return true;
   };
 
@@ -336,11 +382,8 @@ export default function OvertimeDetailPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ 
-          cancelStatus: 'อนุมัติ',
-          status: 'ยกเลิก',
-          isCancelled: true,
-          cancelledById: session.user.id,
-          cancelledAt: new Date().toISOString()
+          action: 'approve_cancel',
+          comment: null
         }),
       });
       
@@ -381,10 +424,8 @@ export default function OvertimeDetailPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ 
-          cancelStatus: 'ไม่อนุมัติ',
-          cancelResponseById: session.user.id,
-          cancelResponseAt: new Date().toISOString(),
-          cancelResponseComment: cancelReason.trim()
+          action: 'reject_cancel',
+          comment: cancelReason.trim()
         }),
       });
       
@@ -406,6 +447,34 @@ export default function OvertimeDetailPage() {
     } finally {
       setActionLoading(false);
     }
+  };
+
+  const getTransactionTypeText = (type) => {
+    switch (type) {
+      case 'approve':
+        return 'อนุมัติ';
+      case 'reject':
+        return 'ไม่อนุมัติ';
+      case 'request_cancel':
+        return 'ขอยกเลิก';
+      case 'approve_cancel':
+        return 'อนุมัติการยกเลิก';
+      case 'reject_cancel':
+        return 'ปฏิเสธการยกเลิก';
+      default:
+        return type;
+    }
+  };
+
+  const getTransactionStatusText = (status, type) => {
+    if (status === 'completed') {
+      // สำหรับ reject_cancel ให้แสดงว่า "สำเร็จ" แทนที่จะเป็น "รอดำเนินการ"
+      if (type === 'reject_cancel') {
+        return 'สำเร็จ';
+      }
+      return 'สำเร็จ';
+    }
+    return 'รอดำเนินการ';
   };
 
   if (status === 'loading' || loading) {
@@ -447,14 +516,54 @@ export default function OvertimeDetailPage() {
               <div className="card-body p-6">
                 <div className="flex flex-col md:flex-row justify-between mb-6">
                   <div className="flex-1 mb-4 md:mb-0">
-                    <div className="flex items-center">
-                      <div className={`badge ${overtime.status === 'อนุมัติ' ? 'badge-success' : 
-                                              overtime.status === 'ไม่อนุมัติ' ? 'badge-error' : 
-                                              overtime.status === 'ขอยกเลิก' ? 'badge-warning' :
-                                              overtime.status === 'ยกเลิก' ? 'badge-ghost' : 
-                                              'badge-warning'} py-3 px-4 text-sm font-medium`}>
-                        {overtime.status}
-                      </div>
+                    <div className="flex items-center gap-2">
+                      {/* แสดงสถานะหลัก */}
+                      {(() => {
+                        // ตรวจสอบสถานะการยกเลิกจาก approvals
+                        if (overtime.isCancelled) {
+                          return (
+                            <div className="badge badge-info py-3 px-4 text-sm font-medium">
+                              ยกเลิกแล้ว
+                            </div>
+                          );
+                        }
+                        
+                        // ตรวจสอบว่ามีคำขอยกเลิกล่าสุดที่ยังไม่ได้ดำเนินการหรือไม่
+                        if (overtime.approvals && Array.isArray(overtime.approvals)) {
+                          const sortedApprovals = [...overtime.approvals].sort((a, b) => 
+                            new Date(b.createdAt) - new Date(a.createdAt)
+                          );
+                          
+                          const latestCancelAction = sortedApprovals.find(a => 
+                            ['request_cancel', 'approve_cancel', 'reject_cancel'].includes(a.type) && 
+                            a.status === 'completed'
+                          );
+                          
+                          if (latestCancelAction && 
+                              latestCancelAction.type === 'request_cancel' && 
+                              overtime.status === 'approved') {
+                            return (
+                              <div className="badge badge-warning py-3 px-4 text-sm font-medium">
+                                รออนุมัติการยกเลิก
+                              </div>
+                            );
+                          }
+                        }
+                        
+                        // ถ้าไม่มีการยกเลิก ให้แสดงสถานะปกติ
+                        return (
+                          <div className={`badge ${overtime.status === 'approved' ? 'badge-success' : 
+                                                overtime.status === 'rejected' ? 'badge-error' : 
+                                                overtime.status === 'waiting_for_cancel' ? 'badge-warning' :
+                                                overtime.status === 'canceled' ? 'badge-ghost' : 
+                                                'badge-warning'} py-3 px-4 text-sm font-medium`}>
+                            {overtime.status === 'approved' ? 'อนุมัติ' : 
+                            overtime.status === 'rejected' ? 'ไม่อนุมัติ' :
+                            overtime.status === 'canceled' ? 'ยกเลิก' :
+                            overtime.status === 'waiting_for_approve' ? 'รออนุมัติ' : overtime.status}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                   
@@ -620,7 +729,7 @@ export default function OvertimeDetailPage() {
                             </div>
                           )}
                           
-                          {overtime.cancelResponseBy && overtime.cancelStatus === 'ไม่อนุมัติ' && (
+                          {overtime.cancelResponseBy && overtime.cancelStatus === 'rejected' && (
                             <div className="flex items-start gap-2">
                               <FiUser size={20} className="mt-1 text-error" />
                               <div>
@@ -632,7 +741,7 @@ export default function OvertimeDetailPage() {
                             </div>
                           )}
                           
-                          {overtime.cancelResponseAt && overtime.cancelStatus === 'ไม่อนุมัติ' && (
+                          {overtime.cancelResponseAt && overtime.cancelStatus === 'rejected' && (
                             <div className="flex items-start gap-2">
                               <FiCalendar size={20} className="mt-1 text-error" />
                               <div>
@@ -642,7 +751,7 @@ export default function OvertimeDetailPage() {
                             </div>
                           )}
                           
-                          {overtime.cancelResponseComment && overtime.cancelStatus === 'ไม่อนุมัติ' && (
+                          {overtime.cancelResponseComment && overtime.cancelStatus === 'rejected' && (
                             <div className="flex items-start gap-2 md:col-span-2">
                               <FiMessageCircle size={20} className="mt-1 text-error" />
                               <div>
@@ -704,7 +813,7 @@ export default function OvertimeDetailPage() {
                         onClick={openCancelModal}
                         disabled={actionLoading}
                       >
-                        <FiXCircle size={20} className="mr-2" /> รอยกเลิกการทำงานล่วงเวลา
+                        <FiXCircle size={20} className="mr-2" /> ขอยกเลิกการทำงานล่วงเวลา
                       </button>
                     </div>
                   )}
@@ -925,6 +1034,60 @@ export default function OvertimeDetailPage() {
               >
                 ยืนยันการไม่อนุมัติการยกเลิก
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* เพิ่มส่วนแสดงตาราง Transaction log คล้ายกับหน้า leave */}
+      {overtime.approvals && overtime.approvals.length > 0 && (
+        <div className="mt-8">
+          <div className="card bg-base-100 shadow-xl">
+            <div className="card-body">
+              <h2 className="card-title text-xl mb-4">ประวัติการทำรายการ</h2>
+              
+              <div className="overflow-x-auto">
+                <table className="table table-zebra w-full">
+                  <thead>
+                    <tr>
+                      <th>วันที่</th>
+                      <th>ประเภทรายการ</th>
+                      <th>ผู้ดำเนินการ</th>
+                      <th>สถานะ</th>
+                      <th>รายละเอียด</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {overtime.approvals.map((approval, index) => (
+                      <tr key={index}>
+                        <td className="whitespace-nowrap">{formatDateTime(approval.createdAt)}</td>
+                        <td>
+                          {getTransactionTypeText(approval.type)}
+                        </td>
+                        <td className="whitespace-nowrap">
+                          {approval.employee ? 
+                            `${approval.employee.firstName || ''} ${approval.employee.lastName || ''}` : 
+                            'ไม่ระบุ'}
+                        </td>
+                        <td>
+                          <div className={`badge ${
+                            approval.type === 'approve' || approval.type === 'approve_cancel' || approval.type === 'reject' || approval.type === 'reject_cancel' ? 'badge-success' : 'badge-warning'
+                          } badge-sm`}>
+                            {getTransactionStatusText(approval.status, approval.type)}
+                          </div>
+                        </td>
+                        <td>
+                          {(approval.reason || approval.comment) && (
+                            <div className="max-w-xs truncate">
+                              {approval.reason || approval.comment}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>

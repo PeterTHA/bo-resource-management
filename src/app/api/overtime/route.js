@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../lib/auth';
-import { getOvertimes, createOvertime } from '../../../lib/db-prisma';
+import { getOvertimes, createOvertimeNew } from '../../../lib/db-prisma';
 
 // GET - ดึงข้อมูลการทำงานล่วงเวลาทั้งหมด
 export async function GET(request) {
@@ -59,14 +59,10 @@ export async function GET(request) {
         });
       }
       
-      // เฉพาะรายการที่อนุมัติแล้ว และรวมถึงรายการที่กำลังรอการยกเลิก
+      // เฉพาะรายการที่อนุมัติแล้ว และไม่ถูกยกเลิก
       const approvedOvertimes = filteredOvertimes.filter(ot => 
-        ot.status === 'อนุมัติ' && 
-        (
-          !ot.isCancelled || 
-          ot.cancelStatus === 'รออนุมัติ' || 
-          ot.cancelStatus === 'ไม่อนุมัติ'
-        )
+        (ot.status === 'approved' || ot.status === 'อนุมัติ') && 
+        (!ot.isCancelled)
       );
       
       // สร้างข้อมูลเริ่มต้นสำหรับทุกเดือน
@@ -182,7 +178,7 @@ export async function POST(request) {
     }
     
     // เพิ่มข้อมูลการทำงานล่วงเวลาใน Prisma
-    const result = await createOvertime(data);
+    const result = await createOvertimeNew(data);
     
     if (!result.success) {
       return NextResponse.json(

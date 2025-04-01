@@ -1,13 +1,9 @@
 import { PrismaClient } from '@prisma/client';
 
-// สร้าง Prisma Client instance
-const prisma = global.prisma || new PrismaClient();
+const prisma = new PrismaClient();
 
-// ในสภาพแวดล้อมการพัฒนา (development) เก็บ instance ไว้ใน global
-if (process.env.NODE_ENV === 'development') global.prisma = prisma;
-
-// ส่งออก prisma instance เพื่อให้ไฟล์อื่นนำไปใช้ได้
 export { prisma };
+export default prisma;
 
 /**
  * ฟังก์ชันสำหรับดึงข้อมูลพนักงานทั้งหมด
@@ -398,23 +394,16 @@ export async function getLeaves(employeeId = null, teamId = null) {
       
       // ตรวจสอบสถานะล่าสุดจาก transaction log
       // หากมีการขอยกเลิกล่าสุด แต่ไม่พบ approveCancelAction หรือ rejectCancelAction ที่เกิดหลังจากการขอยกเลิกล่าสุด
-      // แสดงว่ายังอยู่ในสถานะรออนุมัติการยกเลิก
+      // แสดงว่ายังอยู่ในสถานะรออนุมัติ
       const isLatestRequestCancel = lastApproval && lastApproval.type === 'request_cancel';
-      
-      // ตรวจสอบว่ามี rejectCancelAction ที่เกิดหลังจากการขอยกเลิกล่าสุดหรือไม่
-      const latestRequestCancelTime = requestCancelAction ? new Date(requestCancelAction.createdAt).getTime() : 0;
-      const latestRejectCancelTime = rejectCancelAction ? new Date(rejectCancelAction.createdAt).getTime() : 0;
-      const hasRecentRejectCancel = latestRejectCancelTime > latestRequestCancelTime;
       
       // สถานะยกเลิก
       let cancelStatusValue = null;
       if (approveCancelAction) {
         cancelStatusValue = 'อนุมัติ';
-      } else if (isLatestRequestCancel && !hasRecentRejectCancel) {
-        // ถ้ามีการขอยกเลิกล่าสุด และไม่มีการปฏิเสธการยกเลิกที่เกิดหลังจากนั้น
+      } else if (isLatestRequestCancel && !approveCancelAction && !rejectCancelAction) {
         cancelStatusValue = 'รออนุมัติ';
-      } else if (rejectCancelAction && hasRecentRejectCancel) {
-        // ถ้ามีการปฏิเสธการยกเลิกล่าสุด
+      } else if (rejectCancelAction) {
         cancelStatusValue = 'ไม่อนุมัติ';
       }
       
@@ -526,8 +515,6 @@ export async function getLeaveById(id) {
       return { success: false, message: 'ไม่พบข้อมูลการลา' };
     }
     
-    // แปลงข้อมูลเพื่อความเข้ากันได้กับโค้ดเดิม
-    // ค้นหา approval ล่าสุดตามประเภท
     // เรียงลำดับ approvals ตาม createdAt ใหม่ ให้ล่าสุดอยู่ก่อน
     leave.approvals.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     
@@ -538,48 +525,36 @@ export async function getLeaveById(id) {
     const approveCancelAction = leave.approvals.find(a => a.type === 'approve_cancel' && a.status === 'completed');
     const rejectCancelAction = leave.approvals.find(a => a.type === 'reject_cancel' && a.status === 'completed');
     
-    // ตรวจสอบสถานะล่าสุดจาก transaction log
-    // หากมีการขอยกเลิกล่าสุด แต่ไม่พบ approveCancelAction หรือ rejectCancelAction ที่เกิดหลังจากการขอยกเลิกล่าสุด
-    // แสดงว่ายังอยู่ในสถานะรออนุมัติการยกเลิก
-    const isLatestRequestCancel = lastApproval && lastApproval.type === 'request_cancel';
+    // แปลงสถานะเพื่อให้เข้ากับ UI
+    let statusText = leave.status;
+    if (leave.status === 'waiting_for_approve') statusText = 'รออนุมัติ';
+    else if (leave.status === 'approved') statusText = 'อนุมัติ';
+    else if (leave.status === 'rejected') statusText = 'ไม่อนุมัติ';
+    else if (leave.status === 'canceled') statusText = 'ยกเลิกแล้ว';
     
-    // ตรวจสอบว่ามี rejectCancelAction ที่เกิดหลังจากการขอยกเลิกล่าสุดหรือไม่
-    const latestRequestCancelTime = requestCancelAction ? new Date(requestCancelAction.createdAt).getTime() : 0;
-    const latestRejectCancelTime = rejectCancelAction ? new Date(rejectCancelAction.createdAt).getTime() : 0;
-    const hasRecentRejectCancel = latestRejectCancelTime > latestRequestCancelTime;
-    
-    // สถานะยกเลิก
-    let cancelStatusValue = null;
-    if (approveCancelAction) {
-      cancelStatusValue = 'อนุมัติ';
-    } else if (isLatestRequestCancel && !hasRecentRejectCancel) {
-      // ถ้ามีการขอยกเลิกล่าสุด และไม่มีการปฏิเสธการยกเลิกที่เกิดหลังจากนั้น
-      cancelStatusValue = 'รออนุมัติ';
-    } else if (rejectCancelAction && hasRecentRejectCancel) {
-      // ถ้ามีการปฏิเสธการยกเลิกล่าสุด
-      cancelStatusValue = 'ไม่อนุมัติ';
-    }
-    
-    // สร้างเวอร์ชันของข้อมูลที่เข้ากันได้กับโค้ดเดิม
-    const transformed = {
+    // สร้างข้อมูลเพิ่มเติมเพื่อความเข้ากันได้กับ UI เดิม
+    const transformedLeave = {
       ...leave,
-      // สำหรับการอนุมัติ/ไม่อนุมัติปกติ
-      approvedById: approveAction?.employeeId || rejectAction?.employeeId || null,
-      approvedAt: approveAction?.createdAt || rejectAction?.createdAt || null,
-      comment: approveAction?.comment || rejectAction?.comment || null,
-      approvedBy: approveAction?.employee || rejectAction?.employee || null,
-      
-      // สำหรับการยกเลิก
-      cancelRequestedAt: requestCancelAction?.createdAt || null,
-      cancelReason: requestCancelAction?.reason || null,
-      cancelStatus: cancelStatusValue,
-      cancelApprovedById: approveCancelAction?.employeeId || rejectCancelAction?.employeeId || null,
-      cancelApprovedAt: approveCancelAction?.createdAt || rejectCancelAction?.createdAt || null,
-      cancelComment: approveCancelAction?.comment || rejectCancelAction?.comment || null,
-      cancelApprovedBy: approveCancelAction?.employee || rejectCancelAction?.employee || null,
-      isCancelled: !!approveCancelAction,
-      
-      // เพิ่มข้อมูล transaction logs สำหรับหน้ารายละเอียด
+      status: statusText,
+      // ข้อมูลการอนุมัติ
+      approvedBy: approveAction ? approveAction.employee : null,
+      approvedAt: approveAction ? approveAction.createdAt : null,
+      comment: approveAction ? approveAction.comment : (rejectAction ? rejectAction.comment : null),
+      // ข้อมูลการยกเลิก
+      cancelStatus: requestCancelAction && !approveCancelAction && !rejectCancelAction ? 'รออนุมัติ' :
+                    approveCancelAction ? 'อนุมัติ' :
+                    rejectCancelAction ? 'ไม่อนุมัติ' : null,
+      cancelReason: requestCancelAction ? requestCancelAction.reason : null,
+      cancelRequestBy: requestCancelAction ? requestCancelAction.employee : null,
+      cancelRequestAt: requestCancelAction ? requestCancelAction.createdAt : null,
+      cancelResponseBy: approveCancelAction ? approveCancelAction.employee : 
+                        (rejectCancelAction ? rejectCancelAction.employee : null),
+      cancelResponseAt: approveCancelAction ? approveCancelAction.createdAt :
+                        (rejectCancelAction ? rejectCancelAction.createdAt : null),
+      cancelResponseComment: approveCancelAction ? approveCancelAction.comment :
+                            (rejectCancelAction ? rejectCancelAction.comment : null),
+      isCancelled: approveCancelAction ? true : false,
+      // เพิ่ม transactionLogs สำหรับหน้ารายละเอียด
       transactionLogs: leave.approvals.map(approval => ({
         id: approval.id,
         type: approval.type,
@@ -592,28 +567,7 @@ export async function getLeaveById(id) {
       })),
     };
     
-    // แปลงสถานะใหม่ให้เป็นสถานะเดิมเพื่อความเข้ากันได้
-    if (transformed.status === 'waiting_for_approve') {
-      transformed.status = 'รออนุมัติ';
-    } else if (transformed.status === 'approved') {
-      transformed.status = 'อนุมัติ';
-    } else if (transformed.status === 'rejected') {
-      transformed.status = 'ไม่อนุมัติ';
-    } else if (transformed.status === 'canceled') {
-      transformed.status = 'ยกเลิกแล้ว';
-    }
-    
-    // แปลงสถานะการยกเลิกตามที่ต้องการบนหน้าจอ
-    if (transformed.cancelStatus === 'อนุมัติ') {
-      transformed.cancelStatus = 'ยกเลิกแล้ว';
-    } else if (transformed.cancelStatus === 'ไม่อนุมัติ') {
-      // ถ้าเป็นการปฏิเสธการยกเลิก ให้กำหนดเป็น null เพื่อซ่อนปุ่มอนุมัติ/ปฏิเสธการยกเลิก
-      transformed.cancelStatus = null;
-    } else if (transformed.cancelStatus === 'รอยกเลิก') {
-      transformed.cancelStatus = 'รออนุมัติ';
-    }
-    
-    return { success: true, data: transformed };
+    return { success: true, data: transformedLeave };
   } catch (error) {
     console.error(`Error fetching leave with ID ${id}:`, error);
     return { success: false, message: error.message };
@@ -1008,14 +962,50 @@ export async function rejectCancelLeave(id, approverId, comment = null) {
 /**
  * ฟังก์ชันสำหรับดึงข้อมูลการทำงานล่วงเวลาทั้งหมด
  */
-export async function getOvertimes(employeeId = null) {
+export async function getOvertimes(employeeId = null, startDate = null, endDate = null, summary = false) {
   try {
-    const whereClause = employeeId ? { employeeId } : {};
+    let where = {};
+    if (employeeId) {
+      where.employeeId = employeeId;
+    }
+    if (startDate && endDate) {
+      where.date = {
+        gte: new Date(startDate),
+        lte: new Date(endDate),
+      };
+    } else if (startDate) {
+      where.date = {
+        gte: new Date(startDate),
+      };
+    } else if (endDate) {
+      where.date = {
+        lte: new Date(endDate),
+      };
+    }
     
+    // ถ้าต้องการดูสรุปรายเดือน
+    if (summary) {
+      const result = await prisma.$queryRaw`
+        SELECT 
+          EXTRACT(YEAR FROM date) as year, 
+          EXTRACT(MONTH FROM date) as month, 
+          SUM(total_hours) as total_hours,
+          COUNT(*) as count,
+          STRING_AGG(DISTINCT status, ', ') as statuses
+        FROM overtimes
+        WHERE employee_id = ${employeeId}
+        GROUP BY EXTRACT(YEAR FROM date), EXTRACT(MONTH FROM date)
+        ORDER BY year DESC, month DESC
+      `;
+      
+      return { success: true, data: result };
+    }
+    
+    // ดึงข้อมูลการทำงานล่วงเวลาทั้งหมด
     const overtimes = await prisma.overtime.findMany({
-      where: whereClause,
+      where,
       orderBy: {
-        date: 'desc'
+        date: 'desc',
       },
       include: {
         employee: {
@@ -1024,46 +1014,76 @@ export async function getOvertimes(employeeId = null) {
             employeeId: true,
             firstName: true,
             lastName: true,
-            email: true,
             position: true,
             department: true,
+            departmentId: true,
+            email: true,
+            role: true,
             image: true,
-          }
+            teamId: true,
+          },
         },
-        approvedBy: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            position: true,
-            image: true,
-          }
-        },
-        cancelRequestBy: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            position: true,
-            image: true,
-          }
-        },
-        cancelledBy: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            position: true,
-            image: true,
+        approvals: {
+          orderBy: {
+            createdAt: 'desc'
+          },
+          include: {
+            employee: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                position: true,
+                role: true
+              }
+            }
           }
         }
-      }
+      },
     });
     
-    return { success: true, data: overtimes };
+    // แปลงข้อมูลเพื่อความเข้ากันได้กับโค้ดเดิม
+    const transformedOvertimes = overtimes.map(overtime => {
+      // สร้างข้อมูลเพิ่มเติมจาก approvals
+      overtime.approvals.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      
+      const approveAction = overtime.approvals.find(a => a.type === 'approve' && a.status === 'completed');
+      const rejectAction = overtime.approvals.find(a => a.type === 'reject' && a.status === 'completed');
+      const requestCancelAction = overtime.approvals.find(a => a.type === 'request_cancel' && a.status === 'completed');
+      const approveCancelAction = overtime.approvals.find(a => a.type === 'approve_cancel' && a.status === 'completed');
+      const rejectCancelAction = overtime.approvals.find(a => a.type === 'reject_cancel' && a.status === 'completed');
+      
+      // กำหนด cancelStatus เป็นภาษาอังกฤษ
+      const cancelStatus = requestCancelAction && !approveCancelAction && !rejectCancelAction ? 'waiting_for_approve' :
+                           approveCancelAction ? 'approved' :
+                           null;
+      
+      // สร้างข้อมูลเพิ่มเติมเพื่อความเข้ากันได้กับ UI เดิม
+      return {
+        ...overtime,
+        // ข้อมูลการอนุมัติ
+        approvedBy: approveAction ? approveAction.employee : null,
+        approvedAt: approveAction ? approveAction.createdAt : null,
+        comment: approveAction ? approveAction.comment : (rejectAction ? rejectAction.comment : null),
+        // ข้อมูลการยกเลิก
+        cancelStatus: cancelStatus,
+        cancelReason: requestCancelAction ? requestCancelAction.reason : null,
+        cancelRequestBy: requestCancelAction ? requestCancelAction.employee : null,
+        cancelRequestAt: requestCancelAction ? requestCancelAction.createdAt : null,
+        cancelResponseBy: approveCancelAction ? approveCancelAction.employee : 
+                         (rejectCancelAction ? rejectCancelAction.employee : null),
+        cancelResponseAt: approveCancelAction ? approveCancelAction.createdAt :
+                         (rejectCancelAction ? rejectCancelAction.createdAt : null),
+        cancelResponseComment: approveCancelAction ? approveCancelAction.comment :
+                             (rejectCancelAction ? rejectCancelAction.comment : null),
+        isCancelled: approveCancelAction ? true : false
+      };
+    });
+    
+    return { success: true, data: transformedOvertimes };
   } catch (error) {
     console.error('Error fetching overtimes:', error);
-    return { success: false, message: error.message, connectionError: true };
+    return { success: false, message: error.message };
   }
 }
 
@@ -1081,58 +1101,74 @@ export async function getOvertimeById(id) {
             employeeId: true,
             firstName: true,
             lastName: true,
-            department: true,
-            departmentId: true,
-            position: true,
             email: true,
-            image: true,
+            position: true,
+            department: true,
             role: true,
-          },
-        },
-        approvedBy: {
-          select: {
-            id: true,
-            employeeId: true,
-            firstName: true,
-            lastName: true,
             image: true,
-          },
+            teamId: true
+          }
         },
-        cancelRequestBy: {
-          select: {
-            id: true,
-            employeeId: true,
-            firstName: true,
-            lastName: true,
-            image: true,
+        approvals: {
+          orderBy: {
+            createdAt: 'desc'
           },
-        },
-        cancelledBy: {
-          select: {
-            id: true,
-            employeeId: true,
-            firstName: true,
-            lastName: true,
-            image: true,
-          },
-        },
-        cancelResponseBy: {
-          select: {
-            id: true,
-            employeeId: true,
-            firstName: true,
-            lastName: true,
-            image: true,
-          },
-        },
-      },
+          include: {
+            employee: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                position: true,
+                role: true
+              }
+            }
+          }
+        }
+      }
     });
     
     if (!overtime) {
       return { success: false, message: 'ไม่พบข้อมูลการทำงานล่วงเวลา' };
     }
     
-    return { success: true, data: overtime };
+    // เรียงลำดับ approvals ตาม createdAt ใหม่ ให้ล่าสุดอยู่ก่อน
+    overtime.approvals.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    
+    const lastApproval = overtime.approvals[0] || null;
+    const approveAction = overtime.approvals.find(a => a.type === 'approve' && a.status === 'completed');
+    const rejectAction = overtime.approvals.find(a => a.type === 'reject' && a.status === 'completed');
+    const requestCancelAction = overtime.approvals.find(a => a.type === 'request_cancel' && a.status === 'completed');
+    const approveCancelAction = overtime.approvals.find(a => a.type === 'approve_cancel' && a.status === 'completed');
+    const rejectCancelAction = overtime.approvals.find(a => a.type === 'reject_cancel' && a.status === 'completed');
+    
+    // กำหนด cancelStatus เป็นภาษาอังกฤษ
+    const cancelStatus = requestCancelAction && !approveCancelAction && !rejectCancelAction ? 'waiting_for_approve' :
+                 approveCancelAction ? 'approved' :
+                 null;
+    
+    // สร้างข้อมูลเพิ่มเติมเพื่อความเข้ากันได้กับ UI เดิม
+    const transformedOvertime = {
+      ...overtime,
+      // ข้อมูลการอนุมัติ
+      approvedBy: approveAction ? approveAction.employee : null,
+      approvedAt: approveAction ? approveAction.createdAt : null,
+      comment: approveAction ? approveAction.comment : (rejectAction ? rejectAction.comment : null),
+      // ข้อมูลการยกเลิก
+      cancelStatus: cancelStatus,
+      cancelReason: requestCancelAction ? requestCancelAction.reason : null,
+      cancelRequestBy: requestCancelAction ? requestCancelAction.employee : null,
+      cancelRequestAt: requestCancelAction ? requestCancelAction.createdAt : null,
+      cancelResponseBy: approveCancelAction ? approveCancelAction.employee : 
+                        (rejectCancelAction ? rejectCancelAction.employee : null),
+      cancelResponseAt: approveCancelAction ? approveCancelAction.createdAt :
+                        (rejectCancelAction ? rejectCancelAction.createdAt : null),
+      cancelResponseComment: approveCancelAction ? approveCancelAction.comment :
+                            (rejectCancelAction ? rejectCancelAction.comment : null),
+      isCancelled: approveCancelAction ? true : false
+    };
+    
+    return { success: true, data: transformedOvertime };
   } catch (error) {
     console.error(`Error fetching overtime with ID ${id}:`, error);
     return { success: false, message: error.message };
@@ -1140,9 +1176,9 @@ export async function getOvertimeById(id) {
 }
 
 /**
- * ฟังก์ชันสำหรับเพิ่มข้อมูลการทำงานล่วงเวลา
+ * ฟังก์ชันสำหรับเพิ่มข้อมูลการทำงานล่วงเวลา (โครงสร้างใหม่)
  */
-export async function createOvertime(data) {
+export async function createOvertimeNew(data) {
   try {
     // ตรวจสอบว่าพนักงานมีอยู่จริงหรือไม่
     const employee = await prisma.employee.findUnique({
@@ -1151,6 +1187,16 @@ export async function createOvertime(data) {
     
     if (!employee) {
       return { success: false, message: 'ไม่พบข้อมูลพนักงาน' };
+    }
+    
+    // แปลงสถานะเป็นภาษาอังกฤษ
+    let status = 'waiting_for_approve';
+    if (data.status) {
+      if (data.status === 'รออนุมัติ') status = 'waiting_for_approve';
+      else if (data.status === 'อนุมัติ') status = 'approved';
+      else if (data.status === 'ไม่อนุมัติ') status = 'rejected';
+      else if (data.status === 'ยกเลิกแล้ว') status = 'canceled';
+      else status = data.status; // ถ้าเป็นภาษาอังกฤษอยู่แล้ว
     }
     
     // สร้างข้อมูลการทำงานล่วงเวลาใหม่
@@ -1162,34 +1208,28 @@ export async function createOvertime(data) {
         endTime: data.endTime,
         totalHours: parseFloat(data.totalHours),
         reason: data.reason,
-        status: data.status || 'รออนุมัติ',
-        approvedById: data.approvedById || null,
-        approvedAt: data.approvedAt ? new Date(data.approvedAt) : null,
-        comment: data.comment || null,
-      },
-      include: {
-        employee: {
-          select: {
-            id: true,
-            employeeId: true,
-            firstName: true,
-            lastName: true,
-            department: true,
-            position: true,
-          },
-        },
-        approvedBy: {
-          select: {
-            id: true,
-            employeeId: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
+        status: status,
       },
     });
     
-    return { success: true, data: newOvertime };
+    // ถ้ามีข้อมูลการอนุมัติ สร้าง approval record
+    if (data.approvedById) {
+      await prisma.overtimeApproval.create({
+        data: {
+          overtimeId: newOvertime.id,
+          employeeId: data.approvedById,
+          type: status === 'approved' ? 'approve' : 'reject',
+          status: 'completed',
+          comment: data.comment || null,
+          createdAt: data.approvedAt ? new Date(data.approvedAt) : new Date(),
+        },
+      });
+    }
+    
+    // ดึงข้อมูลการทำงานล่วงเวลาพร้อมข้อมูลเพิ่มเติม
+    const fullOvertime = await getOvertimeById(newOvertime.id);
+    
+    return { success: true, data: fullOvertime.data };
   } catch (error) {
     console.error('Error creating overtime:', error);
     return { success: false, message: error.message };
@@ -1197,96 +1237,72 @@ export async function createOvertime(data) {
 }
 
 /**
- * ฟังก์ชันสำหรับอัปเดตข้อมูลการทำงานล่วงเวลา
+ * ฟังก์ชันสำหรับอัปเดตข้อมูลการทำงานล่วงเวลา (โครงสร้างใหม่)
  */
-export async function updateOvertime(id, data) {
+export async function updateOvertimeNew(id, data) {
   try {
-    // เตรียมข้อมูลสำหรับอัปเดต
-    const updateData = {};
+    // ตรวจสอบว่ามีข้อมูลการทำงานล่วงเวลาหรือไม่
+    const existingOvertime = await prisma.overtime.findUnique({
+      where: { id },
+      include: {
+        approvals: true
+      }
+    });
     
-    // เพิ่มเฉพาะฟิลด์ที่ส่งมา
+    if (!existingOvertime) {
+      return { success: false, message: 'ไม่พบข้อมูลการทำงานล่วงเวลา' };
+    }
+    
+    const updateData = {};
+    const transactions = [];
+    
+    // ข้อมูลพื้นฐานที่อัปเดตได้เสมอ
     if (data.date !== undefined) updateData.date = new Date(data.date);
     if (data.startTime !== undefined) updateData.startTime = data.startTime;
     if (data.endTime !== undefined) updateData.endTime = data.endTime;
     if (data.totalHours !== undefined) updateData.totalHours = parseFloat(data.totalHours);
     if (data.reason !== undefined) updateData.reason = data.reason;
-    if (data.status !== undefined) updateData.status = data.status;
-    if (data.comment !== undefined) updateData.comment = data.comment;
     
-    // ข้อมูลการอนุมัติ
-    if (data.approvedById !== undefined) updateData.approvedById = data.approvedById;
-    if (data.approvedAt !== undefined) updateData.approvedAt = data.approvedAt ? new Date(data.approvedAt) : null;
+    // ถ้ามีการเปลี่ยนสถานะ
+    if (data.status !== undefined) {
+      // แปลงสถานะเดิมเป็นสถานะใหม่
+      let newStatus = data.status;
+      if (data.status === 'รออนุมัติ') newStatus = 'waiting_for_approve';
+      else if (data.status === 'อนุมัติ') newStatus = 'approved';
+      else if (data.status === 'ไม่อนุมัติ') newStatus = 'rejected';
+      else if (data.status === 'ยกเลิกแล้ว') newStatus = 'canceled';
+      
+      updateData.status = newStatus;
+      
+      // ถ้าสถานะเป็นอนุมัติหรือไม่อนุมัติ สร้าง approval record
+      if ((data.status === 'อนุมัติ' || data.status === 'ไม่อนุมัติ') && data.approvedById) {
+        transactions.push(
+          prisma.overtimeApproval.create({
+            data: {
+              overtimeId: id,
+              employeeId: data.approvedById,
+              type: data.status === 'อนุมัติ' ? 'approve' : 'reject',
+              status: 'completed',
+              comment: data.comment || null,
+            },
+          })
+        );
+      }
+    }
     
-    // ข้อมูลการขอยกเลิก
-    if (data.cancelStatus !== undefined) updateData.cancelStatus = data.cancelStatus;
-    if (data.cancelRequestById !== undefined) updateData.cancelRequestById = data.cancelRequestById;
-    if (data.cancelRequestAt !== undefined) updateData.cancelRequestAt = data.cancelRequestAt ? new Date(data.cancelRequestAt) : null;
-    if (data.cancelReason !== undefined) updateData.cancelReason = data.cancelReason;
+    // อัปเดตข้อมูลการทำงานล่วงเวลาและสร้าง approval records ถ้ามี
+    const [updatedOvertime] = await prisma.$transaction([
+      prisma.overtime.update({
+        where: { id },
+        data: updateData,
+      }),
+      ...transactions
+    ]);
     
-    // ข้อมูลการอนุมัติการยกเลิก
-    if (data.isCancelled !== undefined) updateData.isCancelled = data.isCancelled;
-    if (data.cancelledById !== undefined) updateData.cancelledById = data.cancelledById;
-    if (data.cancelledAt !== undefined) updateData.cancelledAt = data.cancelledAt ? new Date(data.cancelledAt) : null;
+    // ดึงข้อมูลการทำงานล่วงเวลาที่อัปเดตแล้วพร้อมข้อมูลเพิ่มเติม
+    const fullOvertime = await getOvertimeById(id);
     
-    // ข้อมูลการตอบกลับคำขอยกเลิก
-    if (data.cancelResponseById !== undefined) updateData.cancelResponseById = data.cancelResponseById;
-    if (data.cancelResponseAt !== undefined) updateData.cancelResponseAt = data.cancelResponseAt ? new Date(data.cancelResponseAt) : null;
-    if (data.cancelResponseComment !== undefined) updateData.cancelResponseComment = data.cancelResponseComment;
-    
-    // อัปเดตข้อมูลการทำงานล่วงเวลา
-    const updatedOvertime = await prisma.overtime.update({
-      where: { id },
-      data: updateData,
-      include: {
-        employee: {
-          select: {
-            id: true,
-            employeeId: true,
-            firstName: true,
-            lastName: true,
-            department: true,
-            departmentId: true,
-            position: true,
-            email: true,
-            role: true,
-          },
-        },
-        approvedBy: {
-          select: {
-            id: true,
-            employeeId: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-        cancelRequestBy: {
-          select: {
-            id: true,
-            employeeId: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-        cancelledBy: {
-          select: {
-            id: true,
-            employeeId: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-        cancelResponseBy: {
-          select: {
-            id: true,
-            employeeId: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-      },
-    });
-    
-    return { success: true, data: updatedOvertime };
+    return { success: true, data: fullOvertime.data };
   } catch (error) {
     console.error(`Error updating overtime with ID ${id}:`, error);
     return { success: false, message: error.message };
@@ -1298,11 +1314,29 @@ export async function updateOvertime(id, data) {
  */
 export async function deleteOvertime(id) {
   try {
-    await prisma.overtime.delete({
+    // ตรวจสอบว่ามีข้อมูลการทำงานล่วงเวลาหรือไม่
+    const existingOvertime = await prisma.overtime.findUnique({
       where: { id },
+      include: {
+        approvals: true
+      }
     });
     
-    return { success: true, message: 'ลบข้อมูลการทำงานล่วงเวลาสำเร็จ' };
+    if (!existingOvertime) {
+      return { success: false, message: 'ไม่พบข้อมูลการทำงานล่วงเวลา' };
+    }
+    
+    // ลบทั้ง OvertimeApproval และ Overtime ในชุดคำสั่งเดียว
+    await prisma.$transaction([
+      prisma.overtimeApproval.deleteMany({
+        where: { overtimeId: id }
+      }),
+      prisma.overtime.delete({
+        where: { id }
+      })
+    ]);
+    
+    return { success: true, message: 'ลบข้อมูลการทำงานล่วงเวลาเรียบร้อยแล้ว' };
   } catch (error) {
     console.error(`Error deleting overtime with ID ${id}:`, error);
     return { success: false, message: error.message };
@@ -1682,6 +1716,291 @@ export async function deleteWorkStatus(id) {
     };
   } catch (error) {
     console.error('Error deleting work status:', error);
+    return { success: false, message: error.message };
+  }
+}
+
+/**
+ * ฟังก์ชันสำหรับอนุมัติการทำงานล่วงเวลา (โครงสร้างใหม่)
+ */
+export async function approveOvertimeNew(id, data) {
+  try {
+    // ตรวจสอบว่ามีข้อมูลการทำงานล่วงเวลาหรือไม่
+    const existingOvertime = await prisma.overtime.findUnique({
+      where: { id },
+      include: {
+        approvals: true,
+        employee: true
+      }
+    });
+    
+    if (!existingOvertime) {
+      return { success: false, message: 'ไม่พบข้อมูลการทำงานล่วงเวลา' };
+    }
+    
+    // ตรวจสอบว่าสถานะปัจจุบันเป็น waiting_for_approve หรือไม่
+    if (existingOvertime.status !== 'waiting_for_approve') {
+      return { success: false, message: 'สามารถอนุมัติได้เฉพาะการทำงานล่วงเวลาที่มีสถานะรออนุมัติเท่านั้น' };
+    }
+    
+    // อัปเดตสถานะการทำงานล่วงเวลาเป็น approved
+    const updatedOvertime = await prisma.overtime.update({
+      where: { id },
+      data: {
+        status: 'approved',
+        updatedAt: new Date()
+      }
+    });
+    
+    // บันทึกการอนุมัติลงในตาราง OvertimeApproval
+    const approval = await prisma.overtimeApproval.create({
+      data: {
+        overtimeId: id,
+        employeeId: data.approverId,
+        type: 'approve',
+        status: 'completed',
+        comment: data.comment || '',
+      }
+    });
+    
+    // ดึงข้อมูลการทำงานล่วงเวลาที่อัปเดตแล้วพร้อมข้อมูลเพิ่มเติม
+    const fullOvertime = await getOvertimeById(id);
+    
+    return { 
+      success: true, 
+      data: fullOvertime.data,
+      message: 'อนุมัติการทำงานล่วงเวลาเรียบร้อยแล้ว'
+    };
+  } catch (error) {
+    console.error(`Error approving overtime with ID ${id}:`, error);
+    return { success: false, message: error.message };
+  }
+}
+
+/**
+ * ฟังก์ชันสำหรับไม่อนุมัติการทำงานล่วงเวลา (โครงสร้างใหม่)
+ */
+export async function rejectOvertimeNew(id, data) {
+  try {
+    // ตรวจสอบว่ามีข้อมูลการทำงานล่วงเวลาหรือไม่
+    const existingOvertime = await prisma.overtime.findUnique({
+      where: { id },
+      include: {
+        approvals: true,
+        employee: true
+      }
+    });
+    
+    if (!existingOvertime) {
+      return { success: false, message: 'ไม่พบข้อมูลการทำงานล่วงเวลา' };
+    }
+    
+    // ตรวจสอบว่าสถานะปัจจุบันเป็น waiting_for_approve หรือไม่
+    if (existingOvertime.status !== 'waiting_for_approve') {
+      return { success: false, message: 'สามารถไม่อนุมัติได้เฉพาะการทำงานล่วงเวลาที่มีสถานะรออนุมัติเท่านั้น' };
+    }
+    
+    // อัปเดตสถานะการทำงานล่วงเวลาเป็น rejected
+    const updatedOvertime = await prisma.overtime.update({
+      where: { id },
+      data: {
+        status: 'rejected',
+        updatedAt: new Date()
+      }
+    });
+    
+    // บันทึกการไม่อนุมัติลงในตาราง OvertimeApproval
+    const approval = await prisma.overtimeApproval.create({
+      data: {
+        overtimeId: id,
+        employeeId: data.approverId,
+        type: 'reject',
+        status: 'completed',
+        comment: data.comment || '',
+      }
+    });
+    
+    // ดึงข้อมูลการทำงานล่วงเวลาที่อัปเดตแล้วพร้อมข้อมูลเพิ่มเติม
+    const fullOvertime = await getOvertimeById(id);
+    
+    return { 
+      success: true, 
+      data: fullOvertime.data,
+      message: 'ไม่อนุมัติการทำงานล่วงเวลาเรียบร้อยแล้ว'
+    };
+  } catch (error) {
+    console.error(`Error rejecting overtime with ID ${id}:`, error);
+    return { success: false, message: error.message };
+  }
+}
+
+/**
+ * ฟังก์ชันสำหรับขอยกเลิกการทำงานล่วงเวลา (โครงสร้างใหม่)
+ */
+export async function requestCancelOvertimeNew(id, data) {
+  try {
+    // ตรวจสอบว่ามีข้อมูลการทำงานล่วงเวลาหรือไม่
+    const existingOvertime = await prisma.overtime.findUnique({
+      where: { id },
+      include: {
+        approvals: {
+          orderBy: { createdAt: 'desc' }
+        },
+        employee: true
+      }
+    });
+    
+    if (!existingOvertime) {
+      return { success: false, message: 'ไม่พบข้อมูลการทำงานล่วงเวลา' };
+    }
+    
+    // ตรวจสอบว่าเป็นการทำงานล่วงเวลาที่อนุมัติแล้วหรือไม่
+    if (existingOvertime.status !== 'approved') {
+      return { success: false, message: 'สามารถยกเลิกได้เฉพาะการทำงานล่วงเวลาที่อนุมัติแล้วเท่านั้น' };
+    }
+    
+    // บันทึกคำขอยกเลิกการทำงานล่วงเวลาในตาราง OvertimeApproval
+    const newApproval = await prisma.overtimeApproval.create({
+      data: {
+        overtimeId: id,
+        employeeId: data.employeeId,
+        type: 'request_cancel',
+        status: 'completed',
+        reason: data.reason,
+      },
+    });
+    
+    // ดึงข้อมูลการทำงานล่วงเวลาที่อัปเดตแล้วพร้อมข้อมูลเพิ่มเติม
+    const fullOvertime = await getOvertimeById(id);
+    
+    return { 
+      success: true, 
+      data: fullOvertime.data,
+      message: 'ส่งคำขอยกเลิกการทำงานล่วงเวลาเรียบร้อยแล้ว กรุณารอการอนุมัติ'
+    };
+  } catch (error) {
+    console.error(`Error requesting cancel overtime with ID ${id}:`, error);
+    return { success: false, message: error.message };
+  }
+}
+
+/**
+ * ฟังก์ชันสำหรับอนุมัติการยกเลิกการทำงานล่วงเวลา (โครงสร้างใหม่)
+ */
+export async function approveCancelOvertimeNew(id, data) {
+  try {
+    // ตรวจสอบว่ามีข้อมูลการทำงานล่วงเวลาหรือไม่
+    const existingOvertime = await prisma.overtime.findUnique({
+      where: { id },
+      include: {
+        approvals: {
+          orderBy: { createdAt: 'desc' }
+        },
+        employee: true
+      }
+    });
+    
+    if (!existingOvertime) {
+      return { success: false, message: 'ไม่พบข้อมูลการทำงานล่วงเวลา' };
+    }
+    
+    // ตรวจสอบว่ามีคำขอยกเลิกหรือไม่
+    const requestCancelAction = existingOvertime.approvals.find(a => a.type === 'request_cancel' && a.status === 'completed');
+    if (!requestCancelAction) {
+      return { success: false, message: 'ไม่พบคำขอยกเลิกการทำงานล่วงเวลา' };
+    }
+    
+    // ตรวจสอบว่าเป็นการทำงานล่วงเวลาที่อนุมัติแล้วหรือไม่
+    if (existingOvertime.status !== 'approved') {
+      return { success: false, message: 'สามารถอนุมัติการยกเลิกได้เฉพาะการทำงานล่วงเวลาที่อนุมัติแล้วเท่านั้น' };
+    }
+    
+    // อัปเดตสถานะการทำงานล่วงเวลาเป็น canceled
+    const updatedOvertime = await prisma.overtime.update({
+      where: { id },
+      data: {
+        status: 'canceled',
+        updatedAt: new Date()
+      }
+    });
+    
+    // บันทึกการอนุมัติยกเลิกลงในตาราง OvertimeApproval
+    const approval = await prisma.overtimeApproval.create({
+      data: {
+        overtimeId: id,
+        employeeId: data.approverId,
+        type: 'approve_cancel',
+        status: 'completed',
+        comment: data.comment || '',
+      }
+    });
+    
+    // ดึงข้อมูลการทำงานล่วงเวลาที่อัปเดตแล้วพร้อมข้อมูลเพิ่มเติม
+    const fullOvertime = await getOvertimeById(id);
+    
+    return { 
+      success: true, 
+      data: fullOvertime.data,
+      message: 'อนุมัติการยกเลิกการทำงานล่วงเวลาเรียบร้อยแล้ว'
+    };
+  } catch (error) {
+    console.error(`Error approving cancel overtime with ID ${id}:`, error);
+    return { success: false, message: error.message };
+  }
+}
+
+/**
+ * ฟังก์ชันสำหรับไม่อนุมัติการยกเลิกการทำงานล่วงเวลา (โครงสร้างใหม่)
+ */
+export async function rejectCancelOvertimeNew(id, data) {
+  try {
+    // ตรวจสอบว่ามีข้อมูลการทำงานล่วงเวลาหรือไม่
+    const existingOvertime = await prisma.overtime.findUnique({
+      where: { id },
+      include: {
+        approvals: {
+          orderBy: { createdAt: 'desc' }
+        },
+        employee: true
+      }
+    });
+    
+    if (!existingOvertime) {
+      return { success: false, message: 'ไม่พบข้อมูลการทำงานล่วงเวลา' };
+    }
+    
+    // ตรวจสอบว่ามีคำขอยกเลิกหรือไม่
+    const requestCancelAction = existingOvertime.approvals.find(a => a.type === 'request_cancel' && a.status === 'completed');
+    if (!requestCancelAction) {
+      return { success: false, message: 'ไม่พบคำขอยกเลิกการทำงานล่วงเวลา' };
+    }
+    
+    // ตรวจสอบว่าเป็นการทำงานล่วงเวลาที่อนุมัติแล้วหรือไม่
+    if (existingOvertime.status !== 'approved') {
+      return { success: false, message: 'สามารถไม่อนุมัติการยกเลิกได้เฉพาะการทำงานล่วงเวลาที่อนุมัติแล้วเท่านั้น' };
+    }
+    
+    // บันทึกการไม่อนุมัติยกเลิกลงในตาราง OvertimeApproval (ไม่มีการเปลี่ยนสถานะ Overtime)
+    const approval = await prisma.overtimeApproval.create({
+      data: {
+        overtimeId: id,
+        employeeId: data.approverId,
+        type: 'reject_cancel',
+        status: 'completed',
+        comment: data.comment || '',
+      }
+    });
+    
+    // ดึงข้อมูลการทำงานล่วงเวลาที่อัปเดตแล้วพร้อมข้อมูลเพิ่มเติม
+    const fullOvertime = await getOvertimeById(id);
+    
+    return { 
+      success: true, 
+      data: fullOvertime.data,
+      message: 'ไม่อนุมัติการยกเลิกการทำงานล่วงเวลาเรียบร้อยแล้ว'
+    };
+  } catch (error) {
+    console.error(`Error rejecting cancel overtime with ID ${id}:`, error);
     return { success: false, message: error.message };
   }
 } 
