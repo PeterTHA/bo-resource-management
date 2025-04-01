@@ -610,12 +610,15 @@ export default function EmployeeCalendarPage() {
       const startDate = new Date(leave.startDate);
       const endDate = new Date(leave.endDate);
       const targetDate = new Date(date);
+      
       startDate.setHours(0, 0, 0, 0);
       endDate.setHours(23, 59, 59, 999);
       targetDate.setHours(12, 0, 0, 0);
+      
       return leave.employeeId === employeeId && 
              startDate <= targetDate && 
-             endDate >= targetDate;
+             endDate >= targetDate &&
+             (leave.status === 'approved' || leave.status === 'waiting_for_approve');
     });
 
     // ถ้ามีการลาที่อนุมัติแล้ว ให้แสดงเฉพาะข้อมูลการลา
@@ -629,19 +632,47 @@ export default function EmployeeCalendarPage() {
     }
 
     // ถ้าไม่มีการลา ตรวจสอบสถานะการทำงานและ OT
-    const localDateStr = date.toISOString().split('T')[0];
+    const dateObj = new Date(date);
+    dateObj.setHours(0, 0, 0, 0);
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    const localDateStr = `${year}-${month}-${day}`;
+    
+    // สร้าง console.log เพื่อตรวจสอบวันที่
+    console.log(`Checking status for employee ${employeeId} on date: ${localDateStr}`);
     
     const employeeWorkStatus = workStatuses.find(workStatus => {
       const wsDate = new Date(workStatus.date);
-      const wsDateStr = wsDate.toISOString().split('T')[0];
+      wsDate.setHours(0, 0, 0, 0);
+      const wsYear = wsDate.getFullYear();
+      const wsMonth = String(wsDate.getMonth() + 1).padStart(2, '0');
+      const wsDay = String(wsDate.getDate()).padStart(2, '0');
+      const wsDateStr = `${wsYear}-${wsMonth}-${wsDay}`;
+      
       return workStatus.employeeId === employeeId && wsDateStr === localDateStr;
     });
     
     const employeeOvertime = overtimes.find(overtime => {
       const otDate = new Date(overtime.date);
-      const otDateStr = otDate.toISOString().split('T')[0];
-      return overtime.employeeId === employeeId && otDateStr === localDateStr;
+      otDate.setHours(0, 0, 0, 0);
+      const otYear = otDate.getFullYear();
+      const otMonth = String(otDate.getMonth() + 1).padStart(2, '0');
+      const otDay = String(otDate.getDate()).padStart(2, '0');
+      const otDateStr = `${otYear}-${otMonth}-${otDay}`;
+      
+      return overtime.employeeId === employeeId && otDateStr === localDateStr &&
+             (overtime.status === 'approved' || overtime.status === 'waiting_for_approve');
     });
+    
+    // แสดง console.log เพื่อตรวจสอบข้อมูลที่พบ
+    if (employeeWorkStatus) {
+      console.log(`Found work status for ${employeeId} on ${localDateStr}: ${employeeWorkStatus.status}`);
+    }
+    
+    if (employeeOvertime) {
+      console.log(`Found overtime for ${employeeId} on ${localDateStr}: ${employeeOvertime.hours} hours`);
+    }
 
     // ถ้ามีทั้ง work status และ OT
     if (employeeWorkStatus && employeeOvertime) {
@@ -652,7 +683,7 @@ export default function EmployeeCalendarPage() {
         relatedStatuses: [{
           type: 'overtime',
           status: employeeOvertime.status,
-          hours: employeeOvertime.totalHours,
+          hours: employeeOvertime.hours || employeeOvertime.totalHours || 0,
           data: employeeOvertime
         }]
       };
@@ -673,7 +704,7 @@ export default function EmployeeCalendarPage() {
       return {
         type: 'overtime',
         status: employeeOvertime.status,
-        hours: employeeOvertime.totalHours,
+        hours: employeeOvertime.hours || employeeOvertime.totalHours || 0,
         data: employeeOvertime,
         relatedStatuses: []
       };

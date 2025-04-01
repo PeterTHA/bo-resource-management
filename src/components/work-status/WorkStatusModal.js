@@ -284,16 +284,18 @@ export default function WorkStatusModal({ isOpen, onClose, employee, date, onSav
             <div className="grid grid-cols-2 gap-4">
               <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                 <div className="text-sm text-gray-500 dark:text-gray-400">จำนวนชั่วโมงทำงานล่วงเวลา</div>
-                <div className="font-medium mt-1">{overtimeData.totalHours || overtimeData.hours || 0} ชั่วโมง</div>
+                <div className="font-medium mt-1">
+                  {overtimeData.hours || overtimeData.totalHours || 0} ชั่วโมง
+                </div>
               </div>
               <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                 <div className="text-sm text-gray-500 dark:text-gray-400">สถานะ</div>
                 <div className="font-medium mt-1">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium
-                    ${overtimeData.status === 'อนุมัติ' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
-                      overtimeData.status === 'ไม่อนุมัติ' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
-                      'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'}`}>
-                    {overtimeData.status}
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                    {overtimeData.status === 'approved' ? 'อนุมัติแล้ว' : 
+                     overtimeData.status === 'waiting_for_approve' ? 'รออนุมัติ' : 
+                     overtimeData.status === 'rejected' ? 'ไม่อนุมัติ' : 
+                     overtimeData.status}
                   </span>
                 </div>
               </div>

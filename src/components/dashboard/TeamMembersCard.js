@@ -15,11 +15,10 @@ export function TeamMembersCard() {
   const [error, setError] = useState(null);
   const [teamLeaves, setTeamLeaves] = useState([]);
   
-  // ใช้วันที่ปัจจุบันในรูปแบบที่เหมาะสมสำหรับการเปรียบเทียบ (แก้ไขปัญหา timezone)
+  // ใช้วันที่ปัจจุบันในรูปแบบที่เหมาะสมสำหรับการเปรียบเทียบ
   const getCurrentDateFormatted = () => {
     const now = new Date();
     const year = now.getFullYear();
-    // เพิ่ม 0 ข้างหน้าถ้าเดือนหรือวันเป็นเลขเดียว
     const month = String(now.getMonth() + 1).padStart(2, '0');
     const day = String(now.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
@@ -27,8 +26,9 @@ export function TeamMembersCard() {
   
   const [currentDate] = useState(getCurrentDateFormatted());
   
-  // เพิ่มฟังก์ชันเพื่อแปลงวันที่ให้เป็นรูปแบบเดียวกัน
+  // ฟังก์ชันเพื่อแปลงวันที่ให้เป็นรูปแบบเดียวกัน
   const formatDateForComparison = (dateString) => {
+    if (!dateString) return "";
     const date = new Date(dateString);
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -51,10 +51,6 @@ export function TeamMembersCard() {
           throw new Error(membersData.message);
         }
         
-        // แสดงข้อมูลทีมทั้งหมดและวันที่ปัจจุบัน
-        console.log('Team members data:', membersData.data);
-        console.log('Current date for comparison:', currentDate);
-        
         if (isMounted) {
           setTeamMembers(membersData.data);
         }
@@ -69,8 +65,6 @@ export function TeamMembersCard() {
             const activeLeaves = calendarData.data.leaves.filter(leave => 
               leave.status === 'approved' || leave.status === 'waiting_for_approve'
             );
-            
-            console.log('Active leaves today:', activeLeaves);
             
             if (isMounted) {
               setTeamLeaves(activeLeaves);
@@ -114,16 +108,10 @@ export function TeamMembersCard() {
     
     // ค้นหาสถานะการทำงานของวันนี้โดยเปรียบเทียบวันที่อย่างถูกต้อง
     const todayStatus = workStatuses.find(status => {
+      if (!status.date) return false;
       const statusDate = formatDateForComparison(status.date);
       return statusDate === currentDate;
     });
-    
-    // แสดงข้อมูลเพื่อการตรวจสอบ
-    if (todayStatus) {
-      console.log(`Found today's status: ${todayStatus.status} for date ${todayStatus.date}`);
-    } else {
-      console.log(`No status found for today (${currentDate}). Using latest status.`);
-    }
     
     // ถ้ามีสถานะของวันนี้ให้ใช้ค่านั้น ถ้าไม่มีให้ใช้สถานะล่าสุด
     return todayStatus ? todayStatus.status : workStatuses[0].status;
@@ -235,17 +223,11 @@ export function TeamMembersCard() {
         <div className="space-y-3">
           <div className="grid grid-cols-1 gap-3">
             {teamMembers.map((member, index) => {
-              // แสดงข้อมูลสมาชิกแต่ละคนเพื่อการตรวจสอบ
-              console.log(`Rendering member #${index + 1}:`, member.firstName, member.lastName);
-              
               // ตรวจสอบว่ามีการลาในวันนี้หรือไม่
               const leaveToday = getEmployeeLeaveToday(member.id);
-              console.log(`Leave today for ${member.firstName}:`, leaveToday ? 'Yes' : 'No');
               
               // ดึงสถานะการทำงานล่าสุดของวันนี้
               let status = getTodayWorkStatus(member.workStatuses);
-              console.log(`Original work status for ${member.firstName}:`, status);
-              
               let statusText = getWorkStatusText(status);
               let colorClass = getWorkStatusColor(status);
               
@@ -254,11 +236,7 @@ export function TeamMembersCard() {
                 status = 'LEAVE';
                 statusText = 'Leave';
                 colorClass = getWorkStatusColor('LEAVE');
-                console.log(`Status changed to LEAVE for ${member.firstName} due to leave`);
               }
-              
-              // แสดงสถานะสุดท้ายที่จะใช้
-              console.log(`Final status for ${member.firstName}:`, status);
               
               return (
                 <div
