@@ -42,6 +42,9 @@ export default function OvertimePage() {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showRejectCancelModal, setShowRejectCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  const [showApproveModal, setShowApproveModal] = useState(false);
+  const [approveComment, setApproveComment] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -95,19 +98,17 @@ export default function OvertimePage() {
           // คำนวณจำนวนข้อมูลแต่ละสถานะ
           const counts = {
             all: data.data.length,
-            pending: data.data.filter(overtime => overtime.status === 'รออนุมัติ').length,
+            pending: data.data.filter(overtime => overtime.status === 'waiting_for_approve').length,
             approved: data.data.filter(overtime => 
-              overtime.status === 'อนุมัติ'
+              overtime.status === 'approved'
             ).length,
-            rejected: data.data.filter(overtime => overtime.status === 'ไม่อนุมัติ').length,
+            rejected: data.data.filter(overtime => overtime.status === 'rejected').length,
             cancelled: data.data.filter(overtime => 
-              overtime.status === 'ยกเลิก' || 
-              overtime.isCancelled || 
-              overtime.cancelledById !== null ||
-              overtime.cancelStatus === 'อนุมัติ'
+              overtime.status === 'canceled' || 
+              overtime.isCancelled === true
             ).length,
             pendingCancel: data.data.filter(overtime => 
-              overtime.status === 'อนุมัติ' && overtime.cancelStatus === 'รออนุมัติ'
+              overtime.status === 'approved' && overtime.cancelStatus === 'waiting_for_approve'
             ).length
           };
           setStatusCounts(counts);
@@ -141,21 +142,9 @@ export default function OvertimePage() {
       const data = await res.json();
       
       if (data.success) {
-        setOvertimes(overtimes.filter(overtime => overtime.id !== id));
         setSuccess('ลบข้อมูลการทำงานล่วงเวลาเรียบร้อยแล้ว');
-        
-        // อัปเดตสถิติ
-        setStatusCounts(prev => {
-          const deletedOvertime = overtimes.find(overtime => overtime.id === id);
-          const status = deletedOvertime?.status === 'รออนุมัติ' ? 'pending' : 
-                         deletedOvertime?.status === 'อนุมัติ' ? 'approved' : 'rejected';
-          
-          return {
-            ...prev,
-            all: prev.all - 1,
-            [status]: prev[status] - 1
-          };
-        });
+        // รีเฟรชข้อมูลการทำงานล่วงเวลา
+        fetchOvertimes();
       } else {
         setError(data.message || 'เกิดข้อผิดพลาดในการลบข้อมูลการทำงานล่วงเวลา');
       }
@@ -167,60 +156,86 @@ export default function OvertimePage() {
     }
   };
 
-  const handleApprove = async (id) => {
-    if (!confirm('คุณต้องการอนุมัติการทำงานล่วงเวลานี้ใช่หรือไม่?')) {
-      return;
+  const handleApprove = async (overtimeId, comment = '') => {
+    try {
+      if (!showApproveModal) {
+        setSelectedOvertimeId(overtimeId);
+        setShowApproveModal(true);
+        return;
+      }
+
+      setIsSubmitting(true);
+      setError('');
+      setSuccess('');
+
+      const response = await fetch(`/api/overtime/${overtimeId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'approve',
+          comment: approveComment
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setSuccess('อนุมัติการทำงานล่วงเวลาเรียบร้อยแล้ว');
+        // รีเฟรชข้อมูลการทำงานล่วงเวลา
+        fetchOvertimes();
+        setShowApproveModal(false);
+        setApproveComment('');
+      } else {
+        setError(result.message || 'เกิดข้อผิดพลาดในการอนุมัติการทำงานล่วงเวลา');
+      }
+    } catch (error) {
+      setError('เกิดข้อผิดพลาดในการอนุมัติการทำงานล่วงเวลา');
+      console.error('Error approving overtime:', error);
+    } finally {
+      setIsSubmitting(false);
     }
+  };
+
+  const handleReject = async (e) => {
+    e.preventDefault();
     
     try {
-      setActionLoading(true);
-      const res = await fetch(`/api/overtime/${id}`, {
+      setIsSubmitting(true);
+      setError('');
+      setSuccess('');
+      
+      const response = await fetch(`/api/overtime/${selectedOvertimeId}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          status: 'อนุมัติ',
-          approvedById: session.user.id,
-          approvedAt: new Date().toISOString()
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'reject',
+          comment: rejectReason
         }),
       });
       
-      const data = await res.json();
+      const result = await response.json();
       
-      if (data.success) {
-        // อัปเดตข้อมูลในรายการ
-        setOvertimes(overtimes.map(overtime => 
-          overtime.id === id ? { 
-            ...overtime, 
-            status: 'อนุมัติ',
-            approvedById: session.user.id,
-            approvedBy: {
-              id: session.user.id,
-              firstName: session.user.firstName || session.user.name?.split(' ')[0] || '',
-              lastName: session.user.lastName || session.user.name?.split(' ')[1] || '',
-            },
-            approvedAt: new Date().toISOString()
-          } : overtime
-        ));
-        
-        setSuccess('อนุมัติการทำงานล่วงเวลาเรียบร้อยแล้ว');
-        
-        // อัปเดตสถิติ
-        setStatusCounts(prev => ({
-          ...prev,
-          pending: prev.pending - 1,
-          approved: prev.approved + 1
-        }));
+      if (result.success) {
+        setSuccess('ไม่อนุมัติการทำงานล่วงเวลาเรียบร้อยแล้ว');
+        // รีเฟรชข้อมูลการทำงานล่วงเวลา
+        fetchOvertimes();
+        setShowRejectModal(false);
+        setRejectReason('');
       } else {
-        setError(data.message || 'เกิดข้อผิดพลาดในการอัปเดตสถานะการทำงานล่วงเวลา');
+        setError(result.message || 'เกิดข้อผิดพลาดในการไม่อนุมัติการทำงานล่วงเวลา');
       }
     } catch (error) {
-      setError('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์');
-      console.error(error);
+      setError('เกิดข้อผิดพลาดในการไม่อนุมัติการทำงานล่วงเวลา');
+      console.error('Error rejecting overtime:', error);
     } finally {
-      setActionLoading(false);
+      setIsSubmitting(false);
     }
+  };
+
+  const handleShowApproveModal = (id) => {
+    setSelectedOvertimeId(id);
+    setApproveComment('');
+    setShowApproveModal(true);
   };
 
   const handleShowRejectModal = (id) => {
@@ -235,8 +250,8 @@ export default function OvertimePage() {
     setShowCancelModal(true);
   };
 
-  const handleReject = async () => {
-    if (!selectedOvertimeId) return;
+  const handleRejectCancel = async () => {
+    if (!selectedOvertimeId || !cancelReason.trim()) return;
     
     try {
       setActionLoading(true);
@@ -246,45 +261,27 @@ export default function OvertimePage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ 
-          status: 'ไม่อนุมัติ',
-          approvedById: session.user.id,
-          comment: rejectReason || null
+          action: 'reject_cancel',
+          comment: cancelReason.trim() || null
         }),
       });
       
       const data = await res.json();
       
       if (data.success) {
-        // อัปเดตข้อมูลในรายการ
-        setOvertimes(overtimes.map(overtime => 
-          overtime.id === selectedOvertimeId ? { 
-            ...overtime, 
-            status: 'ไม่อนุมัติ',
-            approvedBy: {
-              id: session.user.id,
-              firstName: session.user.firstName || session.user.name?.split(' ')[0] || '',
-              lastName: session.user.lastName || session.user.name?.split(' ')[1] || '',
-            },
-            approvedAt: new Date().toISOString(),
-            comment: rejectReason || null
-          } : overtime
-        ));
-        
-        setSuccess('ปฏิเสธการทำงานล่วงเวลาเรียบร้อยแล้ว');
-        
-        // อัปเดตสถิติ
-        setStatusCounts(prev => ({
-          ...prev,
-          pending: prev.pending - 1,
-          rejected: prev.rejected + 1
-        }));
-        
+        setSuccess('ปฏิเสธการยกเลิกการทำงานล่วงเวลาเรียบร้อยแล้ว');
+        // รีเฟรชข้อมูลการทำงานล่วงเวลา
         // ปิด modal
-        setShowRejectModal(false);
+        setShowRejectCancelModal(false);
         setSelectedOvertimeId(null);
-        setRejectReason('');
+        setCancelReason('');
+        
+        // เนื่องจากเปลี่ยนแปลงข้อมูล ให้รีโหลดหน้า
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
       } else {
-        setError(data.message || 'เกิดข้อผิดพลาดในการอัปเดตสถานะการทำงานล่วงเวลา');
+        setError(data.message || 'เกิดข้อผิดพลาดในการปฏิเสธการยกเลิกการทำงานล่วงเวลา');
       }
     } catch (error) {
       setError('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์');
@@ -294,37 +291,96 @@ export default function OvertimePage() {
     }
   };
 
+  /**
+   * แปลงสถานะเป็นข้อความภาษาไทยสำหรับแสดงผล
+   */
+  const getStatusText = (status) => {
+    switch (status) {
+      case 'waiting_for_approve':
+        return 'รออนุมัติ';
+      case 'approved':
+        return 'อนุมัติ';
+      case 'rejected':
+        return 'ไม่อนุมัติ';
+      case 'canceled':
+        return 'ยกเลิกแล้ว';
+      default:
+        return status;
+    }
+  };
+
+  /**
+   * แปลงสถานะการยกเลิกเป็นข้อความภาษาไทยสำหรับแสดงผล
+   */
+  const getCancelStatusText = (status) => {
+    switch (status) {
+      case 'waiting_for_approve':
+        return 'รออนุมัติการยกเลิก';
+      case 'approved':
+        return 'อนุมัติการยกเลิก';
+      case 'rejected':
+        return 'ไม่อนุมัติการยกเลิก';
+      default:
+        return '';
+    }
+  };
+
+  /**
+   * คืนสีของ badge ตามสถานะ
+   */
+  const getStatusBadgeClass = (status) => {
+    if (status === 'waiting_for_approve' || status === 'รออนุมัติ') return 'badge-warning';
+    if (status === 'approved' || status === 'อนุมัติ') return 'badge-success';
+    if (status === 'rejected' || status === 'ไม่อนุมัติ') return 'badge-error';
+    if (status === 'canceled' || status === 'ยกเลิกแล้ว') return 'badge-info';
+    return 'badge-neutral'; // คืนค่าเริ่มต้นถ้าไม่ตรงกับเงื่อนไข
+  };
+
+  /**
+   * คืนสีของ badge ตามสถานะการยกเลิก
+   */
+  const getCancelStatusBadgeClass = (status) => {
+    if (status === 'waiting_for_approve') return 'badge-warning';
+    if (status === 'approved') return 'badge-info';
+    if (status === 'rejected') return 'badge-error';
+    return 'badge-neutral';
+  };
+
   const filteredOvertimes = useMemo(() => {
-    let filtered = overtimes;
-    
-    // กรองตามสถานะ
-    if (filter === 'pending') {
-      filtered = overtimes.filter(overtime => overtime.status === 'รออนุมัติ');
-    } else if (filter === 'approved') {
-      filtered = overtimes.filter(overtime => 
-        overtime.status === 'อนุมัติ'
-      );
-    } else if (filter === 'rejected') {
-      filtered = overtimes.filter(overtime => overtime.status === 'ไม่อนุมัติ');
-    } else if (filter === 'cancelled') {
-      filtered = overtimes.filter(overtime => 
-        overtime.status === 'ยกเลิก' || 
-        overtime.isCancelled || 
-        overtime.cancelledById !== null ||
-        overtime.cancelStatus === 'อนุมัติ'
-      );
-    } else if (filter === 'pendingCancel') {
-      filtered = overtimes.filter(overtime => 
-        overtime.status === 'อนุมัติ' && overtime.cancelStatus === 'รออนุมัติ'
-      );
-    }
-    
-    // กรองตามพนักงาน
-    if (employeeFilter !== 'all') {
-      filtered = filtered.filter(overtime => overtime.employeeId === employeeFilter);
-    }
-    
-    return filtered;
+    return overtimes.filter(overtime => {
+      // ตรวจสอบว่ารายการอยู่ในสถานะรอยกเลิกหรือไม่ โดยดูจาก approvals
+      const isPendingCancel = (() => {
+        if (!overtime.approvals || !Array.isArray(overtime.approvals)) return false;
+        
+        // เรียงลำดับตาม createdAt จากใหม่ไปเก่า
+        const sortedApprovals = [...overtime.approvals].sort((a, b) => 
+          new Date(b.createdAt) - new Date(a.createdAt)
+        );
+        
+        // หาการกระทำล่าสุดที่เกี่ยวข้องกับการขอยกเลิก
+        const latestCancelRelatedAction = sortedApprovals.find(a => 
+          ['request_cancel', 'approve_cancel', 'reject_cancel'].includes(a.type) && 
+          a.status === 'completed'
+        );
+        
+        // ถ้ามีการขอยกเลิกและเป็นแอคชั่นล่าสุด และไม่มีการดำเนินการต่อ จะถือว่ากำลังรอยกเลิก
+        return latestCancelRelatedAction && 
+               latestCancelRelatedAction.type === 'request_cancel' &&
+               overtime.status === 'approved';
+      })();
+      
+      // กรองตามสถานะ
+      if (filter === 'pending' && overtime.status !== 'waiting_for_approve') return false;
+      if (filter === 'approved' && (overtime.status !== 'approved' || isPendingCancel)) return false;
+      if (filter === 'rejected' && overtime.status !== 'rejected') return false;
+      if (filter === 'cancelled' && overtime.status !== 'canceled' && !overtime.isCancelled) return false;
+      if (filter === 'pendingCancel' && !isPendingCancel) return false;
+      
+      // กรองตามพนักงาน
+      if (employeeFilter !== 'all' && overtime.employeeId !== employeeFilter) return false;
+      
+      return true;
+    }).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); // เรียงตามวันที่สร้าง ล่าสุดอยู่บนสุด
   }, [overtimes, filter, employeeFilter]);
 
   const formatDate = (dateString) => {
@@ -365,12 +421,12 @@ export default function OvertimePage() {
     if (!session || !overtime) return false;
     
     // แอดมินอนุมัติได้ทุกรายการที่มีสถานะเป็น "รออนุมัติ"
-    if (session.user.role === 'admin' && overtime.status === 'รออนุมัติ') {
+    if (session.user.role === 'admin' && (overtime.status === 'waiting_for_approve' || overtime.status === 'รออนุมัติ')) {
       return true;
     }
     
     // หัวหน้างานอนุมัติได้ รวมถึงอนุมัติให้กับหัวหน้างานอื่นในทีมเดียวกัน และอนุมัติตัวเองด้วย
-    if (session.user.role === 'supervisor' && overtime.status === 'รออนุมัติ') {
+    if (session.user.role === 'supervisor' && (overtime.status === 'waiting_for_approve' || overtime.status === 'รออนุมัติ')) {
       // หากไม่มีข้อมูล departmentId ของพนักงาน จะอนุโลมให้หัวหน้างานอนุมัติได้
       if (!overtime.employee?.departmentId || !session.user.departmentId) {
         return true;
@@ -391,15 +447,15 @@ export default function OvertimePage() {
     
     // พนักงานลบของตัวเองได้เฉพาะเมื่อสถานะเป็น 'รออนุมัติ' เท่านั้น
     if ((session.user.id === overtime.employeeId) && 
-        overtime.status === 'รออนุมัติ' && 
-        overtime.cancelStatus !== 'รออนุมัติ') {
+        overtime.status === 'waiting_for_approve' && 
+        overtime.cancelStatus !== 'waiting_for_approve') {
       return true;
     }
     
     // แอดมินก็ลบได้เฉพาะเมื่อสถานะเป็น 'รออนุมัติ' เท่านั้น
     if (session.user.role === 'admin' && 
-        overtime.status === 'รออนุมัติ' && 
-        overtime.cancelStatus !== 'รออนุมัติ') {
+        overtime.status === 'waiting_for_approve' && 
+        overtime.cancelStatus !== 'waiting_for_approve') {
       return true;
     }
     
@@ -411,12 +467,12 @@ export default function OvertimePage() {
     if (!session || !overtime) return false;
     
     // พนักงานแก้ไขข้อมูลของตัวเองได้ถ้ายังไม่อนุมัติ
-    if ((session.user.id === overtime.employeeId) && overtime.status === 'รออนุมัติ') {
+    if ((session.user.id === overtime.employeeId) && overtime.status === 'waiting_for_approve') {
       return true;
     }
     
     // แอดมินแก้ไขได้ทุกรายการที่ยังไม่อนุมัติ
-    if (session.user.role === 'admin' && overtime.status === 'รออนุมัติ') {
+    if (session.user.role === 'admin' && overtime.status === 'waiting_for_approve') {
       return true;
     }
     
@@ -427,13 +483,74 @@ export default function OvertimePage() {
   const canCancelRequest = (overtime) => {
     if (!session || !overtime) return false;
     
-    // สามารถขอยกเลิกได้ถ้าเป็นเจ้าของ หรือเป็นแอดมิน และสถานะเป็น "อนุมัติ" และ 
-    // ยังไม่มีการขอยกเลิก หรือ การขอยกเลิกถูกปฏิเสธไปแล้ว
+    // ตรวจสอบว่ามี approvals ข้อมูลและมีรูปแบบถูกต้อง
+    if (!overtime.approvals || !Array.isArray(overtime.approvals)) return false;
+    
+    // เรียงลำดับตาม createdAt จากใหม่ไปเก่า
+    const sortedApprovals = [...overtime.approvals].sort((a, b) => 
+      new Date(b.createdAt) - new Date(a.createdAt)
+    );
+    
+    // หาการกระทำล่าสุดที่เกี่ยวข้องกับการขอยกเลิก (ถ้ามี)
+    const latestCancelAction = sortedApprovals.find(a => 
+      ['request_cancel', 'approve_cancel', 'reject_cancel'].includes(a.type) && 
+      a.status === 'completed'
+    );
+    
+    // ถ้ามีคำขอยกเลิกล่าสุดที่รอพิจารณา ไม่แสดงปุ่มขอยกเลิก
+    if (latestCancelAction && latestCancelAction.type === 'request_cancel') {
+      return false;
+    }
+    
+    // สามารถขอยกเลิกได้ถ้า
+    // 1. เป็นเจ้าของหรือเป็นแอดมิน และ
+    // 2. สถานะเป็น "อนุมัติ" และ 
+    // 3. ไม่ได้ถูกยกเลิกไปแล้ว และ
+    // 4. ไม่มีการขอยกเลิก หรือ มีการปฏิเสธการยกเลิกแล้ว (latestCancelAction.type === 'reject_cancel')
     return (
       (session.user.id === overtime.employeeId || session.user.role === 'admin') && 
-      overtime.status === 'อนุมัติ' &&
-      (!overtime.cancelStatus || overtime.cancelStatus === 'ไม่อนุมัติ')
+      overtime.status === 'approved' &&
+      !overtime.isCancelled &&
+      (!latestCancelAction || latestCancelAction.type === 'reject_cancel')
     );
+  };
+
+  // ตรวจสอบว่าสามารถอนุมัติหรือปฏิเสธการยกเลิกได้หรือไม่
+  const canManageCancelRequest = (overtime) => {
+    if (!session || !overtime) return false;
+    
+    // ตรวจสอบว่ามีบทบาทที่เหมาะสม
+    const isAdmin = session.user.role === 'admin';
+    const isSupervisor = session.user.role === 'supervisor';
+    
+    // ถ้าไม่ใช่แอดมินหรือหัวหน้างาน ไม่สามารถจัดการคำขอยกเลิกได้
+    if (!isAdmin && !isSupervisor) return false;
+    
+    // ตรวจสอบว่ามี approvals ข้อมูลและมีรูปแบบถูกต้อง
+    if (!overtime.approvals || !Array.isArray(overtime.approvals)) return false;
+    
+    // เรียงลำดับตาม createdAt จากใหม่ไปเก่า
+    const sortedApprovals = [...overtime.approvals].sort((a, b) => 
+      new Date(b.createdAt) - new Date(a.createdAt)
+    );
+    
+    // หาการกระทำล่าสุดที่เกี่ยวข้องกับการขอยกเลิก
+    const latestCancelAction = sortedApprovals.find(a => 
+      ['request_cancel', 'approve_cancel', 'reject_cancel'].includes(a.type) && 
+      a.status === 'completed'
+    );
+    
+    // ถ้ามีคำขอยกเลิกล่าสุดที่รอพิจารณา
+    if (latestCancelAction && latestCancelAction.type === 'request_cancel') {
+      // หัวหน้างานต้องอยู่แผนกเดียวกับพนักงาน
+      if (isSupervisor) {
+        return !overtime.employee?.departmentId || !session.user.departmentId || 
+               overtime.employee?.departmentId === session?.user?.departmentId;
+      }
+      return true; // แอดมินสามารถจัดการได้เสมอ
+    }
+    
+    return false; // ไม่มีคำขอยกเลิกล่าสุดที่รอพิจารณา
   };
 
   // ฟังก์ชันสำหรับการขอยกเลิกการทำงานล่วงเวลา
@@ -448,40 +565,17 @@ export default function OvertimePage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ 
-          cancelStatus: 'รออนุมัติ',
-          cancelRequestById: session.user.id,
-          cancelRequestAt: new Date().toISOString(),
-          cancelReason: cancelReason.trim() || null
+          action: 'request_cancel',
+          reason: cancelReason.trim() || null
         }),
       });
       
       const data = await res.json();
       
       if (data.success) {
-        // อัปเดตข้อมูลในรายการ
-        setOvertimes(overtimes.map(overtime => 
-          overtime.id === selectedOvertimeId ? { 
-            ...overtime, 
-            cancelStatus: 'รออนุมัติ',
-            cancelReason: cancelReason.trim() || null,
-            cancelRequestAt: new Date().toISOString(),
-            cancelRequestBy: {
-              id: session.user.id,
-              firstName: session.user.firstName || session.user.name?.split(' ')[0] || '',
-              lastName: session.user.lastName || session.user.name?.split(' ')[1] || '',
-            }
-          } : overtime
-        ));
-        
         setSuccess('ส่งคำขอยกเลิกการทำงานล่วงเวลาเรียบร้อยแล้ว');
-        
-        // อัปเดตสถิติ
-        setStatusCounts(prev => ({
-          ...prev,
-          approved: prev.approved - 1,
-          pendingCancel: prev.pendingCancel + 1
-        }));
-        
+        // รีเฟรชข้อมูลการทำงานล่วงเวลา
+        fetchOvertimes();
         // ปิด modal
         setShowCancelModal(false);
         setSelectedOvertimeId(null);
@@ -511,39 +605,17 @@ export default function OvertimePage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ 
-          cancelStatus: 'อนุมัติ',
-          isCancelled: true,
-          cancelledById: session.user.id,
-          cancelledAt: new Date().toISOString()
+          action: 'approve_cancel',
+          comment: null
         }),
       });
       
       const data = await res.json();
       
       if (data.success) {
-        // อัปเดตข้อมูลในรายการ
-        setOvertimes(overtimes.map(overtime => 
-          overtime.id === id ? { 
-            ...overtime, 
-            cancelStatus: 'อนุมัติ',
-            isCancelled: true,
-            cancelledAt: new Date().toISOString(),
-            cancelledBy: {
-              id: session.user.id,
-              firstName: session.user.firstName || session.user.name?.split(' ')[0] || '',
-              lastName: session.user.lastName || session.user.name?.split(' ')[1] || '',
-            }
-          } : overtime
-        ));
-        
         setSuccess('อนุมัติการยกเลิกการทำงานล่วงเวลาเรียบร้อยแล้ว');
-        
-        // อัปเดตสถิติ
-        setStatusCounts(prev => ({
-          ...prev,
-          pendingCancel: prev.pendingCancel - 1,
-          cancelled: prev.cancelled + 1
-        }));
+        // รีเฟรชข้อมูลการทำงานล่วงเวลา
+        fetchOvertimes();
       } else {
         setError(data.message || 'เกิดข้อผิดพลาดในการอนุมัติการยกเลิกการทำงานล่วงเวลา');
       }
@@ -560,67 +632,6 @@ export default function OvertimePage() {
     setSelectedOvertimeId(id);
     setShowRejectCancelModal(true);
     setCancelReason('');
-  };
-
-  // ฟังก์ชันสำหรับการไม่อนุมัติการยกเลิก
-  const handleRejectCancel = async () => {
-    if (!selectedOvertimeId || !cancelReason.trim()) return;
-    
-    try {
-      setActionLoading(true);
-      const res = await fetch(`/api/overtime/${selectedOvertimeId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          cancelStatus: 'ไม่อนุมัติ',
-          cancelResponseById: session.user.id,
-          cancelResponseAt: new Date().toISOString(),
-          cancelResponseComment: cancelReason.trim() || null
-        }),
-      });
-      
-      const data = await res.json();
-      
-      if (data.success) {
-        // อัปเดตข้อมูลในรายการ
-        setOvertimes(overtimes.map(overtime => 
-          overtime.id === selectedOvertimeId ? { 
-            ...overtime, 
-            cancelStatus: 'ไม่อนุมัติ',
-            cancelResponseAt: new Date().toISOString(),
-            cancelResponseComment: cancelReason.trim() || null,
-            cancelResponseBy: {
-              id: session.user.id,
-              firstName: session.user.firstName || session.user.name?.split(' ')[0] || '',
-              lastName: session.user.lastName || session.user.name?.split(' ')[1] || '',
-            }
-          } : overtime
-        ));
-        
-        setSuccess('ปฏิเสธการยกเลิกการทำงานล่วงเวลาเรียบร้อยแล้ว');
-        
-        // อัปเดตสถิติ
-        setStatusCounts(prev => ({
-          ...prev,
-          pendingCancel: prev.pendingCancel - 1,
-          approved: prev.approved + 1 // กลับไปเป็นอนุมัติเหมือนเดิม
-        }));
-
-        // ปิด modal
-        setShowRejectCancelModal(false);
-        setSelectedOvertimeId(null);
-        setCancelReason('');
-      } else {
-        setError(data.message || 'เกิดข้อผิดพลาดในการปฏิเสธการยกเลิกการทำงานล่วงเวลา');
-      }
-    } catch (error) {
-      setError('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์');
-      console.error(error);
-    } finally {
-      setActionLoading(false);
-    }
   };
 
   if (status === 'loading' || loading) {
@@ -828,33 +839,42 @@ export default function OvertimePage() {
                 <div className="flex justify-between items-start">
                   <h2 className="card-title">ทำงานล่วงเวลา</h2>
                   <div className="flex flex-col gap-1 items-end">
-                    <div className={`badge ${
-                      overtime.status === 'อนุมัติ' ? 'badge-success' : 
-                      overtime.status === 'ไม่อนุมัติ' ? 'badge-error' : 
-                      'badge-warning'
-                    } badge-lg`}>
-                      {overtime.status}
-                    </div>
-                    
-                    {/* แสดงสถานะการยกเลิก */}
-                    {overtime.cancelStatus && (
-                      <div className={`badge ${
-                        overtime.cancelStatus === 'อนุมัติ' ? 'badge-info' : 
-                        overtime.cancelStatus === 'ไม่อนุมัติ' ? 'badge-error' : 
-                        'badge-warning'
-                      } badge-sm`}>
-                        {overtime.cancelStatus === 'อนุมัติ' ? 'ยกเลิกแล้ว' : 
-                         overtime.cancelStatus === 'ไม่อนุมัติ' ? 'ปฏิเสธการยกเลิก' : 
-                         'รอยกเลิก'}
-                      </div>
-                    )}
-
-                    {/* แสดงข้อความยกเลิกแล้วเมื่อ isCancelled เป็น true */}
-                    {(overtime.isCancelled || overtime.cancelStatus === 'อนุมัติ') && !overtime.cancelStatus && (
-                      <div className="badge badge-info badge-sm">
-                        ยกเลิกแล้ว
-                      </div>
-                    )}
+                    {/* แสดงสถานะการยกเลิกหรือรอยกเลิกถ้ามี */}
+                    {(() => {
+                      // ตรวจสอบสถานะการยกเลิกจาก approvals
+                      if (overtime.isCancelled) {
+                        return (
+                          <div className="badge badge-info badge-lg">ยกเลิกแล้ว</div>
+                        );
+                      }
+                      
+                      // ตรวจสอบสถานะรอยกเลิกจาก approvals
+                      if (overtime.approvals && Array.isArray(overtime.approvals)) {
+                        const sortedApprovals = [...overtime.approvals].sort((a, b) => 
+                          new Date(b.createdAt) - new Date(a.createdAt)
+                        );
+                        
+                        const latestCancelAction = sortedApprovals.find(a => 
+                          ['request_cancel', 'approve_cancel', 'reject_cancel'].includes(a.type) && 
+                          a.status === 'completed'
+                        );
+                        
+                        if (latestCancelAction && 
+                            latestCancelAction.type === 'request_cancel' && 
+                            overtime.status === 'approved') {
+                          return (
+                            <div className="badge badge-warning badge-lg">รออนุมัติการยกเลิก</div>
+                          );
+                        }
+                      }
+                      
+                      // แสดงสถานะปกติถ้าไม่มีการยกเลิก
+                      return (
+                        <div className={`badge ${getStatusBadgeClass(overtime.status)} badge-lg`}>
+                          {getStatusText(overtime.status)}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
                 
@@ -939,8 +959,8 @@ export default function OvertimePage() {
                   
                   {/* ปุ่มไม่อนุมัติ */}
                   {canApprove(overtime) && (
-                    <button 
-                      className="btn btn-error btn-sm"
+                    <button
+                      className="btn btn-error btn-sm text-white"
                       onClick={(e) => {
                         e.stopPropagation(); // ป้องกันการนำทางเมื่อคลิกปุ่ม
                         handleShowRejectModal(overtime.id);
@@ -980,11 +1000,7 @@ export default function OvertimePage() {
                   )}
                   
                   {/* ปุ่มอนุมัติการยกเลิก */}
-                  {overtime.cancelStatus === 'รออนุมัติ' && 
-                   (session?.user?.role === 'admin' || 
-                    (session?.user?.role === 'supervisor' && 
-                     (!overtime.employee?.departmentId || !session.user.departmentId || 
-                      overtime.employee?.departmentId === session?.user?.departmentId))) && (
+                  {canManageCancelRequest(overtime) && (
                     <button 
                       className="btn btn-success btn-sm"
                       onClick={(e) => {
@@ -998,11 +1014,7 @@ export default function OvertimePage() {
                   )}
 
                   {/* ปุ่มไม่อนุมัติการยกเลิก */}
-                  {overtime.cancelStatus === 'รออนุมัติ' && 
-                   (session?.user?.role === 'admin' || 
-                    (session?.user?.role === 'supervisor' && 
-                     (!overtime.employee?.departmentId || !session.user.departmentId || 
-                      overtime.employee?.departmentId === session?.user?.departmentId))) && (
+                  {canManageCancelRequest(overtime) && (
                     <button 
                       className="btn btn-error btn-sm"
                       onClick={(e) => {
@@ -1026,7 +1038,71 @@ export default function OvertimePage() {
         </div>
       )}
 
-      {/* Modal สำหรับไม่อนุมัติการทำงานล่วงเวลา */}
+      {/* Approve Modal */}
+      {showApproveModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+              <div className="absolute inset-0 bg-gray-500 dark:bg-gray-900 opacity-75"></div>
+            </div>
+            
+            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            
+            <div className="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+              <div className="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div className="sm:flex sm:items-start">
+                  <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-green-100 dark:bg-green-900 sm:mx-0 sm:h-10 sm:w-10">
+                    <FiCheckCircle className="h-6 w-6 text-green-600 dark:text-green-300" />
+                  </div>
+                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                    <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-gray-100" id="modal-title">
+                      อนุมัติการทำงานล่วงเวลา
+                    </h3>
+                    <div className="mt-2">
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        คุณต้องการอนุมัติการทำงานล่วงเวลานี้ใช่หรือไม่
+                      </p>
+                      <div className="mt-4">
+                        <label htmlFor="approve-comment" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          ความคิดเห็น (ไม่บังคับ)
+                        </label>
+                        <textarea
+                          id="approve-comment"
+                          name="approve-comment"
+                          rows="3"
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                          value={approveComment}
+                          onChange={(e) => setApproveComment(e.target.value)}
+                        ></textarea>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <button
+                  type="button"
+                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm"
+                  onClick={(e) => handleApprove(selectedOvertimeId, approveComment)}
+                  disabled={actionLoading}
+                >
+                  {actionLoading ? 'กำลังดำเนินการ...' : 'อนุมัติ'}
+                </button>
+                <button
+                  type="button"
+                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700"
+                  onClick={() => setShowApproveModal(false)}
+                  disabled={actionLoading}
+                >
+                  ยกเลิก
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject Modal */}
       {showRejectModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
           <div className="bg-base-100 rounded-lg shadow-xl max-w-md w-full p-5">
@@ -1057,18 +1133,18 @@ export default function OvertimePage() {
                 ยกเลิก
               </button>
               <button
-                onClick={handleReject}
+                onClick={(e) => handleReject(e)}
                 className="btn btn-error text-white"
-                disabled={actionLoading}
+                disabled={isSubmitting}
               >
-                ยืนยันการไม่อนุมัติ
+                {isSubmitting ? 'กำลังดำเนินการ...' : 'ไม่อนุมัติ'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal สำหรับการขอยกเลิกการทำงานล่วงเวลา */}
+      {/* Cancel Modal */}
       {showCancelModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
           <div className="bg-base-100 rounded-lg shadow-xl max-w-md w-full p-5">
@@ -1110,7 +1186,7 @@ export default function OvertimePage() {
         </div>
       )}
 
-      {/* Modal สำหรับไม่อนุมัติการยกเลิกการทำงานล่วงเวลา */}
+      {/* Reject Cancel Modal */}
       {showRejectCancelModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
           <div className="bg-base-100 rounded-lg shadow-xl max-w-md w-full p-5">

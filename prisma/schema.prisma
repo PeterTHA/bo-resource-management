@@ -32,11 +32,8 @@ model Employee {
   teamData          Team?       @relation(fields: [teamId], references: [id])
   leaves            Leave[]     @relation("EmployeeLeaves")
   leaveApprovals    LeaveApproval[] @relation("EmployeeLeaveApprovals")
-  approvedOvertimes Overtime[]  @relation("OvertimeApprover")
+  overtimeApprovals OvertimeApproval[] @relation("EmployeeOvertimeApprovals")
   overtimes         Overtime[]  @relation("EmployeeOvertimes")
-  cancelRequestOvertimes Overtime[] @relation("OvertimeCancelRequester")
-  cancelledOvertimes Overtime[] @relation("OvertimeCanceller")
-  cancelResponseOvertimes Overtime[] @relation("OvertimeCancelResponder")
   workStatuses      WorkStatus[] @relation("EmployeeWorkStatuses")
   createdWorkStatuses WorkStatus[] @relation("WorkStatusCreator")
 
@@ -86,29 +83,29 @@ model Overtime {
   endTime           String    @map("end_time")
   totalHours        Float     @map("total_hours")
   reason            String
-  status            String    @default("รออนุมัติ")
-  approvedById      String?   @map("approved_by_id")
-  approvedAt        DateTime? @map("approved_at")
-  comment           String?
-  cancelRequestById String?   @map("cancel_request_by_id")
-  cancelRequestAt   DateTime? @map("cancel_request_at")
-  cancelReason      String?   @map("cancel_reason")
-  cancelledById     String?   @map("cancelled_by_id")
-  cancelledAt       DateTime? @map("cancelled_at")
-  cancelStatus      String?   @map("cancel_status")
-  isCancelled       Boolean   @default(false) @map("is_cancelled")
-  cancelResponseById String?  @map("cancel_response_by_id")
-  cancelResponseAt  DateTime? @map("cancel_response_at")
-  cancelResponseComment String? @map("cancel_response_comment")
+  status            String    @default("waiting_for_approve")
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
-  approvedBy        Employee? @relation("OvertimeApprover", fields: [approvedById], references: [id])
   employee          Employee  @relation("EmployeeOvertimes", fields: [employeeId], references: [id])
-  cancelRequestBy   Employee? @relation("OvertimeCancelRequester", fields: [cancelRequestById], references: [id])
-  cancelledBy       Employee? @relation("OvertimeCanceller", fields: [cancelledById], references: [id])
-  cancelResponseBy  Employee? @relation("OvertimeCancelResponder", fields: [cancelResponseById], references: [id])
+  approvals         OvertimeApproval[] @relation("OvertimeApprovals")
 
   @@map("overtimes")
+}
+
+model OvertimeApproval {
+  id                 String    @id @default(uuid())
+  overtimeId         String    @map("overtime_id")
+  employeeId         String    @map("employee_id")
+  type               String    // approve, reject, request_cancel, approve_cancel, reject_cancel
+  status             String    // completed, pending
+  reason             String?
+  comment            String?
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  overtime           Overtime  @relation("OvertimeApprovals", fields: [overtimeId], references: [id])
+  employee           Employee  @relation("EmployeeOvertimeApprovals", fields: [employeeId], references: [id])
+
+  @@map("overtime_approvals")
 }
 
 model Team {
