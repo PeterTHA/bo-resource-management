@@ -77,7 +77,8 @@ export async function GET() {
       rejected: overtimesByStatus.REJECTED.length,
       cancelled: overtimesByStatus.CANCELLED.length,
       total: overtimeSummary.length,
-      totalHours: overtimeSummary.reduce((sum, ot) => sum + (ot.totalHours || 0), 0)
+      totalHours: overtimeSummary.reduce((sum, ot) => sum + (ot.totalHours || 0), 0),
+      approvedHours: overtimesByStatus.APPROVED.reduce((sum, ot) => sum + (ot.totalHours || 0), 0)
     };
 
     return NextResponse.json({

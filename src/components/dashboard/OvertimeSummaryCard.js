@@ -161,7 +161,7 @@ export function OvertimeSummaryCard() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="rounded-md border p-3">
               <div className="text-sm font-medium text-muted-foreground">รวม</div>
-              <div className="text-2xl font-bold">{overtimeData.stats.total}</div>
+              <div className="text-2xl font-bold">{overtimeData.stats.approved + overtimeData.stats.pending}</div>
             </div>
             <div className="rounded-md border p-3">
               <div className="text-sm font-medium text-muted-foreground">รอ</div>
@@ -173,7 +173,7 @@ export function OvertimeSummaryCard() {
             </div>
             <div className="rounded-md border p-3">
               <div className="text-sm font-medium text-muted-foreground">ชั่วโมงรวม</div>
-              <div className="text-2xl font-bold text-blue-500">{overtimeData.stats.totalHours}</div>
+              <div className="text-2xl font-bold text-blue-500">{overtimeData.stats.approvedHours || 0}</div>
             </div>
           </div>
 
@@ -199,7 +199,7 @@ export function OvertimeSummaryCard() {
                         <div 
                           className="bg-blue-600 h-1.5 rounded-full" 
                           style={{ 
-                            width: `${Math.min(100, (stat.hours / (overtimeData.stats.totalHours || 1)) * 100)}%` 
+                            width: `${Math.min(100, (stat.hours / (overtimeData.stats.approvedHours || 1)) * 100)}%` 
                           }}
                         />
                       </div>
