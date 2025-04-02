@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -9,7 +9,7 @@ import { redirect } from 'next/navigation';
 
 // เปลี่ยนจาก Heroicons เป็น react-icons
 import { FiCheckCircle, FiXCircle, FiTrash2, FiPlus, FiFilter, FiCalendar, FiUser, FiClock, 
-         FiFileText, FiDownload, FiInfo, FiAlertTriangle, FiMessageCircle, FiEdit, FiEye, FiChevronUp, FiChevronDown, FiXSquare, FiX, FiCheck, FiPaperclip, FiImage, FiArchive, FiUploadCloud, FiUpload, FiFile } from 'react-icons/fi';
+         FiFileText, FiDownload, FiInfo, FiAlertTriangle, FiMessageCircle, FiEdit, FiEye, FiChevronUp, FiChevronDown, FiXSquare, FiX, FiCheck, FiPaperclip, FiImage, FiArchive, FiUploadCloud, FiUpload, FiFile, FiSave } from 'react-icons/fi';
 import { LoadingPage, LoadingButton } from '../../components/ui/LoadingSpinner';
 import ErrorMessage from '../../components/ui/ErrorMessage';
 import {
@@ -44,6 +44,7 @@ import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import { th } from "date-fns/locale";
 import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 // เพิ่มฟังก์ชันตรวจสอบว่าเป็นรูปภาพจาก mock-images หรือไม่
 const isMockImage = (src) => {
@@ -106,6 +107,22 @@ export default function LeavesPage() {
     leaveFormat: 'เต็มวัน',
     attachments: []
   });
+  
+  // Add Leave sheet states
+  const [isAddSheetOpen, setIsAddSheetOpen] = useState(false);
+  const [addFormData, setAddFormData] = useState({
+    leaveType: 'ลาป่วย',
+    startDate: '',
+    endDate: '',
+    leaveFormat: 'เต็มวัน',
+    reason: '',
+  });
+  const [addFilesToUpload, setAddFilesToUpload] = useState([]);
+  const [addTotalDays, setAddTotalDays] = useState(0);
+  const [addLoading, setAddLoading] = useState(false);
+  const [addUploading, setAddUploading] = useState(false);
+  const [addError, setAddError] = useState('');
+  const [addSuccess, setAddSuccess] = useState('');
   
   // ดึงข้อมูล session
   const { data: session } = useSession({
@@ -1381,6 +1398,195 @@ export default function LeavesPage() {
     setEditFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  // คำนวณจำนวนวันลาทั้งหมดสำหรับฟอร์มเพิ่มการลา
+  const calculateAddTotalDays = useCallback(() => {
+    if (!addFormData.startDate || !addFormData.endDate) return 0;
+
+    const start = new Date(addFormData.startDate);
+    const end = new Date(addFormData.endDate);
+    
+    // ถ้าวันที่สิ้นสุดน้อยกว่าวันที่เริ่ม ไม่คำนวณ
+    if (end < start) return 0;
+    
+    // คำนวณจำนวนวัน
+    const diffTime = Math.abs(end - start);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // รวมวันเริ่มต้นและวันสิ้นสุด
+    
+    // ถ้าเป็นการลาครึ่งวัน
+    if (addFormData.leaveFormat.includes('ครึ่งวัน')) {
+      // กรณีลาครึ่งวันแต่กรอกหลายวัน ให้แสดงเฉพาะ 0.5 วัน
+      return start.getTime() === end.getTime() ? 0.5 : diffDays;
+    }
+    
+    return diffDays;
+  }, [addFormData.startDate, addFormData.endDate, addFormData.leaveFormat]);
+
+  useEffect(() => {
+    setAddTotalDays(calculateAddTotalDays());
+  }, [addFormData.startDate, addFormData.endDate, addFormData.leaveFormat, calculateAddTotalDays]);
+
+  // จัดการการเปลี่ยนแปลงฟอร์มเพิ่มการลา
+  const handleAddFormChange = (e) => {
+    const { name, value } = e.target;
+    setAddFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+    
+    // ถ้าเปลี่ยนเป็นการลาครึ่งวัน ให้กำหนดวันสิ้นสุดเป็นวันเดียวกับวันเริ่มต้น
+    if (name === 'leaveFormat' && value.includes('ครึ่งวัน') && addFormData.startDate) {
+      setAddFormData((prev) => ({
+        ...prev,
+        endDate: prev.startDate,
+      }));
+    }
+  };
+
+  // จัดการการเพิ่มไฟล์
+  const handleAddFileChange = (e) => {
+    const newFiles = Array.from(e.target.files);
+    setAddFilesToUpload(prev => [...prev, ...newFiles]);
+  };
+
+  // ลบไฟล์จากรายการที่จะอัปโหลด
+  const removeAddFile = (index) => {
+    setAddFilesToUpload(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // อัปโหลดไฟล์สำหรับการเพิ่มการลา
+  const uploadAddFiles = async () => {
+    if (addFilesToUpload.length === 0) return [];
+    
+    try {
+      setAddUploading(true);
+      
+      const formData = new FormData();
+      formData.append('type', 'leave');
+      
+      // เพิ่มไฟล์ทั้งหมดที่ต้องการอัปโหลด
+      addFilesToUpload.forEach(file => {
+        formData.append('files', file);
+      });
+      
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.message || 'อัปโหลดไฟล์ไม่สำเร็จ');
+      }
+      
+      return result.files.map(file => file.url);
+    } catch (error) {
+      console.error('Error uploading files:', error);
+      throw error;
+    } finally {
+      setAddUploading(false);
+    }
+  };
+
+  // บันทึกข้อมูลการลาใหม่
+  const handleAddSubmit = async (e) => {
+    e.preventDefault();
+    
+    try {
+      setAddLoading(true);
+      setAddError('');
+      setAddSuccess('');
+      
+      // ตรวจสอบข้อมูลที่จำเป็น
+      if (!addFormData.leaveType || !addFormData.startDate || !addFormData.endDate || !addFormData.reason) {
+        setAddError('กรุณากรอกข้อมูลให้ครบถ้วน');
+        return;
+      }
+      
+      // คำนวณจำนวนวันลา
+      calculateAddTotalDays();
+      
+      // อัปโหลดไฟล์ (ถ้ามี)
+      let attachments = [];
+      if (addFilesToUpload.length > 0) {
+        try {
+          attachments = await uploadAddFiles();
+        } catch (error) {
+          setAddError(`การอัปโหลดไฟล์ไม่สำเร็จ: ${error.message}`);
+          return;
+        }
+      }
+      
+      // ส่งข้อมูลไปบันทึก
+      const response = await fetch('/api/leaves', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          leaveType: addFormData.leaveType,
+          startDate: addFormData.startDate,
+          endDate: addFormData.endDate,
+          reason: addFormData.reason,
+          leaveFormat: addFormData.leaveFormat,
+          totalDays: addTotalDays,
+          attachments: attachments,
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setAddSuccess('บันทึกข้อมูลการลาเรียบร้อยแล้ว');
+        
+        // เพิ่มข้อมูลการลาใหม่ลงในรายการ
+        setLeaves(prevLeaves => [data.data, ...prevLeaves]);
+        
+        // ปิด Sheet และรีเซ็ตฟอร์ม
+        setTimeout(() => {
+          setIsAddSheetOpen(false);
+          setAddFormData({
+            leaveType: 'ลาป่วย',
+            startDate: '',
+            endDate: '',
+            leaveFormat: 'เต็มวัน',
+            reason: '',
+          });
+          setAddFilesToUpload([]);
+          setAddSuccess('');
+        }, 1500);
+        
+        toast({
+          title: "ดำเนินการสำเร็จ",
+          description: "บันทึกข้อมูลการลาเรียบร้อยแล้ว",
+          duration: 5000,
+        });
+      } else {
+        setAddError(data.message || 'เกิดข้อผิดพลาดในการเพิ่มข้อมูลการลา');
+      }
+    } catch (error) {
+      setAddError('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์');
+      console.error(error);
+    } finally {
+      setAddLoading(false);
+    }
+  };
+
+  // เปิด Sheet เพิ่มการลา
+  const openAddSheet = () => {
+    setAddFormData({
+      leaveType: 'ลาป่วย',
+      startDate: '',
+      endDate: '',
+      leaveFormat: 'เต็มวัน',
+      reason: '',
+    });
+    setAddFilesToUpload([]);
+    setAddError('');
+    setAddSuccess('');
+    setIsAddSheetOpen(true);
+  };
+
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -1400,12 +1606,15 @@ export default function LeavesPage() {
         <h1 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-gray-100 flex items-center">
           <FiCalendar className="mr-2 text-primary" /> รายการการลา
         </h1>
-        <Link
-          href="/leaves/add"
-          className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ring-offset-background bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2"
-        >
-          <FiPlus className="mr-1.5 h-4 w-4" /> <span>ขอลางาน</span>
-        </Link>
+        <div className="mt-4 md:mt-0 flex space-x-2">
+          <Button
+            onClick={openAddSheet}
+            className="gap-1"
+          >
+            <FiPlus className="h-4 w-4" />
+            <span>เพิ่มการลา</span>
+          </Button>
+        </div>
       </div>
       
       {error && <ErrorMessage message={error} type="error" />}
@@ -2265,6 +2474,23 @@ export default function LeavesPage() {
                 <option value="อื่นๆ">อื่นๆ</option>
               </select>
             </div>
+
+            <div className="space-y-2">
+              <label htmlFor="leaveFormat" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                รูปแบบการลา
+              </label>
+              <select
+                id="leaveFormat"
+                name="leaveFormat"
+                value={editFormData.leaveFormat}
+                onChange={handleEditFormChange}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="เต็มวัน">เต็มวัน</option>
+                <option value="ครึ่งวัน (ช่วงเช้า)">ครึ่งวัน (ช่วงเช้า)</option>
+                <option value="ครึ่งวัน (ช่วงบ่าย)">ครึ่งวัน (ช่วงบ่าย)</option>
+              </select>
+            </div>
             
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -2321,22 +2547,7 @@ export default function LeavesPage() {
               </Popover>
             </div>
             
-            <div className="space-y-2">
-              <label htmlFor="leaveFormat" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                รูปแบบการลา
-              </label>
-              <select
-                id="leaveFormat"
-                name="leaveFormat"
-                value={editFormData.leaveFormat}
-                onChange={handleEditFormChange}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <option value="เต็มวัน">เต็มวัน</option>
-                <option value="ครึ่งวัน (ช่วงเช้า)">ครึ่งวัน (ช่วงเช้า)</option>
-                <option value="ครึ่งวัน (ช่วงบ่าย)">ครึ่งวัน (ช่วงบ่าย)</option>
-              </select>
-            </div>
+            
             
             <div className="bg-slate-100 dark:bg-slate-800 p-3 rounded-md text-sm">
               <p>จำนวนวันลาทั้งหมด: <span className="font-semibold">{editFormData.totalDays}</span> วัน</p>
@@ -2514,6 +2725,274 @@ export default function LeavesPage() {
               >
                 <FiEdit className="mr-1.5 h-4 w-4" />
                 <span>บันทึกการแก้ไข</span>
+              </LoadingButton>
+            </SheetFooter>
+          </form>
+        </SheetContent>
+      </Sheet>
+      
+      {/* Sheet สำหรับเพิ่มการลา */}
+      <Sheet open={isAddSheetOpen} onOpenChange={setIsAddSheetOpen}>
+        <SheetContent side="right" className="w-full max-w-xl overflow-y-auto">
+          <SheetHeader className="border-b pb-4 mb-4">
+            <SheetTitle className="text-lg">ขอลางาน</SheetTitle>
+            <SheetDescription>
+              กรอกข้อมูลการลาและกดบันทึกเพื่อส่งคำขอลา
+            </SheetDescription>
+          </SheetHeader>
+          
+          {addError && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4" role="alert">
+            <div className="flex items-center">
+              <FiAlertTriangle className="h-5 w-5 mr-2" />
+              <span>{addError}</span>
+            </div>
+          </div>}
+          
+          {addSuccess && (
+            <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4" role="alert">
+              <div className="flex items-center">
+                <FiInfo className="h-5 w-5 mr-2" />
+                <span>{addSuccess}</span>
+              </div>
+            </div>
+          )}
+          
+          <form onSubmit={handleAddSubmit} className="space-y-6">
+            <div className="space-y-2">
+              <label htmlFor="leaveType" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                ประเภทการลา <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="leaveType"
+                name="leaveType"
+                value={addFormData.leaveType}
+                onChange={handleAddFormChange}
+                required
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="ลาป่วย">ลาป่วย</option>
+                <option value="ลากิจ">ลากิจ</option>
+                <option value="ลาพักร้อน">ลาพักร้อน</option>
+                <option value="ลาคลอด">ลาคลอด</option>
+                <option value="ลาบวช">ลาบวช</option>
+                <option value="ลาไม่รับเงินเดือน">ลาไม่รับเงินเดือน</option>
+                <option value="อื่นๆ">อื่นๆ</option>
+              </select>
+            </div>
+            
+            <div className="space-y-2">
+              <label htmlFor="leaveFormat" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                รูปแบบการลา <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="leaveFormat"
+                name="leaveFormat"
+                value={addFormData.leaveFormat}
+                onChange={handleAddFormChange}
+                required
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="เต็มวัน">เต็มวัน</option>
+                <option value="ครึ่งวัน-เช้า">ครึ่งวัน (เช้า)</option>
+                <option value="ครึ่งวัน-บ่าย">ครึ่งวัน (บ่าย)</option>
+              </select>
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                วันที่เริ่มลา <span className="text-red-500">*</span>
+              </label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <div className="relative">
+                    <Input
+                      value={addFormData.startDate ? format(new Date(addFormData.startDate), 'dd/MM/yyyy') : ''}
+                      className="pl-10"
+                      placeholder="เลือกวันที่เริ่มลา"
+                      readOnly
+                    />
+                    <FiCalendar className="absolute left-3 top-2.5 h-4 w-4 text-gray-500 dark:text-gray-400" />
+                  </div>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={addFormData.startDate ? new Date(addFormData.startDate) : undefined}
+                    onSelect={(date) => {
+                      if (date) {
+                        const formattedDate = format(date, 'yyyy-MM-dd');
+                        const e = {
+                          target: {
+                            name: 'startDate',
+                            value: formattedDate
+                          }
+                        };
+                        handleAddFormChange(e);
+                      }
+                    }}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                วันที่สิ้นสุด <span className="text-red-500">*</span>
+              </label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <div className="relative">
+                    <Input
+                      value={addFormData.endDate ? format(new Date(addFormData.endDate), 'dd/MM/yyyy') : ''}
+                      className="pl-10"
+                      placeholder="เลือกวันที่สิ้นสุด"
+                      readOnly
+                      disabled={addFormData.leaveFormat.includes('ครึ่งวัน')}
+                    />
+                    <FiCalendar className="absolute left-3 top-2.5 h-4 w-4 text-gray-500 dark:text-gray-400" />
+                  </div>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={addFormData.endDate ? new Date(addFormData.endDate) : undefined}
+                    onSelect={(date) => {
+                      if (date) {
+                        const formattedDate = format(date, 'yyyy-MM-dd');
+                        const e = {
+                          target: {
+                            name: 'endDate',
+                            value: formattedDate
+                          }
+                        };
+                        handleAddFormChange(e);
+                      }
+                    }}
+                    disabled={(date) => addFormData.startDate ? date < new Date(addFormData.startDate) : false}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            
+            <div className="bg-slate-100 dark:bg-slate-800 p-3 rounded-md text-sm">
+              <p>จำนวนวันลาทั้งหมด: <span className="font-semibold">{addTotalDays}</span> วัน</p>
+            </div>
+            
+            <div className="space-y-2">
+              <label htmlFor="reason" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                เหตุผลการลา <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                id="reason"
+                name="reason"
+                value={addFormData.reason}
+                onChange={handleAddFormChange}
+                required
+                rows={4}
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              />
+            </div>
+            
+            <div className="space-y-3">
+              <div className="flex items-center">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  เอกสารแนบ (ถ้ามี)
+                </label>
+                <div className="ml-2 p-1 rounded-full bg-blue-50 dark:bg-blue-900/30">
+                  <FiInfo className="h-3 w-3 text-blue-500" />
+                </div>
+              </div>
+              
+              {/* ส่วนอัปโหลดไฟล์ใหม่ */}
+              <div 
+                className="rounded-lg border border-dashed border-slate-300 dark:border-slate-700 p-4 bg-slate-50 dark:bg-slate-800/50 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                <div className="flex flex-col items-center text-center">
+                  <FiUploadCloud className="h-10 w-10 text-slate-400 mb-2" />
+                  <div className="mb-2">
+                    <p className="text-sm text-slate-500">ลากไฟล์มาวางที่นี่ หรือ</p>
+                  </div>
+                  <label className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 cursor-pointer">
+                    <FiFileText className="mr-1.5 h-4 w-4" />
+                    <span>เลือกไฟล์</span>
+                    <input
+                      type="file"
+                      onChange={handleAddFileChange}
+                      className="hidden"
+                      multiple
+                    />
+                  </label>
+                  <p className="text-xs text-gray-500 mt-2">รองรับไฟล์ PDF, รูปภาพ, เอกสาร (.zip ไม่เกิน 5MB/ไฟล์)</p>
+                </div>
+              </div>
+              
+              {/* แสดงไฟล์ที่จะอัปโหลด */}
+              {addFilesToUpload.length > 0 && (
+                <div className="mt-3">
+                  <div className="flex items-center mb-2 border-b dark:border-gray-700 pb-1">
+                    <FiUpload className="h-4 w-4 text-primary mr-1.5" />
+                    <h3 className="text-sm font-medium">ไฟล์ที่เลือก ({addFilesToUpload.length})</h3>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 space-y-2">
+                    {addFilesToUpload.map((file, index) => {
+                      const fileExt = file.name.split('.').pop()?.toLowerCase();
+                      
+                      // เลือกไอคอนตามประเภทไฟล์
+                      let FileIcon = FiFileText;
+                      if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExt)) {
+                        FileIcon = FiImage;
+                      } else if (fileExt === 'pdf') {
+                        FileIcon = FiFile;
+                      } else if (['zip', 'rar', '7z'].includes(fileExt)) {
+                        FileIcon = FiArchive;
+                      }
+                      
+                      return (
+                        <div key={index} className="flex justify-between items-center p-2 rounded-md bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/70 transition-colors">
+                          <div className="text-sm truncate flex items-center">
+                            <div className="h-8 w-8 flex items-center justify-center rounded bg-primary/10 text-primary mr-2">
+                              <FileIcon className="h-4 w-4" />
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="font-medium truncate max-w-[300px]">{file.name}</span>
+                              <span className="text-xs text-gray-500">{(file.size / 1024).toFixed(1)} KB</span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeAddFile(index)}
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30 p-2 rounded-full transition-colors"
+                            title="ลบไฟล์"
+                          >
+                            <FiTrash2 size={16} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <SheetFooter>
+              <SheetClose asChild>
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2"
+                >
+                  ยกเลิก
+                </button>
+              </SheetClose>
+              <LoadingButton
+                type="submit"
+                loading={addLoading || addUploading}
+                disabled={addLoading || addUploading}
+                className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2"
+              >
+                <FiSave className="mr-1.5 h-4 w-4" />
+                <span>บันทึกข้อมูล</span>
               </LoadingButton>
             </SheetFooter>
           </form>
