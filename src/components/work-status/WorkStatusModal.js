@@ -91,7 +91,19 @@ export default function WorkStatusModal({ isOpen, onClose, employee, date, onSav
     
     try {
       if (endDate) {
-        // สำหรับการบันทึกวันเดียว (แบบเดิม)
+        // สร้าง Date object ที่เป็น UTC เวลา 12:00 น. เพื่อป้องกันปัญหา timezone
+        const inputDate = new Date(startDateObj);
+        const year = inputDate.getFullYear();
+        const month = inputDate.getMonth();
+        const day = inputDate.getDate();
+        const utcDate = new Date(Date.UTC(year, month, day, 12, 0, 0));
+        
+        console.log('Submitting work status:');
+        console.log('- Original date:', startDateObj.toISOString());
+        console.log('- UTC date to submit:', utcDate.toISOString());
+        console.log('- Status:', status);
+        
+        // สำหรับการบันทึกวันเดียว
         const response = await fetch('/api/work-status', {
           method: 'POST',
           headers: {
@@ -99,7 +111,7 @@ export default function WorkStatusModal({ isOpen, onClose, employee, date, onSav
           },
           body: JSON.stringify({
             employeeId: employee.id,
-            date: startDateObj.toISOString(),
+            date: utcDate.toISOString(),
             status,
             note,
             forceUpdate: true // เพิ่ม flag ให้สามารถบันทึกคล่อมข้อมูลเดิมได้
@@ -308,17 +320,53 @@ export default function WorkStatusModal({ isOpen, onClose, employee, date, onSav
                   <FiClock className="mr-2 text-purple-500" />
                   {(() => {
                     try {
-                      // ตรวจสอบว่าวันที่ถูกต้องหรือไม่
-                      const startTimeDate = new Date(overtimeData.startTime);
-                      const endTimeDate = new Date(overtimeData.endTime);
+                      console.log('======== OT TIME DEBUG ========');
+                      console.log('Overtime data:', overtimeData);
+                      console.log('Start time:', overtimeData.startTime);
+                      console.log('End time:', overtimeData.endTime);
                       
-                      if (isNaN(startTimeDate.getTime()) || isNaN(endTimeDate.getTime())) {
-                        throw new Error('Invalid date');
+                      // ตรวจสอบรูปแบบของเวลา
+                      const isTimeString = (time) => {
+                        return typeof time === 'string' && /^\d{1,2}:\d{2}(:\d{2})?$/.test(time);
+                      };
+                      
+                      // ถ้าเป็น string เวลาโดยตรงเช่น "18:00" ให้ใช้ตรงๆ
+                      if (isTimeString(overtimeData.startTime) && isTimeString(overtimeData.endTime)) {
+                        console.log('Using time strings directly');
+                        return `${overtimeData.startTime} - ${overtimeData.endTime} น.`;
                       }
-
-                      return `${formatTime(startTimeDate)} - ${formatTime(endTimeDate)}`;
+                      
+                      // ตรวจสอบว่าวันที่ถูกต้องหรือไม่ (Date object หรือ ISO string)
+                      const startTimeObj = new Date(overtimeData.startTime);
+                      const endTimeObj = new Date(overtimeData.endTime);
+                      
+                      if (isNaN(startTimeObj.getTime()) || isNaN(endTimeObj.getTime())) {
+                        throw new Error('Invalid date format');
+                      }
+                      
+                      const startTimeFormatted = startTimeObj.toLocaleTimeString('th-TH', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: false
+                      });
+                      
+                      const endTimeFormatted = endTimeObj.toLocaleTimeString('th-TH', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: false
+                      });
+                      
+                      console.log('Formatted start time:', startTimeFormatted);
+                      console.log('Formatted end time:', endTimeFormatted);
+                      console.log('============================');
+                      
+                      return `${startTimeFormatted} - ${endTimeFormatted} น.`;
                     } catch (error) {
-                      return 'เวลาไม่ถูกต้อง';
+                      console.error('Error formatting overtime time:', error, overtimeData);
+                      
+                      // ดึงจำนวนชั่วโมงที่ทำ OT
+                      const hours = overtimeData.hours || overtimeData.totalHours || 0;
+                      return `จำนวน ${hours} ชั่วโมง (ไม่ระบุเวลาแน่ชัด)`;
                     }
                   })()}
                 </div>
@@ -326,7 +374,11 @@ export default function WorkStatusModal({ isOpen, onClose, employee, date, onSav
             ) : (
               <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                 <div className="text-sm text-gray-500 dark:text-gray-400">เวลาทำงาน</div>
-                <div className="font-medium mt-1 text-gray-500 italic">ไม่ระบุเวลาทำงาน</div>
+                <div className="font-medium mt-1 text-gray-500 italic">
+                  {overtimeData.hours || overtimeData.totalHours ? 
+                    `จำนวน ${overtimeData.hours || overtimeData.totalHours} ชั่วโมง (ไม่ระบุเวลาแน่ชัด)` : 
+                    'ไม่ระบุเวลาทำงาน'}
+                </div>
               </div>
             )}
 

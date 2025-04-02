@@ -1403,7 +1403,7 @@ export async function getStatistics() {
 }
 
 /**
- * ฟังก์ชันสำหรับดึงข้อมูลปฏิทินพนักงาน
+ * ฟังก์ชันสำหรับดึงข้อมูลปฏิทินพนักงาน (ปรับปรุงประสิทธิภาพ)
  */
 export async function getEmployeeCalendarData(startDate, endDate) {
   try {
@@ -1417,109 +1417,140 @@ export async function getEmployeeCalendarData(startDate, endDate) {
     
     console.log('Calendar range - start:', start.toISOString(), 'end:', end.toISOString());
     
-    // ดึงข้อมูลพนักงานทั้งหมด
-    const employees = await prisma.employee.findMany({
-      where: {
-        isActive: true,
-      },
-      select: {
-        id: true,
-        employeeId: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        position: true,
-        department: true,
-        role: true,
-        image: true,
-        teamId: true,
-      },
-      orderBy: {
-        firstName: 'asc',
-      },
-    });
-    
-    // ดึงข้อมูลการลาในช่วงเวลาที่กำหนด
-    const leaves = await prisma.leave.findMany({
-      where: {
-        startDate: {
-          lte: end,
+    // สร้าง Promise ทั้งหมดเพื่อดึงข้อมูลพร้อมกัน
+    const [employees, leaves, overtimes, workStatuses] = await Promise.all([
+      // ดึงข้อมูลพนักงานเฉพาะที่ active และเฉพาะฟิลด์ที่จำเป็น
+      prisma.employee.findMany({
+        where: {
+          isActive: true,
         },
-        endDate: {
-          gte: start,
+        select: {
+          id: true,
+          employeeId: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          position: true,
+          department: true,
+          role: true,
+          image: true,
+          teamId: true,
+          teamData: {
+            select: {
+              id: true,
+              name: true,
+              code: true
+            }
+          }
         },
-      },
-      include: {
-        employee: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            position: true,
-            department: true,
-            image: true,
-            teamId: true,
+        orderBy: {
+          firstName: 'asc',
+        },
+      }),
+      
+      // ดึงข้อมูลการลาในช่วงเวลาที่กำหนด (เฉพาะที่ได้รับอนุมัติหรือรออนุมัติ)
+      prisma.leave.findMany({
+        where: {
+          startDate: {
+            lte: end,
+          },
+          endDate: {
+            gte: start,
+          },
+          // เฉพาะที่ได้รับอนุมัติหรือรออนุมัติ
+          status: {
+            in: ['approved', 'waiting_for_approve']
+          }
+        },
+        select: {
+          id: true,
+          employeeId: true,
+          startDate: true,
+          endDate: true,
+          leaveType: true,
+          totalDays: true,
+          status: true,
+          reason: true,
+          employee: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              position: true,
+              teamId: true,
+            },
           },
         },
-      },
-    });
-    
-    // ดึงข้อมูลการทำงานล่วงเวลาในช่วงเวลาที่กำหนด
-    const overtimes = await prisma.overtime.findMany({
-      where: {
-        date: {
-          gte: start,
-          lte: end,
+      }),
+      
+      // ดึงข้อมูลการทำงานล่วงเวลาในช่วงเวลาที่กำหนด
+      prisma.overtime.findMany({
+        where: {
+          date: {
+            gte: start,
+            lte: end,
+          },
+          // เฉพาะที่ได้รับอนุมัติหรือรออนุมัติ
+          status: {
+            in: ['approved', 'waiting_for_approve']
+          }
         },
-      },
-      include: {
-        employee: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            position: true,
-            department: true,
-            image: true,
-            teamId: true,
+        select: {
+          id: true,
+          employeeId: true,
+          date: true,
+          startTime: true,
+          endTime: true,
+          totalHours: true,
+          status: true,
+          reason: true,
+          employee: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              position: true,
+              teamId: true,
+            },
           },
         },
-      },
-    });
-    
-    // ดึงข้อมูลสถานะการทำงาน (WFH)
-    const workStatuses = await prisma.workStatus.findMany({
-      where: {
-        date: {
-          gte: start,
-          lte: end,
-        },
-      },
-      include: {
-        employee: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            position: true,
-            teamId: true,
-            teamData: true,
-            department: true,
-            image: true,
+      }),
+      
+      // ดึงข้อมูลสถานะการทำงาน
+      prisma.workStatus.findMany({
+        where: {
+          date: {
+            gte: start,
+            lte: end,
           },
         },
-        createdBy: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
+        select: {
+          id: true,
+          employeeId: true,
+          date: true,
+          status: true,
+          note: true,
+          employee: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              position: true,
+              teamId: true,
+              teamData: {
+                select: {
+                  id: true,
+                  name: true
+                }
+              },
+            },
           },
         },
-      },
-      orderBy: {
-        date: 'desc',
-      },
-    });
+        orderBy: {
+          date: 'desc',
+        },
+      })
+    ]);
     
     return {
       success: true,
@@ -1638,22 +1669,33 @@ export async function createOrUpdateWorkStatus(data) {
   try {
     const { employeeId, date, status, note, createdById } = data;
     
-    // แปลงวันที่จากสตริงเป็น Date object ถ้าจำเป็น
-    const dateObj = new Date(date);
+    // ตรวจสอบข้อมูลวันที่ที่รับเข้ามา
+    console.log('================ WORK STATUS SAVE DEBUG ================');
+    console.log('Input date:', date);
     
-    // แก้ไขการเตรียมวันที่ให้ถูกต้องตาม timezone
-    // เปลี่ยนจากการใช้ UTC เป็นการใช้วันที่เหมือนกับที่เลือกจริงๆ โดยการตัดเวลาออก
-    // สร้างวันที่ใหม่ โดยใช้เฉพาะส่วนของวันที่ เดือน ปี แบบ local time เพื่อป้องกันการคลาดเคลื่อนจาก timezone
-    const localDateStr = dateObj.toLocaleDateString('en-CA'); // ใช้ format YYYY-MM-DD เช่น 2023-09-15
-    const formattedDate = new Date(localDateStr + 'T00:00:00.000Z');
+    // แปลงวันที่ให้เป็น Date object
+    let dateObj;
+    if (date instanceof Date) {
+      dateObj = new Date(date);
+    } else {
+      dateObj = new Date(date);
+    }
     
-    console.log('Saving work status for date:', date);
-    console.log('Input date as string:', date);
-    console.log('Input date as object:', dateObj.toISOString());
-    console.log('Local date string:', localDateStr);
-    console.log('Formatted date to save:', formattedDate.toISOString());
+    // คัดลอกเฉพาะส่วนของวันที่ เดือน ปี โดยไม่สนใจเวลา
+    const year = dateObj.getFullYear();
+    const month = dateObj.getMonth();
+    const day = dateObj.getDate();
     
-    // ค้นหาว่ามีข้อมูลอยู่แล้วหรือไม่
+    // สร้าง Date object ใหม่ที่ไม่มีส่วนของเวลา ตั้งเวลาเป็น 12:00 น. เพื่อป้องกันปัญหา timezone
+    const formattedDate = new Date(Date.UTC(year, month, day, 12, 0, 0));
+    
+    console.log('Date object:', dateObj.toISOString());
+    console.log('UTC Date:', formattedDate.toISOString());
+    console.log('Local date (th-TH):', formattedDate.toLocaleDateString('th-TH'));
+    console.log('Local date (en-US):', formattedDate.toLocaleDateString('en-US'));
+    console.log('========================================================');
+    
+    // ตรวจสอบว่าพนักงานคนนี้มีสถานะการทำงานในวันนี้อยู่แล้วหรือไม่
     const existingWorkStatus = await prisma.workStatus.findFirst({
       where: {
         employeeId,
@@ -1661,43 +1703,53 @@ export async function createOrUpdateWorkStatus(data) {
       },
     });
     
-    // ถ้ามีข้อมูลอยู่แล้ว ให้อัปเดต
     if (existingWorkStatus) {
-      const updatedWorkStatus = await prisma.workStatus.update({
-        where: { id: existingWorkStatus.id },
-        data: {
-          status,
-          note,
-          createdById,
-        },
-      });
+      // ถ้ามีข้อมูลอยู่แล้ว ให้อัปเดต
+      console.log(`Updating existing work status (ID: ${existingWorkStatus.id}) for date ${formattedDate.toISOString()}`);
       
       return {
         success: true,
-        data: updatedWorkStatus,
-        message: 'อัปเดตสถานะการทำงานสำเร็จ',
+        data: await prisma.workStatus.update({
+          where: { id: existingWorkStatus.id },
+          data: {
+            status,
+            note,
+            updatedById: createdById,
+            updatedAt: new Date(),
+          },
+          include: {
+            employee: true,
+          },
+        }),
+        message: 'อัปเดตสถานะการทำงานเรียบร้อยแล้ว',
+      };
+    } else {
+      // ถ้ายังไม่มีข้อมูล ให้สร้างใหม่
+      console.log(`Creating new work status for date ${formattedDate.toISOString()}`);
+      
+      return {
+        success: true,
+        data: await prisma.workStatus.create({
+          data: {
+            employeeId,
+            date: formattedDate,
+            status,
+            note,
+            createdById,
+          },
+          include: {
+            employee: true,
+          },
+        }),
+        message: 'บันทึกสถานะการทำงานเรียบร้อยแล้ว',
       };
     }
-    
-    // ถ้ายังไม่มีข้อมูล ให้สร้างใหม่
-    const newWorkStatus = await prisma.workStatus.create({
-      data: {
-        employeeId,
-        date: formattedDate,
-        status,
-        note,
-        createdById,
-      },
-    });
-    
-    return {
-      success: true,
-      data: newWorkStatus,
-      message: 'สร้างสถานะการทำงานสำเร็จ',
-    };
   } catch (error) {
-    console.error('Error creating/updating work status:', error);
-    return { success: false, message: error.message };
+    console.error('Error in createOrUpdateWorkStatus:', error);
+    return {
+      success: false,
+      message: `เกิดข้อผิดพลาดในการบันทึกข้อมูล: ${error.message}`,
+    };
   }
 }
 

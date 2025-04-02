@@ -37,8 +37,37 @@ const useFormatDate = () => {
       month: 'short' 
     });
   }, []);
+  
+  // ฟังก์ชันจัดรูปแบบเดือนและปีเป็นภาษาไทย
+  const formatMonthYear = useMemo(() => (date) => {
+    if (!date) return '';
+    
+    const dateObj = new Date(date);
+    return dateObj.toLocaleDateString('th-TH', { 
+      month: 'long', 
+      year: 'numeric' 
+    });
+  }, []);
+  
+  // ฟังก์ชันจัดรูปแบบวันที่แบบสั้นพร้อมวันในสัปดาห์เป็นภาษาไทย
+  const formatShortDateWithDay = useMemo(() => (date) => {
+    if (!date) return '';
+    
+    const dateObj = new Date(date);
+    return dateObj.toLocaleDateString('th-TH', { 
+      day: 'numeric', 
+      month: 'short',
+      weekday: 'short'
+    });
+  }, []);
 
-  return { formatDate, formatDateTime, formatShortDate };
+  return { 
+    formatDate, 
+    formatDateTime, 
+    formatShortDate, 
+    formatMonthYear,
+    formatShortDateWithDay
+  };
 };
 
 export default useFormatDate; 

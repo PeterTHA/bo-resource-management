@@ -179,42 +179,193 @@ const isMockImage = (src) => {
   return src && typeof src === 'string' && (src.startsWith('/mock-images/') || src.startsWith('./mock-images/'));
 };
 
+// ประกาศตัวแปรสำหรับเก็บข้อมูล cache
+let calendarDataCache = {
+  employees: [],
+  workStatuses: [],
+  leaves: [],
+  overtimes: [],
+  lastFetched: null,
+  startDate: null,
+  endDate: null
+};
+
 export default function EmployeeCalendarPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const abortControllerRef = useRef(null);
+  const [viewMode, setViewMode] = useState('week');
+  const [currentDate, setCurrentDate] = useState(new Date());
   const [employees, setEmployees] = useState([]);
+  const [workStatuses, setWorkStatuses] = useState([]);
   const [leaves, setLeaves] = useState([]);
   const [overtimes, setOvertimes] = useState([]);
-  const [workStatuses, setWorkStatuses] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState('week'); // 'week', 'month'
-  const [selectedDepartment, setSelectedDepartment] = useState('all');
-  const [departments, setDepartments] = useState([]);
-  const [selectedTeam, setSelectedTeam] = useState('all'); // เพิ่ม state สำหรับทีมที่เลือก
-  const [teams, setTeams] = useState([]); // เพิ่ม state สำหรับเก็บรายการทีม
   const [isDataFetching, setIsDataFetching] = useState(false);
-  const [hasCheckedPermissions, setHasCheckedPermissions] = useState(false);
-  const [employeesByTeam, setEmployeesByTeam] = useState([]); // เพิ่ม state สำหรับเก็บพนักงานแยกตามทีม
-  const [currentUserData, setCurrentUserData] = useState(null); // เพิ่ม state สำหรับเก็บข้อมูลผู้ใช้ปัจจุบัน
-  const [teamsData, setTeamsData] = useState({}); // เพิ่ม state สำหรับเก็บข้อมูลทีม
-
-  // เพิ่ม ref สำหรับเก็บ AbortController
-  const abortControllerRef = useRef(null);
-  
-  // Modal สำหรับสถานะการทำงาน
+  const [error, setError] = useState('');
+  const [departments, setDepartments] = useState([]);
+  const [teams, setTeams] = useState([]);
+  const [selectedDepartment, setSelectedDepartment] = useState('all');
+  const [selectedTeam, setSelectedTeam] = useState('all');
+  const [teamsData, setTeamsData] = useState({});
+  const [employeesByTeam, setEmployeesByTeam] = useState([]);
+  const [selectedWorkStatus, setSelectedWorkStatus] = useState(null);
   const [isWorkStatusModalOpen, setIsWorkStatusModalOpen] = useState({ isOpen: false, viewOnly: false });
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
-  const [selectedWorkStatus, setSelectedWorkStatus] = useState(null);
-
-  // เพิ่ม state เพื่อเก็บสิทธิ์การแก้ไขของพนักงานแต่ละคน
+  const [currentUserData, setCurrentUserData] = useState(null);
   const [employeePermissions, setEmployeePermissions] = useState({});
+  const [hasCheckedPermissions, setHasCheckedPermissions] = useState(false);
+  // เพิ่ม state สำหรับจัดการการโหลดข้อมูลแผนกและทีม
+  const [isDepartmentsLoaded, setIsDepartmentsLoaded] = useState(false);
+  const [isTeamsLoaded, setIsTeamsLoaded] = useState(false);
+  // นำเข้าฟังก์ชันการจัดรูปแบบวันที่จาก hook
+  const { formatDate, formatDateTime, formatShortDate, formatMonthYear } = useFormatDate();
+
+  // ฟังก์ชันดึงข้อมูลปฏิทิน
+  const fetchCalendarData = async () => {
+    setIsDataFetching(true);
+    setLoading(true); // เพิ่มการเซ็ต loading เป็น true เมื่อเริ่มโหลดข้อมูล
+    
+    try {
+      // ยกเลิกคำขอ API ก่อนหน้า (ถ้ามี)
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      
+      // สร้าง AbortController ใหม่
+      abortControllerRef.current = new AbortController();
+      
+      const startDate = getStartDate();
+      const endDate = getEndDate();
+      
+      // ตรวจสอบว่ามีข้อมูลใน cache หรือไม่ และถ้ามี ข้อมูลเป็นช่วงเวลาเดียวกันหรือไม่
+      const isSameRange = calendarDataCache.startDate && 
+                          calendarDataCache.endDate && 
+                          calendarDataCache.startDate.toISOString() === startDate.toISOString() && 
+                          calendarDataCache.endDate.toISOString() === endDate.toISOString();
+                          
+      const cacheIsValid = calendarDataCache.lastFetched && 
+                          (new Date().getTime() - calendarDataCache.lastFetched.getTime()) < 60000 && // cache หมดอายุใน 1 นาที
+                          isSameRange;
+      
+      // ถ้ามีข้อมูลใน cache และยังไม่หมดอายุ ให้ใช้ข้อมูลจาก cache
+      if (cacheIsValid) {
+        console.log('Using cached calendar data');
+        
+        setEmployees(calendarDataCache.employees || []);
+        setWorkStatuses(calendarDataCache.workStatuses || []);
+        setLeaves(calendarDataCache.leaves || []);
+        setOvertimes(calendarDataCache.overtimes || []);
+        
+        // จัดกลุ่มพนักงานตามทีม
+        groupEmployeesByTeam(calendarDataCache.employees);
+        
+        // ถ้าใช้ข้อมูลจาก cache ให้ตั้งค่าโหลดเสร็จและ return
+        setIsDataFetching(false);
+        setLoading(false);
+        return;
+      }
+      
+      // ดึงข้อมูลใหม่จาก API
+      console.log('Fetching new calendar data');
+      const response = await fetch(`/api/employee-calendar?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`, {
+        signal: abortControllerRef.current.signal
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        // อัปเดตข้อมูลใน state
+        setEmployees(data.data.employees || []);
+        setWorkStatuses(data.data.workStatuses || []);
+        setLeaves(data.data.leaves || []);
+        setOvertimes(data.data.overtimes || []);
+        
+        // บันทึกข้อมูลลง cache
+        calendarDataCache = {
+          employees: data.data.employees || [],
+          workStatuses: data.data.workStatuses || [],
+          leaves: data.data.leaves || [],
+          overtimes: data.data.overtimes || [],
+          lastFetched: new Date(),
+          startDate: startDate,
+          endDate: endDate
+        };
+        
+        // จัดกลุ่มพนักงานตามทีม
+        groupEmployeesByTeam(data.data.employees);
+        
+        // ดึงข้อมูลผู้ใช้ปัจจุบัน (เพื่อใช้ในการตรวจสอบสิทธิ์)
+        if (session?.user) {
+          const currentUserData = data.data.employees.find(e => e.id === session.user.id);
+          if (currentUserData) {
+            setCurrentUserData(currentUserData);
+          }
+        }
+        
+        setError('');
+      } else {
+        setError(data.message || 'ไม่สามารถดึงข้อมูลได้');
+      }
+    } catch (err) {
+      // ไม่แสดงข้อความ error ถ้าเป็นการยกเลิกโดยตั้งใจ
+      if (err.name !== 'AbortError') {
+        console.error('Error fetching calendar data:', err);
+        setError('เกิดข้อผิดพลาดในการดึงข้อมูล');
+      }
+    } finally {
+      setIsDataFetching(false);
+      setLoading(false); // เพิ่มการเซ็ต loading เป็น false เมื่อโหลดข้อมูลเสร็จสิ้น
+    }
+  };
   
+  // ฟังก์ชันสำหรับจัดกลุ่มพนักงานตามทีม
+  const groupEmployeesByTeam = (employeesData) => {
+    if (!employeesData || employeesData.length === 0) return;
+    
+    // กรองและจัดกลุ่มพนักงานตามทีม
+    const employeesByTeamMap = {};
+    
+    employeesData.forEach(employee => {
+      // ใช้ teamName หรือ teamData.name หรือตัวแปร defaultTeam
+      const teamName = employee.teamName || 
+                     (employee.teamData && employee.teamData.name) || 
+                     (employee.team && employee.team.name) || 
+                     'ไม่ระบุทีม';
+      
+      // สร้าง key ของทีมถ้ายังไม่มี
+      if (!employeesByTeamMap[teamName]) {
+        employeesByTeamMap[teamName] = [];
+      }
+      
+      // เพิ่มพนักงานเข้าไปในทีม
+      employeesByTeamMap[teamName].push(employee);
+    });
+    
+    // เรียงลำดับชื่อทีมตามตัวอักษร
+    const sortedTeamNames = Object.keys(employeesByTeamMap).sort();
+    
+    // สร้าง array ของทีมพร้อมสมาชิก
+    const teams = sortedTeamNames.map(teamName => ({
+      name: teamName,
+      members: employeesByTeamMap[teamName]
+    }));
+    
+    // ตั้งค่า state
+    setEmployeesByTeam(teams);
+  };
+
   // ฟังก์ชันสำหรับดึงข้อมูลแผนกทั้งหมด
   const fetchDepartments = async () => {
+    // ถ้าเคยโหลดข้อมูลแผนกแล้ว ไม่ต้องโหลดซ้ำ
+    if (isDepartmentsLoaded) {
+      console.log('ข้อมูลแผนกถูกโหลดแล้ว ข้ามการโหลดซ้ำ');
+      return;
+    }
+    
     try {
+      console.log('กำลังดึงข้อมูลแผนก...');
       const res = await fetch('/api/departments');
       const data = await res.json();
       
@@ -235,6 +386,9 @@ export default function EmployeeCalendarPage() {
         
         setDepartments(departmentNames);
       }
+      
+      // ตั้งค่าสถานะว่าโหลดข้อมูลแผนกแล้ว
+      setIsDepartmentsLoaded(true);
     } catch (error) {
       console.error('Error fetching departments:', error);
     }
@@ -242,8 +396,14 @@ export default function EmployeeCalendarPage() {
   
   // ฟังก์ชันสำหรับดึงข้อมูลทีมทั้งหมด
   const fetchTeamsData = async () => {
+    // ถ้าเคยโหลดข้อมูลทีมแล้ว ไม่ต้องโหลดซ้ำ
+    if (isTeamsLoaded) {
+      console.log('ข้อมูลทีมถูกโหลดแล้ว ข้ามการโหลดซ้ำ');
+      return;
+    }
+    
     try {
-      setLoading(true);
+      console.log('กำลังดึงข้อมูลทีม...');
       
       // ลองดึงข้อมูลจาก API ก่อน
       const res = await fetch('/api/teams');
@@ -265,6 +425,9 @@ export default function EmployeeCalendarPage() {
         
         setTeams(teamNames);
         console.log('ดึงข้อมูลทีมสำเร็จ:', teamNames.length, 'ทีม');
+        
+        // ตั้งค่าสถานะว่าโหลดข้อมูลทีมแล้ว
+        setIsTeamsLoaded(true);
       } else {
         // ถ้าไม่สามารถดึงข้อมูลจาก API ได้ ให้ใช้ข้อมูลจากพนักงาน
         console.log('ไม่สามารถดึงข้อมูลทีมจาก API ได้ ใช้ข้อมูลจากพนักงานแทน');
@@ -274,8 +437,6 @@ export default function EmployeeCalendarPage() {
       console.error('Error fetching teams data:', error);
       // ในกรณีที่เกิดข้อผิดพลาด ให้ใช้ข้อมูลจากพนักงาน
       extractTeamsFromEmployees();
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -454,16 +615,8 @@ export default function EmployeeCalendarPage() {
   };
 
   // ฟังก์ชันสำหรับการแสดงผล
-  const formatDate = (date) => {
-    return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
-  };
-
   const formatDayName = (date) => {
     return date.toLocaleDateString('th-TH', { weekday: 'short' });
-  };
-
-  const formatMonthYear = (date) => {
-    return date.toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
   };
 
   const isWeekend = (date) => {
@@ -480,24 +633,39 @@ export default function EmployeeCalendarPage() {
 
   // ฟังก์ชันสำหรับการตรวจสอบสถานะของพนักงานในแต่ละวัน
   const getEmployeeStatusForDate = (employeeId, date) => {
+    // แปลงวันที่ที่ต้องการตรวจสอบเป็น UTC ตั้งเวลาเป็น 12:00 น. เพื่อป้องกันปัญหา timezone
+    const targetDate = new Date(date);
+    const year = targetDate.getFullYear();
+    const month = targetDate.getMonth();
+    const day = targetDate.getDate();
+    const targetUTCDate = new Date(Date.UTC(year, month, day, 12, 0, 0));
+    
     // ตรวจสอบการลาที่อนุมัติแล้วก่อน เพราะมีความสำคัญสูงสุด
     const leave = leaves.find(leave => {
-      const startDate = new Date(leave.startDate);
-      const endDate = new Date(leave.endDate);
-      const targetDate = new Date(date);
+      if (!leave.startDate || !leave.endDate) return false;
       
-      startDate.setHours(0, 0, 0, 0);
-      endDate.setHours(23, 59, 59, 999);
-      targetDate.setHours(12, 0, 0, 0);
+      // แปลงวันที่เริ่มต้นและสิ้นสุดการลาเป็น UTC
+      const startDate = new Date(leave.startDate);
+      const sYear = startDate.getFullYear();
+      const sMonth = startDate.getMonth();
+      const sDay = startDate.getDate();
+      const startUTCDate = new Date(Date.UTC(sYear, sMonth, sDay, 0, 0, 0));
+      
+      const endDate = new Date(leave.endDate);
+      const eYear = endDate.getFullYear();
+      const eMonth = endDate.getMonth();
+      const eDay = endDate.getDate();
+      const endUTCDate = new Date(Date.UTC(eYear, eMonth, eDay, 23, 59, 59));
       
       return leave.employeeId === employeeId && 
-             startDate <= targetDate && 
-             endDate >= targetDate &&
+             startUTCDate <= targetUTCDate && 
+             endUTCDate >= targetUTCDate &&
              (leave.status === 'approved' || leave.status === 'waiting_for_approve');
     });
 
     // ถ้ามีการลาที่อนุมัติแล้ว ให้แสดงเฉพาะข้อมูลการลา
     if (leave) {
+      console.log(`Found leave for employee ${employeeId} on ${targetUTCDate.toISOString()}`);
       return {
         type: 'leave',
         data: leave,
@@ -507,38 +675,47 @@ export default function EmployeeCalendarPage() {
     }
 
     // ถ้าไม่มีการลา ตรวจสอบสถานะการทำงานและ OT
-    const dateObj = new Date(date);
-    dateObj.setHours(0, 0, 0, 0);
-    const year = dateObj.getFullYear();
-    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-    const day = String(dateObj.getDate()).padStart(2, '0');
-    const localDateStr = `${year}-${month}-${day}`;
-    
     const employeeWorkStatus = workStatuses.find(workStatus => {
-      const wsDate = new Date(workStatus.date);
-      wsDate.setHours(0, 0, 0, 0);
-      const wsYear = wsDate.getFullYear();
-      const wsMonth = String(wsDate.getMonth() + 1).padStart(2, '0');
-      const wsDay = String(wsDate.getDate()).padStart(2, '0');
-      const wsDateStr = `${wsYear}-${wsMonth}-${wsDay}`;
+      if (!workStatus.date) return false;
       
-      return workStatus.employeeId === employeeId && wsDateStr === localDateStr;
+      // แปลงวันที่ของสถานะการทำงานให้เป็น UTC
+      const wsDate = new Date(workStatus.date);
+      const wsYear = wsDate.getFullYear();
+      const wsMonth = wsDate.getMonth();
+      const wsDay = wsDate.getDate();
+      const wsUTCDate = new Date(Date.UTC(wsYear, wsMonth, wsDay, 12, 0, 0));
+      
+      // เปรียบเทียบวันที่ใน UTC
+      const isSameDate = wsUTCDate.getUTCFullYear() === targetUTCDate.getUTCFullYear() &&
+                         wsUTCDate.getUTCMonth() === targetUTCDate.getUTCMonth() &&
+                         wsUTCDate.getUTCDate() === targetUTCDate.getUTCDate();
+                         
+      return workStatus.employeeId === employeeId && isSameDate;
     });
     
     const employeeOvertime = overtimes.find(overtime => {
-      const otDate = new Date(overtime.date);
-      otDate.setHours(0, 0, 0, 0);
-      const otYear = otDate.getFullYear();
-      const otMonth = String(otDate.getMonth() + 1).padStart(2, '0');
-      const otDay = String(otDate.getDate()).padStart(2, '0');
-      const otDateStr = `${otYear}-${otMonth}-${otDay}`;
+      if (!overtime.date) return false;
       
-      return overtime.employeeId === employeeId && otDateStr === localDateStr &&
+      // แปลงวันที่ของ OT ให้เป็น UTC
+      const otDate = new Date(overtime.date);
+      const otYear = otDate.getFullYear();
+      const otMonth = otDate.getMonth();
+      const otDay = otDate.getDate();
+      const otUTCDate = new Date(Date.UTC(otYear, otMonth, otDay, 12, 0, 0));
+      
+      // เปรียบเทียบวันที่ใน UTC
+      const isSameDate = otUTCDate.getUTCFullYear() === targetUTCDate.getUTCFullYear() &&
+                         otUTCDate.getUTCMonth() === targetUTCDate.getUTCMonth() &&
+                         otUTCDate.getUTCDate() === targetUTCDate.getUTCDate();
+                         
+      return overtime.employeeId === employeeId && 
+             isSameDate &&
              (overtime.status === 'approved' || overtime.status === 'waiting_for_approve');
     });
 
     // ถ้ามีทั้ง work status และ OT
     if (employeeWorkStatus && employeeOvertime) {
+      console.log(`Found work status and OT for employee ${employeeId} on ${targetUTCDate.toISOString()}`);
       return {
         type: 'workStatus',
         status: employeeWorkStatus.status,
@@ -554,6 +731,7 @@ export default function EmployeeCalendarPage() {
 
     // ถ้ามีแค่ work status
     if (employeeWorkStatus) {
+      console.log(`Found work status for employee ${employeeId} on ${targetUTCDate.toISOString()}: ${employeeWorkStatus.status}`);
       return {
         type: 'workStatus',
         status: employeeWorkStatus.status,
@@ -564,6 +742,7 @@ export default function EmployeeCalendarPage() {
 
     // ถ้ามีแค่ OT
     if (employeeOvertime) {
+      console.log(`Found OT for employee ${employeeId} on ${targetUTCDate.toISOString()}`);
       return {
         type: 'overtime',
         status: employeeOvertime.status,
@@ -756,95 +935,6 @@ export default function EmployeeCalendarPage() {
       // ปิด modal หลังจากที่โหลดข้อมูลเรียบร้อยแล้ว
       setIsWorkStatusModalOpen({ isOpen: false, viewOnly: false });
       setLoading(false);
-    }
-  };
-
-  // ฟังก์ชันดึงข้อมูลปฏิทิน
-  const fetchCalendarData = async () => {
-    setIsDataFetching(true);
-    setLoading(true); // เพิ่มการเซ็ต loading เป็น true เมื่อเริ่มโหลดข้อมูล
-    
-    try {
-      // ยกเลิกคำขอ API ก่อนหน้า (ถ้ามี)
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-      
-      // สร้าง AbortController ใหม่
-      abortControllerRef.current = new AbortController();
-      
-      const startDate = getStartDate();
-      const endDate = getEndDate();
-      
-      const response = await fetch(`/api/employee-calendar?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`, {
-        signal: abortControllerRef.current.signal
-      });
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        // จัดเตรียมข้อมูลและจัดกลุ่มตามทีมสำหรับการแสดงผล
-        setEmployees(data.data.employees || []);
-        setWorkStatuses(data.data.workStatuses || []);
-        setLeaves(data.data.leaves || []);
-        setOvertimes(data.data.overtimes || []);
-        
-        // กรองและจัดกลุ่มพนักงานตามทีม
-        const employeesByTeamMap = {};
-        
-        // ใช้ข้อมูลทีมใหม่ ถ้ามี
-        if (data.data.employees && data.data.employees.length > 0) {
-          data.data.employees.forEach(employee => {
-            // ใช้ teamName หรือ teamData.name หรือตัวแปร defaultTeam
-            const teamName = employee.teamName || 
-                            (employee.teamData && employee.teamData.name) || 
-                            (employee.team && employee.team.name) || 
-                            'ไม่ระบุทีม';
-            
-            // สร้าง key ของทีมถ้ายังไม่มี
-            if (!employeesByTeamMap[teamName]) {
-              employeesByTeamMap[teamName] = [];
-            }
-            
-            // เพิ่มพนักงานเข้าไปในทีม
-            employeesByTeamMap[teamName].push(employee);
-          });
-        }
-        
-        // เรียงลำดับชื่อทีมตามตัวอักษร
-        const sortedTeamNames = Object.keys(employeesByTeamMap).sort();
-        
-        // สร้าง array ของทีมพร้อมสมาชิก
-        const teams = sortedTeamNames.map(teamName => ({
-          name: teamName,
-          members: employeesByTeamMap[teamName]
-        }));
-        
-        // ตั้งค่า state
-        setEmployeesByTeam(teams);
-        
-        // ดึงข้อมูลผู้ใช้ปัจจุบัน (เพื่อใช้ในการตรวจสอบสิทธิ์)
-        if (session && session.user) {
-          const currentUserData = data.data.employees.find(e => e.id === session.user.id);
-          
-          if (currentUserData) {
-            setCurrentUserData(currentUserData);
-          }
-        }
-        
-        setError('');
-      } else {
-        setError(data.message || 'ไม่สามารถดึงข้อมูลได้');
-      }
-    } catch (err) {
-      // ไม่แสดงข้อความ error ถ้าเป็นการยกเลิกโดยตั้งใจ
-      if (err.name !== 'AbortError') {
-        console.error('Error fetching calendar data:', err);
-        setError('เกิดข้อผิดพลาดในการดึงข้อมูล');
-      }
-    } finally {
-      setIsDataFetching(false);
-      setLoading(false); // เพิ่มการเซ็ต loading เป็น false เมื่อโหลดข้อมูลเสร็จสิ้น
     }
   };
 
