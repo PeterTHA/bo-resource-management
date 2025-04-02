@@ -34,8 +34,8 @@ model Employee {
   leaveApprovals    LeaveApproval[] @relation("EmployeeLeaveApprovals")
   overtimeApprovals OvertimeApproval[] @relation("EmployeeOvertimeApprovals")
   overtimes         Overtime[]  @relation("EmployeeOvertimes")
-  workStatuses      WorkStatus[] @relation("EmployeeWorkStatuses")
-  createdWorkStatuses WorkStatus[] @relation("WorkStatusCreator")
+  workStatuses      WorkStatusRecord[] @relation("EmployeeWorkStatuses")
+  createdWorkStatuses WorkStatusRecord[] @relation("WorkStatusCreator")
 
   @@map("employees")
 }
@@ -53,6 +53,7 @@ model Leave {
   attachments        String[]  @default([]) @map("attachments")
   leaveFormat        String    @default("เต็มวัน") @map("leave_format")
   totalDays          Float     @default(0) @map("total_days")
+  isDuringCancel     Boolean   @default(false) @map("is_during_cancel")
   employee           Employee  @relation("EmployeeLeaves", fields: [employeeId], references: [id])
   approvals          LeaveApproval[] @relation("LeaveApprovals")
 

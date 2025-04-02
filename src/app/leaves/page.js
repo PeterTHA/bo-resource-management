@@ -5,12 +5,45 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
+import { redirect } from 'next/navigation';
 
 // เปลี่ยนจาก Heroicons เป็น react-icons
 import { FiCheckCircle, FiXCircle, FiTrash2, FiPlus, FiFilter, FiCalendar, FiUser, FiClock, 
-         FiFileText, FiDownload, FiInfo, FiAlertTriangle, FiMessageCircle, FiEdit } from 'react-icons/fi';
+         FiFileText, FiDownload, FiInfo, FiAlertTriangle, FiMessageCircle, FiEdit, FiEye, FiChevronUp, FiChevronDown, FiXSquare, FiX, FiCheck, FiPaperclip, FiImage, FiArchive, FiUploadCloud, FiUpload, FiFile } from 'react-icons/fi';
 import { LoadingPage, LoadingButton } from '../../components/ui/LoadingSpinner';
 import ErrorMessage from '../../components/ui/ErrorMessage';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetFooter,
+  SheetClose,
+} from '@/components/ui/sheet';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Toaster } from "@/components/ui/toaster";
+import { useToast } from "@/components/ui/use-toast";
+import { Calendar } from "@/components/ui/calendar";
+import { 
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Input } from "@/components/ui/input";
+import { format } from "date-fns";
+import { th } from "date-fns/locale";
+import { Loader2 } from "lucide-react";
 
 // เพิ่มฟังก์ชันตรวจสอบว่าเป็นรูปภาพจาก mock-images หรือไม่
 const isMockImage = (src) => {
@@ -18,37 +51,69 @@ const isMockImage = (src) => {
 };
 
 export default function LeavesPage() {
-  const { data: session, status } = useSession();
   const router = useRouter();
+  const { toast } = useToast();
   const [leaves, setLeaves] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [filter, setFilter] = useState('all');
-  const [employeeFilter, setEmployeeFilter] = useState('all'); // 'all' หรือ employeeId
   const [employees, setEmployees] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [filter, setFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [sortField, setSortField] = useState('createdAt');
+  const [sortDirection, setSortDirection] = useState('desc');
   const [statusCounts, setStatusCounts] = useState({
     all: 0,
-    pending: 0, 
+    pending: 0,
     approved: 0,
     rejected: 0,
     cancelled: 0,
     pendingCancel: 0
   });
-  const [showRejectModal, setShowRejectModal] = useState(false);
-  const [rejectReason, setRejectReason] = useState('');
-  const [selectedLeaveId, setSelectedLeaveId] = useState(null);
-  const [showCancelModal, setShowCancelModal] = useState(false);
-  const [cancelReason, setCancelReason] = useState('');
+  
+  // Modal states
   const [showApproveModal, setShowApproveModal] = useState(false);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showApproveCancelModal, setShowApproveCancelModal] = useState(false);
+  const [showRejectCancelModal, setShowRejectCancelModal] = useState(false);
+  const [selectedLeaveId, setSelectedLeaveId] = useState(null);
+  const [selectedDeleteLeaveId, setSelectedDeleteLeaveId] = useState(null);
+  const [alertDialogOpen, setAlertDialogOpen] = useState(false);
+  
+  // Form data states
   const [approveReason, setApproveReason] = useState('');
-
-  useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/login');
+  const [rejectReason, setRejectReason] = useState('');
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelApprovalComment, setCancelApprovalComment] = useState('');
+  const [cancelModalTitle, setCancelModalTitle] = useState('ขอยกเลิกการลา');
+  const [cancelModalDescription, setCancelModalDescription] = useState('กรุณาระบุเหตุผลในการขอยกเลิกการลา');
+  
+  // Edit Leave sheet states
+  const [isEditSheetOpen, setIsEditSheetOpen] = useState(false);
+  const [editingLeave, setEditingLeave] = useState(null);
+  const [startDate, setStartDate] = useState(null);
+  const [endDate, setEndDate] = useState(null);
+  const [filesToUpload, setFilesToUpload] = useState([]);
+  const [editFormData, setEditFormData] = useState({
+    leaveType: '',
+    startDate: '',
+    endDate: '',
+    reason: '',
+    leaveFormat: 'เต็มวัน',
+    attachments: []
+  });
+  
+  // ดึงข้อมูล session
+  const { data: session } = useSession({
+    required: true,
+    onUnauthenticated() {
+      redirect('/auth/login');
     }
-  }, [status, router]);
+  });
 
   useEffect(() => {
     const fetchEmployees = async () => {
@@ -91,24 +156,44 @@ export default function LeavesPage() {
         const data = await res.json();
         
         if (data.success) {
-          setLeaves(data.data);
+          // ปรับปรุงข้อมูลโดยเพิ่ม isDuringCancel
+          const leavesWithStatus = data.data.map(leave => {
+            // ตรวจสอบว่ามีคำขอยกเลิกที่ยังรออนุมัติหรือไม่
+            const hasPendingCancelRequest = leave.approvals?.some(a => 
+              a.type === 'request_cancel' && 
+              a.status === 'completed' && 
+              !leave.approvals.some(b => 
+                (b.type === 'approve_cancel' || b.type === 'reject_cancel') && 
+                b.status === 'completed' && 
+                b.createdAt > a.createdAt
+              )
+            );
+            
+            // เพิ่ม flag เพื่อใช้ในการแสดงผล
+            return {
+              ...leave,
+              isDuringCancel: hasPendingCancelRequest
+            };
+          });
+          
+          setLeaves(leavesWithStatus);
           
           // คำนวณจำนวนข้อมูลแต่ละสถานะ
           const counts = {
-            all: data.data.length,
-            pending: data.data.filter(leave => 
+            all: leavesWithStatus.length,
+            pending: leavesWithStatus.filter(leave => 
               leave.status === 'รออนุมัติ'
             ).length,
-            approved: data.data.filter(leave => 
+            approved: leavesWithStatus.filter(leave => 
               leave.status === 'อนุมัติ' && 
-              !leave.isCancelled && 
-              leave.cancelStatus !== 'รออนุมัติ'
+              !leave.isDuringCancel
             ).length,
-            rejected: data.data.filter(leave => leave.status === 'ไม่อนุมัติ').length,
-            cancelled: data.data.filter(leave => leave.isCancelled).length,
-            pendingCancel: data.data.filter(leave => 
-              leave.status === 'อนุมัติ' && leave.cancelStatus === 'รออนุมัติ'
-            ).length
+            rejected: leavesWithStatus.filter(leave => leave.status === 'ไม่อนุมัติ').length,
+            cancelled: leavesWithStatus.filter(leave => 
+              leave.status === 'ยกเลิก' ||
+              leave.approvals?.some(a => a.type === 'approve_cancel' && a.status === 'completed')
+            ).length,
+            pendingCancel: leavesWithStatus.filter(leave => leave.isDuringCancel).length
           };
           setStatusCounts(counts);
         } else {
@@ -128,10 +213,6 @@ export default function LeavesPage() {
   }, [session]);
 
   const handleDelete = async (id) => {
-    if (!confirm('คุณต้องการลบข้อมูลการลานี้ใช่หรือไม่?')) {
-      return;
-    }
-    
     try {
       setActionLoading(true);
       const res = await fetch(`/api/leaves/${id}`, {
@@ -142,7 +223,11 @@ export default function LeavesPage() {
       
       if (data.success) {
         setLeaves(leaves.filter(leave => leave.id !== id));
-        setSuccess('ลบข้อมูลการลาเรียบร้อยแล้ว');
+        toast({
+          title: "ดำเนินการสำเร็จ",
+          description: "ลบข้อมูลการลาเรียบร้อยแล้ว",
+          duration: 10000,
+        });
         
         // อัปเดตสถิติ
         setStatusCounts(prev => {
@@ -157,14 +242,31 @@ export default function LeavesPage() {
           };
         });
       } else {
-        setError(data.message || 'เกิดข้อผิดพลาดในการลบข้อมูลการลา');
+        toast({
+          title: "เกิดข้อผิดพลาด",
+          description: data.message || 'เกิดข้อผิดพลาดในการลบข้อมูลการลา',
+          variant: "destructive",
+          duration: 10000,
+        });
       }
     } catch (error) {
-      setError('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์');
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: 'เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์',
+        variant: "destructive",
+        duration: 10000,
+      });
       console.error(error);
     } finally {
       setActionLoading(false);
+      setSelectedDeleteLeaveId(null);
     }
+  };
+
+  // ฟังก์ชันที่เรียกก่อนลบข้อมูล
+  const confirmDelete = (id) => {
+    setSelectedDeleteLeaveId(id);
+    setAlertDialogOpen(true);
   };
 
   const handleApprove = async () => {
@@ -202,7 +304,11 @@ export default function LeavesPage() {
           } : leave
         ));
         
-        setSuccess('อนุมัติการลาเรียบร้อยแล้ว');
+        toast({
+          title: "ดำเนินการสำเร็จ",
+          description: "อนุมัติการลาเรียบร้อยแล้ว",
+          duration: 10000,
+        });
         
         // อัปเดตสถิติ
         setStatusCounts(prev => ({
@@ -216,10 +322,20 @@ export default function LeavesPage() {
         setSelectedLeaveId(null);
         setApproveReason('');
       } else {
-        setError(data.message || 'เกิดข้อผิดพลาดในการอัปเดตสถานะการลา');
+        toast({
+          title: "เกิดข้อผิดพลาด",
+          description: data.message || 'เกิดข้อผิดพลาดในการอัปเดตสถานะการลา',
+          variant: "destructive",
+          duration: 10000,
+        });
       }
     } catch (error) {
-      setError('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์');
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: 'เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์',
+        variant: "destructive",
+        duration: 10000,
+      });
       console.error(error);
     } finally {
       setActionLoading(false);
@@ -273,7 +389,11 @@ export default function LeavesPage() {
           } : leave
         ));
         
-        setSuccess('ปฏิเสธการลาเรียบร้อยแล้ว');
+        toast({
+          title: "ดำเนินการสำเร็จ",
+          description: "ปฏิเสธการลาเรียบร้อยแล้ว",
+          duration: 10000,
+        });
         
         // อัปเดตสถิติ
         setStatusCounts(prev => ({
@@ -287,10 +407,308 @@ export default function LeavesPage() {
         setSelectedLeaveId(null);
         setRejectReason('');
       } else {
-        setError(data.message || 'เกิดข้อผิดพลาดในการอัปเดตสถานะการลา');
+        toast({
+          title: "เกิดข้อผิดพลาด",
+          description: data.message || 'เกิดข้อผิดพลาดในการอัปเดตสถานะการลา',
+          variant: "destructive",
+          duration: 10000,
+        });
       }
     } catch (error) {
-      setError('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์');
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: 'เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์',
+        variant: "destructive",
+        duration: 10000,
+      });
+      console.error(error);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const openCancelModal = (id) => {
+    setSelectedLeaveId(id);
+    setCancelReason('');
+    
+    // ดึงข้อมูลใบลาที่ถูกเลือก
+    const selectedLeave = leaves.find(leave => leave.id === id);
+    const isRequestingForSelf = session.user.id === selectedLeave?.employeeId;
+    
+    // กำหนดข้อความให้เหมาะสมกับกรณี
+    if (isRequestingForSelf) {
+      setCancelModalTitle("ขอยกเลิกการลา");
+      setCancelModalDescription("กรุณาระบุเหตุผลในการขอยกเลิกการลาของคุณ");
+    } else {
+      setCancelModalTitle("ขอยกเลิกการลาแทน");
+      setCancelModalDescription(`กรุณาระบุเหตุผลในการขอยกเลิกการลาของ ${selectedLeave?.employee?.firstName || ''} ${selectedLeave?.employee?.lastName || ''}`);
+    }
+    
+    setShowCancelModal(true);
+  };
+
+  const openApproveCancelModal = (id) => {
+    setSelectedLeaveId(id);
+    setCancelApprovalComment('');
+    setShowApproveCancelModal(true);
+  };
+
+  const openRejectCancelModal = (id) => {
+    setSelectedLeaveId(id);
+    setCancelApprovalComment('');
+    setShowRejectCancelModal(true);
+  };
+
+  const handleCancelRequest = async () => {
+    if (!selectedLeaveId) return;
+    
+    try {
+      setActionLoading(true);
+      
+      // ตรวจสอบว่ามี session และ session.user.id
+      if (!session || !session?.user?.id) {
+        console.error('Invalid session in client component:', JSON.stringify(session, null, 2));
+        toast({
+          title: "เกิดข้อผิดพลาด",
+          description: "ข้อมูลผู้ใช้ไม่ถูกต้อง กรุณาเข้าสู่ระบบใหม่",
+          variant: "destructive",
+          duration: 10000,
+        });
+        setActionLoading(false);
+        return;
+      }
+      
+      // แสดงค่าที่จะส่งไป API
+      console.log('Sending cancel request with:', {
+        selectedLeaveId,
+        cancelReason,
+        userId: session?.user?.id,
+        userRole: session?.user?.role || 'unknown'
+      });
+      
+      const res = await fetch(`/api/leaves/${selectedLeaveId}/cancel-request`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          cancelReason: cancelReason || null
+        }),
+      });
+      
+      const data = await res.json();
+      
+      if (data.success) {
+        // ดึงข้อมูลใบลาที่ถูกเลือก
+        const selectedLeave = leaves.find(leave => leave.id === selectedLeaveId);
+        const isRequestingForSelf = session.user.id === selectedLeave?.employeeId;
+        
+        // อัปเดตข้อมูลในรายการ
+        const updatedLeaves = leaves.map(leave => 
+          leave.id === selectedLeaveId ? { 
+            ...leave,
+            isDuringCancel: true,
+            approvals: [
+              {
+                type: 'request_cancel',
+                status: 'completed',
+                reason: cancelReason || null,
+                employeeId: session?.user?.id,
+                createdAt: new Date().toISOString()
+              },
+              ...(leave.approvals || [])
+            ]
+          } : leave
+        );
+        
+        console.log('Updated leave with isDuringCancel:', updatedLeaves.find(l => l.id === selectedLeaveId));
+        setLeaves(updatedLeaves);
+        
+        toast({
+          title: "ดำเนินการสำเร็จ",
+          description: isRequestingForSelf 
+            ? "ส่งคำขอยกเลิกการลาเรียบร้อยแล้ว กรุณารอการอนุมัติ" 
+            : `ส่งคำขอยกเลิกการลาของ ${selectedLeave?.employee?.firstName || ''} ${selectedLeave?.employee?.lastName || ''} เรียบร้อยแล้ว กรุณารอการอนุมัติ`,
+          duration: 10000,
+        });
+        
+        // อัปเดตสถิติ
+        setStatusCounts(prev => ({
+          ...prev,
+          approved: prev.approved - 1,
+          pendingCancel: prev.pendingCancel + 1
+        }));
+        
+        // ปิด modal
+        setShowCancelModal(false);
+        setSelectedLeaveId(null);
+        setCancelReason('');
+      } else {
+        toast({
+          title: "เกิดข้อผิดพลาด",
+          description: data.message || 'เกิดข้อผิดพลาดในการส่งคำขอยกเลิกการลา',
+          variant: "destructive",
+          duration: 10000,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: 'เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์',
+        variant: "destructive",
+        duration: 10000,
+      });
+      console.error(error);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleApproveCancel = async () => {
+    if (!selectedLeaveId) return;
+    
+    try {
+      setActionLoading(true);
+      const res = await fetch(`/api/leaves/${selectedLeaveId}/approve-cancel`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          comment: cancelApprovalComment || null
+        }),
+      });
+      
+      const data = await res.json();
+      
+      if (data.success) {
+        // อัปเดตข้อมูลในรายการ
+        setLeaves(leaves.map(leave => 
+          leave.id === selectedLeaveId ? { 
+            ...leave,
+            status: 'ยกเลิก',
+            isDuringCancel: false,
+            approvals: [
+              {
+                type: 'approve_cancel',
+                status: 'completed',
+                comment: cancelApprovalComment || null,
+                employeeId: session?.user?.id,
+                createdAt: new Date().toISOString()
+              },
+              ...(leave.approvals || [])
+            ]
+          } : leave
+        ));
+        
+        toast({
+          title: "ดำเนินการสำเร็จ",
+          description: "อนุมัติการยกเลิกการลาเรียบร้อยแล้ว",
+          duration: 10000,
+        });
+        
+        // อัปเดตสถิติ
+        setStatusCounts(prev => ({
+          ...prev,
+          approved: prev.approved - 1,
+          pendingCancel: prev.pendingCancel - 1,
+          cancelled: prev.cancelled + 1
+        }));
+        
+        // ปิด modal
+        setShowApproveCancelModal(false);
+        setSelectedLeaveId(null);
+        setCancelApprovalComment('');
+      } else {
+        toast({
+          title: "เกิดข้อผิดพลาด",
+          description: data.message || 'เกิดข้อผิดพลาดในการอนุมัติการยกเลิกการลา',
+          variant: "destructive",
+          duration: 10000,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: 'เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์',
+        variant: "destructive",
+        duration: 10000,
+      });
+      console.error(error);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRejectCancel = async () => {
+    if (!selectedLeaveId) return;
+    
+    try {
+      setActionLoading(true);
+      const res = await fetch(`/api/leaves/${selectedLeaveId}/reject-cancel`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          comment: cancelApprovalComment || null
+        }),
+      });
+      
+      const data = await res.json();
+      
+      if (data.success) {
+        // อัปเดตข้อมูลในรายการ
+        setLeaves(leaves.map(leave => 
+          leave.id === selectedLeaveId ? { 
+            ...leave,
+            isDuringCancel: false,
+            status: 'อนุมัติ', // ยังคงสถานะอนุมัติไว้
+            approvals: [
+              {
+                type: 'reject_cancel',
+                status: 'completed',
+                comment: cancelApprovalComment || null,
+                employeeId: session?.user?.id,
+                createdAt: new Date().toISOString()
+              },
+              ...(leave.approvals || [])
+            ]
+          } : leave
+        ));
+        
+        toast({
+          title: "ดำเนินการสำเร็จ",
+          description: "ปฏิเสธการยกเลิกการลาเรียบร้อยแล้ว",
+          duration: 10000,
+        });
+        
+        // อัปเดตสถิติ
+        setStatusCounts(prev => ({
+          ...prev,
+          pendingCancel: prev.pendingCancel - 1,
+          approved: prev.approved // ยังเป็นอนุมัติเหมือนเดิม
+        }));
+        
+        // ปิด modal
+        setShowRejectCancelModal(false);
+        setSelectedLeaveId(null);
+        setCancelApprovalComment('');
+      } else {
+        toast({
+          title: "เกิดข้อผิดพลาด",
+          description: data.message || 'เกิดข้อผิดพลาดในการปฏิเสธการยกเลิกการลา',
+          variant: "destructive",
+          duration: 10000,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: 'เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์',
+        variant: "destructive",
+        duration: 10000,
+      });
       console.error(error);
     } finally {
       setActionLoading(false);
@@ -306,33 +724,196 @@ export default function LeavesPage() {
     } else if (filter === 'approved') {
       filtered = leaves.filter(leave => 
         leave.status === 'อนุมัติ' && 
-        !leave.isCancelled && 
-        !leave.cancelStatus
+        !leave.isDuringCancel
       );
     } else if (filter === 'rejected') {
       filtered = leaves.filter(leave => leave.status === 'ไม่อนุมัติ');
     } else if (filter === 'cancelled') {
       filtered = leaves.filter(leave => 
-        leave.status === 'ยกเลิก' || 
-        leave.isCancelled || 
-        leave.cancelledById !== null ||
-        leave.cancelStatus === 'อนุมัติ'
+        leave.status === 'ยกเลิก' ||
+        leave.approvals?.some(a => a.type === 'approve_cancel' && a.status === 'completed')
       );
     } else if (filter === 'pendingCancel') {
-      filtered = leaves.filter(leave => 
-        leave.status === 'อนุมัติ' && leave.cancelStatus === 'รออนุมัติ'
+      filtered = leaves.filter(leave => leave.isDuringCancel);
+    }
+    
+    // ค้นหาตามข้อความ
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(leave => 
+        leave.leaveType?.toLowerCase().includes(query) ||
+        leave.employee?.firstName?.toLowerCase().includes(query) ||
+        leave.employee?.lastName?.toLowerCase().includes(query) ||
+        leave.status?.toLowerCase().includes(query) ||
+        leave.reason?.toLowerCase().includes(query)
       );
     }
     
-    // กรองตามพนักงาน
-    if (employeeFilter !== 'all') {
-      filtered = filtered.filter(leave => leave.employeeId === employeeFilter);
-    }
+    // เรียงลำดับข้อมูล
+    filtered.sort((a, b) => {
+      let valueA = a[sortField];
+      let valueB = b[sortField];
+      
+      // กรณีข้อมูลพนักงาน
+      if (sortField === 'employee') {
+        valueA = a.employee?.firstName || '';
+        valueB = b.employee?.firstName || '';
+      }
+      
+      // กรณีเปรียบเทียบวันที่
+      if (sortField === 'startDate' || sortField === 'endDate' || sortField === 'createdAt') {
+        valueA = new Date(valueA || 0).getTime();
+        valueB = new Date(valueB || 0).getTime();
+      }
+      
+      // กรณีเปรียบเทียบตัวเลข
+      if (sortField === 'totalDays') {
+        valueA = Number(valueA || 0);
+        valueB = Number(valueB || 0);
+      }
+      
+      if (valueA < valueB) return sortDirection === 'asc' ? -1 : 1;
+      if (valueA > valueB) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
     
     return filtered;
-  }, [leaves, filter, employeeFilter]);
+  }, [leaves, filter, searchQuery, sortField, sortDirection]);
 
+  // คำนวณข้อมูลสำหรับแสดงผลตาม pagination
+  const paginatedLeaves = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredLeaves.slice(startIndex, startIndex + pageSize);
+  }, [filteredLeaves, currentPage, pageSize]);
+
+  // คำนวณจำนวนหน้าทั้งหมด
+  const totalPages = useMemo(() => {
+    return Math.ceil(filteredLeaves.length / pageSize);
+  }, [filteredLeaves, pageSize]);
+
+  // ฟังก์ชันเปลี่ยนหน้า
+  const handlePageChange = (newPage) => {
+    setCurrentPage(newPage);
+  };
+
+  // ฟังก์ชันจัดการการเรียงลำดับที่ทำงานได้จริง
+  const handleSort = (field) => {
+    let newDirection = sortDirection;
+    
+    if (sortField === field) {
+      // ถ้าคลิกที่ field เดิม ให้สลับทิศทางการเรียง
+      newDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+      setSortDirection(newDirection);
+    } else {
+      // ถ้าคลิกที่ field ใหม่ ให้ตั้งค่าเริ่มต้นเป็นการเรียงจากมากไปน้อย
+      setSortField(field);
+      newDirection = 'desc';
+      setSortDirection('desc');
+    }
+    
+    // สร้างคัดลอกข้อมูลเพื่อเรียงใหม่
+    const leavesCopy = [...leaves];
+    
+    // เรียงข้อมูลใหม่ตามฟิลด์และทิศทางที่เลือก
+    leavesCopy.sort((a, b) => {
+      let valueA = a[field];
+      let valueB = b[field];
+      
+      // กรณีข้อมูลพนักงาน
+      if (field === 'employee') {
+        valueA = a.employee?.firstName || '';
+        valueB = b.employee?.firstName || '';
+      }
+      
+      // กรณีเปรียบเทียบวันที่
+      if (field === 'startDate' || field === 'endDate' || field === 'createdAt') {
+        valueA = new Date(valueA || 0).getTime();
+        valueB = new Date(valueB || 0).getTime();
+      }
+      
+      // กรณีเปรียบเทียบตัวเลข
+      if (field === 'totalDays') {
+        valueA = Number(valueA || 0);
+        valueB = Number(valueB || 0);
+      }
+      
+      if (valueA < valueB) return newDirection === 'asc' ? -1 : 1;
+      if (valueA > valueB) return newDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+    
+    // อัพเดต state เพื่อให้เกิดการ re-render
+    setLeaves(leavesCopy);
+    
+    // รีเซ็ตกลับไปหน้าแรกเมื่อเปลี่ยนการเรียงลำดับ
+    setCurrentPage(1);
+    
+    // แจ้งเตือนการเรียงลำดับข้อมูล (ตัวอย่าง)
+    toast({
+      title: "เรียงข้อมูลเรียบร้อย",
+      description: `เรียงตาม ${field} ${newDirection === 'asc' ? 'จากน้อยไปมาก' : 'จากมากไปน้อย'}`,
+      duration: 3000,
+    });
+  };
+
+  // ไอคอนแสดงทิศทางการเรียงลำดับ
+  const renderSortIcon = (field) => {
+    if (sortField !== field) {
+      return (
+        <svg 
+          xmlns="http://www.w3.org/2000/svg" 
+          width="15" 
+          height="15" 
+          viewBox="0 0 24 24" 
+          fill="none" 
+          stroke="currentColor" 
+          strokeWidth="2" 
+          strokeLinecap="round" 
+          strokeLinejoin="round" 
+          className="h-4 w-4 ml-1 opacity-50"
+        >
+          <path d="M8 9l4-4 4 4" />
+          <path d="M16 15l-4 4-4-4" />
+        </svg>
+      );
+    }
+    
+    return sortDirection === 'asc' ? (
+      <svg 
+        xmlns="http://www.w3.org/2000/svg" 
+        width="15" 
+        height="15" 
+        viewBox="0 0 24 24" 
+        fill="none" 
+        stroke="currentColor" 
+        strokeWidth="2" 
+        strokeLinecap="round" 
+        strokeLinejoin="round" 
+        className="h-4 w-4 ml-1 text-primary font-bold"
+      >
+        <path d="m18 15-6-6-6 6"/>
+      </svg>
+    ) : (
+      <svg 
+        xmlns="http://www.w3.org/2000/svg" 
+        width="15" 
+        height="15" 
+        viewBox="0 0 24 24" 
+        fill="none" 
+        stroke="currentColor" 
+        strokeWidth="2" 
+        strokeLinecap="round" 
+        strokeLinejoin="round" 
+        className="h-4 w-4 ml-1 text-primary font-bold"
+      >
+        <path d="m6 9 6 6 6-6"/>
+      </svg>
+    );
+  };
+
+  // เปลี่ยนรูปแบบวันที่
   const formatDate = (dateString) => {
+    if (!dateString) return '-';
     const date = new Date(dateString);
     return date.toLocaleDateString('th-TH', {
       year: 'numeric',
@@ -425,7 +1006,382 @@ export default function LeavesPage() {
     return false;
   };
 
-  if (status === 'loading' || loading) {
+  // ตรวจสอบว่าสามารถอนุมัติคำขอยกเลิกการลาได้หรือไม่
+  const canApproveCancelRequest = (leave) => {
+    if (!session || !leave) return false;
+    
+    // แอดมินและหัวหน้างานเท่านั้นที่สามารถอนุมัติการยกเลิกได้
+    if (session.user.role === 'admin' || session.user.role === 'supervisor') {
+      // ตรวจสอบว่ามีการขอยกเลิกล่าสุดหรือไม่
+      if (leave.approvals && leave.approvals.length > 0) {
+        // เรียงลำดับการดำเนินการจากล่าสุดไปเก่าสุด
+        const sortedApprovals = [...leave.approvals].sort(
+          (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+        );
+        
+        // หาการดำเนินการล่าสุด
+        const latestAction = sortedApprovals[0];
+        
+        // ถ้าการดำเนินการล่าสุดเป็นการอนุมัติหรือปฏิเสธการยกเลิกแล้ว ไม่ต้องแสดงปุ่มอีก
+        if (latestAction.type === 'approve_cancel' || latestAction.type === 'reject_cancel') {
+          return false;
+        }
+        
+        // ถ้าการดำเนินการล่าสุดเป็นการขอยกเลิก ให้แสดงปุ่มอนุมัติหรือไม่อนุมัติการยกเลิก
+        if (latestAction.type === 'request_cancel' && latestAction.status === 'completed') {
+          return true;
+        }
+      }
+      
+      // กรณีที่ใบลายังอยู่ในสถานะ isDuringCancel และไม่มีการอนุมัติหรือปฏิเสธการยกเลิกล่าสุด
+      if (leave.isDuringCancel === true && 
+          (!leave.approvals || !leave.approvals.some(a => 
+            (a.type === 'approve_cancel' || a.type === 'reject_cancel') && 
+            a.status === 'completed'))) {
+        return true;
+      }
+    }
+    
+    return false;
+  };
+
+  // ตรวจสอบว่าสามารถขอยกเลิกการลาได้หรือไม่
+  const canCancelRequest = (leave) => {
+    if (!session || !leave) return false;
+    
+    // ตรวจสอบว่าเป็นการลาที่อนุมัติแล้ว
+    if (leave.status !== 'อนุมัติ') return false;
+    
+    // ตรวจสอบว่ามีคำขอยกเลิกที่ยังรออนุมัติอยู่หรือไม่
+    const hasPendingCancelRequest = leave.approvals?.some(a => 
+      a.type === 'request_cancel' && 
+      a.status === 'completed' && 
+      !leave.approvals.some(b => 
+        ((b.type === 'approve_cancel' && b.status === 'completed') || 
+        (b.type === 'reject_cancel' && b.status === 'completed')) && 
+        b.createdAt > a.createdAt
+      )
+    );
+    
+    // ถ้ามีคำขอยกเลิกที่ยังรออนุมัติอยู่ จะไม่สามารถขอยกเลิกซ้ำได้
+    if (hasPendingCancelRequest) return false;
+    
+    // หาคำขอยกเลิกล่าสุด
+    let latestCancelRequest = null;
+    let latestResponse = null;
+    
+    if (leave.approvals && leave.approvals.length > 0) {
+      // หาคำขอยกเลิกล่าสุด
+      const cancelRequests = leave.approvals
+        .filter(a => a.type === 'request_cancel' && a.status === 'completed')
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      
+      if (cancelRequests.length > 0) {
+        latestCancelRequest = cancelRequests[0];
+        
+        // หาการตอบกลับล่าสุด (อนุมัติหรือปฏิเสธ) ต่อคำขอยกเลิกล่าสุด
+        const responses = leave.approvals
+          .filter(a => (a.type === 'approve_cancel' || a.type === 'reject_cancel') && a.status === 'completed')
+          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        
+        if (responses.length > 0) {
+          latestResponse = responses[0];
+        }
+      }
+    }
+    
+    // ถ้ามีคำขอยกเลิกล่าสุด และมีการตอบกลับล่าสุด และการตอบกลับเกิดขึ้นหลังคำขอ
+    // และการตอบกลับล่าสุดคือปฏิเสธ จะสามารถขอยกเลิกได้อีกครั้ง
+    if (latestCancelRequest && latestResponse && 
+        new Date(latestResponse.createdAt) > new Date(latestCancelRequest.createdAt) && 
+        latestResponse.type === 'reject_cancel') {
+      // อนุญาตให้ขอยกเลิกอีกครั้งได้
+    } else if (latestCancelRequest && !latestResponse) {
+      // ถ้ามีคำขอยกเลิกล่าสุดแต่ไม่มีการตอบกลับ จะไม่สามารถขอยกเลิกได้
+      return false;
+    }
+    
+    // พนักงานขอยกเลิกการลาของตัวเองได้
+    if (session.user.id === leave.employeeId) return true;
+    
+    // หัวหน้าทีมขอยกเลิกแทนคนในทีมได้
+    if (canRequestCancelForTeam(leave)) return true;
+    
+    // แอดมินขอยกเลิกการลาได้ทุกรายการ
+    if (session.user.role === 'admin') return true;
+    
+    return false;
+  };
+  
+  // ตรวจสอบว่าหัวหน้าทีมสามารถขอยกเลิกการลาแทนสมาชิกในทีมได้หรือไม่
+  const canRequestCancelForTeam = (leave) => {
+    if (!session || !leave) return false;
+    
+    // ต้องเป็นหัวหน้าทีม
+    if (session.user.role !== 'supervisor') return false;
+    
+    // ต้องเป็นการลาที่อนุมัติแล้ว
+    if (leave.status !== 'อนุมัติ') return false;
+    
+    // ตรวจสอบว่าพนักงานที่ลาอยู่ในทีมของหัวหน้าหรือไม่
+    const isSameTeam = session.user.teamId && 
+                       leave.employee?.teamId === session.user.teamId;
+    
+    return isSameTeam;
+  };
+
+  // ฟังก์ชันเปิด Sheet แก้ไขข้อมูล
+  const openEditSheet = (leave) => {
+    setEditingLeave(leave);
+    
+    // แปลงวันที่จาก string เป็น Date object สำหรับ Calendar
+    const parsedStartDate = leave.startDate ? new Date(leave.startDate) : null;
+    const parsedEndDate = leave.endDate ? new Date(leave.endDate) : null;
+    
+    setStartDate(parsedStartDate);
+    setEndDate(parsedEndDate);
+    
+    setEditFormData({
+      leaveType: leave.leaveType || '',
+      startDate: leave.startDate ? new Date(leave.startDate).toISOString().split('T')[0] : '',
+      endDate: leave.endDate ? new Date(leave.endDate).toISOString().split('T')[0] : '',
+      reason: leave.reason || '',
+      leaveFormat: leave.leaveFormat || 'เต็มวัน',
+      totalDays: leave.totalDays || 0,
+      attachments: leave.attachments || [],
+    });
+    
+    setFilesToUpload([]);
+    setIsEditSheetOpen(true);
+  };
+
+  // ฟังก์ชันจัดการไฟล์ที่อัปโหลด
+  const handleFileChange = (e) => {
+    const newFiles = Array.from(e.target.files);
+    setFilesToUpload(prev => [...prev, ...newFiles]);
+  };
+
+  // ฟังก์ชันจัดการการลากไฟล์มาวาง
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      setFilesToUpload(prev => [...prev, ...Array.from(files)]);
+    }
+  };
+
+  // ฟังก์ชันลบไฟล์ที่เลือก
+  const removeFile = (index) => {
+    setFilesToUpload(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // ฟังก์ชันลบไฟล์เดิมที่มีอยู่
+  const removeAttachment = (index) => {
+    setEditFormData(prev => {
+      const newAttachments = [...prev.attachments];
+      newAttachments.splice(index, 1);
+      return {
+        ...prev,
+        attachments: newAttachments
+      };
+    });
+  };
+
+  // ฟังก์ชันอัปโหลดไฟล์
+  const uploadFiles = async () => {
+    if (filesToUpload.length === 0) return [];
+    
+    try {
+      setUploading(true);
+      
+      const formData = new FormData();
+      formData.append('type', 'leave');
+      
+      // เพิ่มไฟล์ทั้งหมดที่ต้องการอัปโหลด
+      filesToUpload.forEach(file => {
+        formData.append('files', file);
+      });
+      
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.message || 'อัปโหลดไฟล์ไม่สำเร็จ');
+      }
+      
+      return result.files.map(file => file.url);
+    } catch (error) {
+      console.error('Error uploading files:', error);
+      throw error;
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // อัปเดตฟังก์ชันคำนวณวันลาเมื่อเลือกวันที่ด้วย Calendar
+  const calculateTotalDays = () => {
+    if (startDate && endDate && editFormData.leaveFormat) {
+      if (editFormData.leaveFormat.includes('ครึ่งวัน')) {
+        return 0.5;
+      } else {
+        const diffTime = Math.abs(endDate - startDate);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+        return diffDays;
+      }
+    }
+    return 0;
+  };
+
+  // อัปเดตเมื่อมีการเลือกวันที่ด้วย Calendar
+  useEffect(() => {
+    if (startDate && endDate) {
+      const totalDays = calculateTotalDays();
+      setEditFormData(prev => ({
+        ...prev,
+        startDate: format(startDate, 'yyyy-MM-dd'),
+        endDate: format(endDate, 'yyyy-MM-dd'),
+        totalDays
+      }));
+    }
+  }, [startDate, endDate, editFormData.leaveFormat]);
+
+  // ฟังก์ชันอัปเดตข้อมูลการลา
+  const handleUpdateLeave = async (e) => {
+    e.preventDefault();
+    
+    if (!editingLeave) return;
+    
+    try {
+      setActionLoading(true);
+      
+      // คำนวณจำนวนวันลาอัตโนมัติ
+      const startDate = new Date(editFormData.startDate);
+      const endDate = new Date(editFormData.endDate);
+      let totalDays = editFormData.totalDays;
+      
+      // คำนวณจำนวนวันลาอัตโนมัติ (ถ้าเป็นการลาเต็มวัน)
+      if (editFormData.leaveFormat === 'เต็มวัน') {
+        const diffTime = Math.abs(endDate - startDate);
+        totalDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+      } else if (editFormData.leaveFormat.includes('ครึ่งวัน')) {
+        totalDays = 0.5;
+      }
+      
+      // อัปโหลดไฟล์ (ถ้ามี)
+      let uploadedFileUrls = [];
+      if (filesToUpload.length > 0) {
+        try {
+          uploadedFileUrls = await uploadFiles();
+        } catch (error) {
+          toast({
+            title: "เกิดข้อผิดพลาด",
+            description: `การอัปโหลดไฟล์ไม่สำเร็จ: ${error.message}`,
+            variant: "destructive",
+            duration: 10000,
+          });
+          setActionLoading(false);
+          return;
+        }
+      }
+      
+      // รวมรายการไฟล์ทั้งหมด (ไฟล์เดิมและไฟล์ใหม่)
+      const allAttachments = [
+        ...editFormData.attachments,
+        ...uploadedFileUrls
+      ];
+      
+      const res = await fetch(`/api/leaves/${editingLeave.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          leaveType: editFormData.leaveType,
+          startDate: editFormData.startDate,
+          endDate: editFormData.endDate,
+          reason: editFormData.reason,
+          leaveFormat: editFormData.leaveFormat,
+          totalDays: totalDays,
+          attachments: allAttachments
+        }),
+      });
+      
+      const data = await res.json();
+      
+      if (data.success) {
+        // อัปเดตข้อมูลในรายการ
+        setLeaves(leaves.map(leave => 
+          leave.id === editingLeave.id ? { 
+            ...leave, 
+            leaveType: editFormData.leaveType,
+            startDate: editFormData.startDate,
+            endDate: editFormData.endDate,
+            reason: editFormData.reason,
+            leaveFormat: editFormData.leaveFormat,
+            totalDays: totalDays,
+            attachments: allAttachments
+          } : leave
+        ));
+        
+        toast({
+          title: "ดำเนินการสำเร็จ",
+          description: "อัปเดตข้อมูลการลาเรียบร้อยแล้ว",
+          duration: 10000,
+        });
+        
+        // ปิด Sheet
+        setIsEditSheetOpen(false);
+        setEditingLeave(null);
+        setFilesToUpload([]);
+      } else {
+        toast({
+          title: "เกิดข้อผิดพลาด",
+          description: data.message || 'เกิดข้อผิดพลาดในการอัปเดตข้อมูลการลา',
+          variant: "destructive",
+          duration: 10000,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: 'เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์',
+        variant: "destructive",
+        duration: 10000,
+      });
+      console.error(error);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // ฟังก์ชันจัดการการเปลี่ยนแปลงข้อมูลในฟอร์ม
+  const handleEditFormChange = (e) => {
+    const { name, value } = e.target;
+    setEditFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  if (loading) {
     return (
       <div className="container mx-auto px-4 py-8">
         <LoadingPage message="กำลังโหลดข้อมูลการลา..." />
@@ -439,100 +1395,25 @@ export default function LeavesPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-        <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 flex items-center">
-          <FiCalendar className="mr-2 text-blue-600 dark:text-blue-400" /> รายการการลา
+      <Toaster />
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <h1 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-gray-100 flex items-center">
+          <FiCalendar className="mr-2 text-primary" /> รายการการลา
         </h1>
         <Link
           href="/leaves/add"
-          className="btn btn-primary inline-flex items-center justify-center text-white shadow-md hover:shadow-lg"
+          className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ring-offset-background bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2"
         >
           <FiPlus className="mr-1.5 h-4 w-4" /> <span>ขอลางาน</span>
         </Link>
       </div>
       
       {error && <ErrorMessage message={error} type="error" />}
-      {success && <ErrorMessage message={success} type="success" />}
-      
-      {/* Dashboard สรุปสถิติการลา */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-6 gap-4 mb-6">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 border-l-4 border-blue-500 dark:border-blue-400 transition-all duration-200 hover:shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">การลาทั้งหมด</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{statusCounts.all}</p>
-            </div>
-            <div className="bg-blue-100 dark:bg-blue-900/30 p-3 rounded-full">
-              <FiCalendar className="h-5 w-5 text-blue-500 dark:text-blue-400" />
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 border-l-4 border-yellow-500 dark:border-yellow-400 transition-all duration-200 hover:shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">รออนุมัติ</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{statusCounts.pending}</p>
-            </div>
-            <div className="bg-yellow-100 dark:bg-yellow-900/30 p-3 rounded-full">
-              <FiClock className="h-5 w-5 text-yellow-500 dark:text-yellow-400" />
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 border-l-4 border-green-500 dark:border-green-400 transition-all duration-200 hover:shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">อนุมัติแล้ว</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{statusCounts.approved}</p>
-            </div>
-            <div className="bg-green-100 dark:bg-green-900/30 p-3 rounded-full">
-              <FiCheckCircle className="h-5 w-5 text-green-500 dark:text-green-400" />
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 border-l-4 border-red-500 dark:border-red-400 transition-all duration-200 hover:shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">ไม่อนุมัติ</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{statusCounts.rejected}</p>
-            </div>
-            <div className="bg-red-100 dark:bg-red-900/30 p-3 rounded-full">
-              <FiXCircle className="h-5 w-5 text-red-500 dark:text-red-400" />
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 border-l-4 border-purple-500 dark:border-purple-400 transition-all duration-200 hover:shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">ยกเลิกแล้ว</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{statusCounts.cancelled}</p>
-            </div>
-            <div className="bg-purple-100 dark:bg-purple-900/30 p-3 rounded-full">
-              <FiXCircle className="h-5 w-5 text-purple-500 dark:text-purple-400" />
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 border-l-4 border-orange-500 dark:border-orange-400 transition-all duration-200 hover:shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">รอยกเลิก</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{statusCounts.pendingCancel}</p>
-            </div>
-            <div className="bg-orange-100 dark:bg-orange-900/30 p-3 rounded-full">
-              <FiAlertTriangle className="h-5 w-5 text-orange-500 dark:text-orange-400" />
-            </div>
-          </div>
-        </div>
-      </div>
       
       {/* ตัวกรองข้อมูล */}
       <div className="mb-6">
-        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md transition-colors duration-300">
-          <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-3 flex items-center">
+        <div className="bg-white dark:bg-gray-800 p-5 rounded-lg border shadow-sm">
+          <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4 flex items-center">
             <FiFilter className="mr-2" /> กรองข้อมูล
           </h2>
           
@@ -540,362 +1421,1104 @@ export default function LeavesPage() {
           <div className="flex flex-wrap gap-2 mb-4">
             <button
               onClick={() => setFilter('all')}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+              className={`inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 px-3 py-1.5 ${
                 filter === 'all'
-                  ? 'bg-blue-600 text-white shadow-md'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600'
+                  ? 'bg-primary text-primary-foreground shadow hover:bg-primary/90'
+                  : 'border border-input bg-background hover:bg-accent hover:text-accent-foreground'
               }`}
             >
               ทั้งหมด ({statusCounts.all})
             </button>
             <button
               onClick={() => setFilter('pending')}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+              className={`inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 px-3 py-1.5 ${
                 filter === 'pending'
-                  ? 'bg-yellow-500 text-white shadow-md'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600'
+                  ? 'bg-yellow-500 text-white shadow hover:bg-yellow-600'
+                  : 'border border-input bg-background hover:bg-accent hover:text-accent-foreground'
               }`}
             >
               รออนุมัติ ({statusCounts.pending})
             </button>
             <button
               onClick={() => setFilter('approved')}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+              className={`inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 px-3 py-1.5 ${
                 filter === 'approved'
-                  ? 'bg-green-600 text-white shadow-md'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600'
+                  ? 'bg-green-600 text-white shadow hover:bg-green-700'
+                  : 'border border-input bg-background hover:bg-accent hover:text-accent-foreground'
               }`}
             >
               อนุมัติแล้ว ({statusCounts.approved})
             </button>
             <button
               onClick={() => setFilter('rejected')}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+              className={`inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 px-3 py-1.5 ${
                 filter === 'rejected'
-                  ? 'bg-red-600 text-white shadow-md'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600'
+                  ? 'bg-red-600 text-white shadow hover:bg-red-700'
+                  : 'border border-input bg-background hover:bg-accent hover:text-accent-foreground'
               }`}
             >
               ไม่อนุมัติ ({statusCounts.rejected})
             </button>
             <button
               onClick={() => setFilter('cancelled')}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+              className={`inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 px-3 py-1.5 ${
                 filter === 'cancelled'
-                  ? 'bg-purple-600 text-white shadow-md'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600'
+                  ? 'bg-purple-600 text-white shadow hover:bg-purple-700'
+                  : 'border border-input bg-background hover:bg-accent hover:text-accent-foreground'
               }`}
             >
               ยกเลิกแล้ว ({statusCounts.cancelled})
             </button>
             <button
               onClick={() => setFilter('pendingCancel')}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+              className={`inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 px-3 py-1.5 ${
                 filter === 'pendingCancel'
-                  ? 'bg-orange-600 text-white shadow-md'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600'
+                  ? 'bg-orange-600 text-white shadow hover:bg-orange-700'
+                  : 'border border-input bg-background hover:bg-accent hover:text-accent-foreground'
               }`}
             >
               รอยกเลิก ({statusCounts.pendingCancel})
             </button>
           </div>
           
-          {/* กรองตามพนักงาน */}
-          <div className="mt-3">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
-              กรองตามพนักงาน
+          <div className="flex flex-col sm:flex-row gap-4">
+            {/* ช่องค้นหา */}
+            <div className="flex-1 w-1/2">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 block">
+                ค้นหา
             </label>
-            <select 
-              className="select select-bordered w-full max-w-xs"
-              value={employeeFilter}
-              onChange={(e) => setEmployeeFilter(e.target.value)}
-            >
-              <option value="all">ทั้งหมด</option>
-              {employees.map(employee => (
-                <option key={employee.id} value={employee.id}>
-                  {employee.firstName} {employee.lastName}
-                </option>
-              ))}
-            </select>
+              <div className="relative">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500 dark:text-gray-400"
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="m21 21-4.3-4.3" />
+                </svg>
+                <input
+                  type="search"
+                  placeholder="ค้นหาจากชื่อพนักงาน, ประเภทการลา..."
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent pl-9 pr-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setCurrentPage(1); // รีเซ็ตกลับไปหน้าแรกเมื่อเปลี่ยนคำค้นหา
+                  }}
+                />
+              </div>
+            </div>
           </div>
         </div>
       </div>
       
-      {/* แสดงรายการการลาแบบการ์ด */}
+      {/* แสดงรายการการลาแบบตาราง */}
       {filteredLeaves.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredLeaves.map((leave) => (
-            <div key={leave.id} className="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow duration-300 cursor-pointer" onClick={() => navigateToLeaveDetail(leave.id)}>
-              <div className="card-body">
-                <div className="flex justify-between items-start">
-                  <h2 className="card-title">{leave.leaveType}</h2>
-                  <div className="flex flex-col gap-1 items-end">
-                    <div className={`badge ${
-                      leave.status === 'อนุมัติ' ? 'badge-success' : 
-                      leave.status === 'ไม่อนุมัติ' ? 'badge-error' : 
-                      'badge-warning'
-                    } badge-lg`}>
-                      {leave.status}
+        <div className="space-y-4">
+          <div className="rounded-md border">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 dark:bg-gray-800 border-b">
+                  <tr className="text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    <th 
+                      className="px-6 py-3 cursor-pointer select-none" 
+                      onClick={() => handleSort('leaveType')}
+                    >
+                      <div className="flex items-center">
+                        ประเภทการลา
+                        {renderSortIcon('leaveType')}
                     </div>
-                    
-                    {/* แสดงสถานะการยกเลิกถ้ามี */}
-                    {leave.cancelStatus === 'อนุมัติ' && (
-                      <div className="badge badge-info badge-sm">
-                        ยกเลิกแล้ว
+                    </th>
+                    <th 
+                      className="px-6 py-3 cursor-pointer select-none" 
+                      onClick={() => handleSort('employee')}
+                    >
+                      <div className="flex items-center">
+                        พนักงาน
+                        {renderSortIcon('employee')}
                       </div>
-                    )}
-                    {leave.cancelStatus === 'รออนุมัติ' && (
-                      <div className="badge badge-warning badge-sm">
-                        รอยกเลิก
+                    </th>
+                    <th 
+                      className="px-6 py-3 cursor-pointer select-none" 
+                      onClick={() => handleSort('startDate')}
+                    >
+                      <div className="flex items-center">
+                        วันที่เริ่มลา
+                        {renderSortIcon('startDate')}
                       </div>
-                    )}
-                  </div>
-                </div>
-                
-                <div className="mt-2 space-y-3">
-                  <div className="flex gap-2 items-start">
-                    <FiCalendar size={18} className="mt-1 text-primary" />
-                    <div>
-                      <div className="font-semibold">วันที่ลา</div>
-                      <div>
-                        {formatDate(leave.startDate)}
-                        {leave.startDate !== leave.endDate && ` - ${formatDate(leave.endDate)}`}
+                    </th>
+                    <th 
+                      className="px-6 py-3 cursor-pointer select-none" 
+                      onClick={() => handleSort('endDate')}
+                    >
+                      <div className="flex items-center">
+                        วันที่สิ้นสุด
+                        {renderSortIcon('endDate')}
                       </div>
-                    </div>
-                  </div>
-                  
-                  <div className="flex gap-2 items-start">
-                    <FiUser size={18} className="mt-1 text-primary" />
-                    <div>
-                      <div className="font-semibold">พนักงาน</div>
-                      <div className="flex items-center gap-2">
-                        {leave.employee?.image ? (
-                          <div className="avatar">
-                            <div className="w-8 h-8 rounded-full">
-                              <Image
-                                src={leave.employee.image}
-                                alt={leave.employee.firstName}
-                                width={32}
-                                height={32}
-                                className="rounded-full"
-                                unoptimized={isMockImage(leave.employee.image)}
-                              />
+                    </th>
+                    <th 
+                      className="px-6 py-3 cursor-pointer select-none" 
+                      onClick={() => handleSort('totalDays')}
+                    >
+                      <div className="flex items-center">
+                        จำนวนวัน
+                        {renderSortIcon('totalDays')}
+                      </div>
+                    </th>
+                    <th 
+                      className="px-6 py-3 cursor-pointer select-none" 
+                      onClick={() => handleSort('status')}
+                    >
+                      <div className="flex items-center">
+                        สถานะ
+                        {renderSortIcon('status')}
+                      </div>
+                    </th>
+                    {/* เพิ่มคอลัมน์เอกสารแนบ */}
+                    <th className="px-6 py-3">
+                      <div className="flex items-center">
+                        เอกสารแนบ
+                      </div>
+                    </th>
+                    <th 
+                      className="px-6 py-3 cursor-pointer select-none" 
+                      onClick={() => handleSort('createdAt')}
+                    >
+                      <div className="flex items-center">
+                        วันที่สร้าง
+                        {renderSortIcon('createdAt')}
+                      </div>
+                    </th>
+                    <th className="px-6 py-3 text-center">จัดการ</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-900">
+                  {paginatedLeaves.map((leave) => (
+                    <tr 
+                      key={leave.id} 
+                      className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                    >
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <FiFileText className="h-4 w-4 text-primary mr-2" />
+                          <span>{leave.leaveType}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          {leave.employee?.image ? (
+                              <div className="h-8 w-8 rounded-full overflow-hidden">
+                                <Image
+                                  src={leave.employee.image}
+                                  alt={leave.employee.firstName}
+                                  width={32}
+                                  height={32}
+                                  className="rounded-full"
+                                  unoptimized={isMockImage(leave.employee.image)}
+                                />
                             </div>
-                          </div>
+                          ) : (
+                              <div className="flex h-8 w-8 rounded-full bg-primary text-primary-content items-center justify-center">
+                                <span className="text-xs font-medium">
+                                  {leave.employee?.firstName?.[0] || ''}{leave.employee?.lastName?.[0] || ''}
+                                </span>
+                            </div>
+                          )}
+                            <div className="ml-1">
+                              <div className="text-sm font-medium text-gray-900 dark:text-gray-200">
+                                {leave.employee?.firstName || ''} {leave.employee?.lastName || ''}
+                              </div>
+                            </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900 dark:text-gray-200">
+                          {formatDate(leave.startDate)}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900 dark:text-gray-200">
+                          {formatDate(leave.endDate)}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900 dark:text-gray-200">{leave.totalDays} วัน</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">({leave.leaveFormat})</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex flex-col gap-1">
+                          {leave.status === 'ยกเลิก' || leave.approvals?.some(a => a.type === 'approve_cancel' && a.status === 'completed') ? (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400">
+                              ยกเลิก
+                            </span>
+                          ) : leave.isDuringCancel ? (
+                            <div className="flex flex-col gap-1">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400`}>
+                                ขอยกเลิก
+                              </span>
+                              <span className="text-xs text-gray-500 dark:text-gray-400">(รออนุมัติการยกเลิก)</span>
+                            </div>
+                          ) : (
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              leave.status === 'อนุมัติ' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 
+                              leave.status === 'ไม่อนุมัติ' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 
+                              'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                            }`}>
+                              {leave.status}
+                            </span>
+                          )}
+                          
+                          {/* ส่วนนี้ไม่จำเป็นแล้วเพราะเราใช้ isDuringCancel แล้ว
+                          {!leave.approvals?.some(a => a.type === 'approve_cancel' && a.status === 'completed') &&
+                           leave.status !== 'ยกเลิก' &&
+                           leave.approvals?.some(a => a.type === 'request_cancel' && a.status === 'completed') && 
+                           !leave.approvals?.some(a => (a.type === 'approve_cancel' || a.type === 'reject_cancel') && a.status === 'completed') && (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400">
+                              รอยกเลิก
+                            </span>
+                          )}*/}
+                        </div>
+                      </td>
+                      {/* เซลล์แสดงเอกสารแนบ */}
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {leave.attachments && leave.attachments.length > 0 ? (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <button className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/40">
+                                <FiFileText className="mr-1" /> {leave.attachments.length} ไฟล์
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-80 p-3" align="start">
+                              <div className="space-y-2">
+                                <h3 className="font-medium">เอกสารแนบ</h3>
+                                <div className="max-h-60 overflow-y-auto space-y-1">
+                                  {leave.attachments.map((attachment, idx) => (
+                                    <div key={idx} className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 p-2 rounded-md">
+                                      <div className="flex items-center overflow-hidden">
+                                        <FiFileText className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0 mr-2" />
+                                        <span className="text-sm truncate">{attachment.split('/').pop()}</span>
+                                      </div>
+                                      <div className="flex gap-1 flex-shrink-0 ml-2">
+                                        <a
+                                          href={attachment}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="p-1 rounded-md text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30"
+                                          title="ดูไฟล์"
+                                        >
+                                          <FiEye size={14} />
+                                        </a>
+                                        <a
+                                          href={attachment}
+                                          download
+                                          className="p-1 rounded-md text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/30"
+                                          title="ดาวน์โหลด"
+                                        >
+                                          <FiDownload size={14} />
+                                        </a>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
                         ) : (
-                          <div className="avatar placeholder">
-                            <div className="bg-primary text-primary-content w-8 h-8 rounded-full">
-                              <span>{leave.employee?.firstName?.[0] || ''}{leave.employee?.lastName?.[0] || ''}</span>
-                            </div>
-                          </div>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">ไม่มีเอกสาร</span>
                         )}
-                        <span>
-                          {leave.employee?.firstName || ''} {leave.employee?.lastName || ''}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="flex gap-2 items-start">
-                    <FiInfo size={18} className="mt-1 text-primary" />
-                    <div>
-                      <div className="font-semibold">จำนวนวัน</div>
-                      <div>{leave.totalDays} วัน ({leave.leaveFormat})</div>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="flex justify-end mt-4 gap-2">
-                  {/* ปุ่มแก้ไข */}
-                  {canEdit(leave) && (
-                    <button 
-                      className="btn btn-info btn-sm"
-                      onClick={(e) => {
-                        e.stopPropagation(); // ป้องกันการนำทางเมื่อคลิกปุ่ม
-                        router.push(`/leaves/${leave.id}/edit`);
-                      }}
-                      disabled={actionLoading}
-                    >
-                      <FiEdit size={18} className="mr-1" /> แก้ไข
-                    </button>
-                  )}
-                  
-                  {/* ปุ่มอนุมัติ */}
-                  {canApprove(leave) && (
-                    <button 
-                      className="btn btn-success btn-sm"
-                      onClick={(e) => {
-                        e.stopPropagation(); // ป้องกันการนำทางเมื่อคลิกปุ่ม
-                        openApproveModal(leave.id);
-                      }}
-                      disabled={actionLoading}
-                    >
-                      <FiCheckCircle size={18} className="mr-1" /> อนุมัติ
-                    </button>
-                  )}
-                  
-                  {/* ปุ่มไม่อนุมัติ */}
-                  {canApprove(leave) && (
-                    <button 
-                      className="btn btn-error btn-sm"
-                      onClick={(e) => {
-                        e.stopPropagation(); // ป้องกันการนำทางเมื่อคลิกปุ่ม
-                        openRejectModal(leave.id);
-                      }}
-                      disabled={actionLoading}
-                    >
-                      <FiXCircle size={18} className="mr-1" /> ไม่อนุมัติ
-                    </button>
-                  )}
-                  
-                  {/* ปุ่มลบ */}
-                  {canDelete(leave) && (
-                    <button 
-                      className="btn btn-outline btn-error btn-sm"
-                      onClick={(e) => {
-                        e.stopPropagation(); // ป้องกันการนำทางเมื่อคลิกปุ่ม
-                        handleDelete(leave.id);
-                      }}
-                      disabled={actionLoading}
-                    >
-                      <FiTrash2 size={18} />
-                    </button>
-                  )}
-                </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-500 dark:text-gray-400">
+                          {formatDate(leave.createdAt)}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex justify-center items-center space-x-2">
+                          {/* ปุ่มดูรายละเอียด */}
+                          <button 
+                            className="p-1 rounded-md text-primary hover:text-primary/80 dark:text-primary-foreground dark:hover:text-primary-foreground/80 hover:bg-primary/10 dark:hover:bg-primary/20 focus:outline-none"
+                            onClick={() => navigateToLeaveDetail(leave.id)}
+                            title="ดูรายละเอียด"
+                          >
+                            <FiEye className="h-4 w-4" />
+                          </button>
+                          
+                          {/* ปุ่มแก้ไข */}
+                          {canEdit(leave) && (
+                            <button 
+                              className="p-1 rounded-md text-amber-600 hover:text-amber-700 dark:text-amber-500 dark:hover:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30 focus:outline-none"
+                              onClick={() => openEditSheet(leave)}
+                              title="แก้ไข"
+                            >
+                              <FiEdit className="h-4 w-4" />
+                            </button>
+                          )}
+                          
+                          {/* ปุ่มอนุมัติ */}
+                          {canApprove(leave) && (
+                            <button 
+                              className="p-1 rounded-md text-green-600 hover:text-green-700 dark:text-green-500 dark:hover:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30 focus:outline-none"
+                              onClick={() => openApproveModal(leave.id)}
+                              title="อนุมัติ"
+                            >
+                              <FiCheckCircle className="h-4 w-4" />
+                            </button>
+                          )}
+                          
+                          {/* ปุ่มไม่อนุมัติ */}
+                          {canApprove(leave) && (
+                            <button 
+                              className="p-1 rounded-md text-red-600 hover:text-red-700 dark:text-red-500 dark:hover:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 focus:outline-none"
+                              onClick={() => openRejectModal(leave.id)}
+                              title="ไม่อนุมัติ"
+                            >
+                              <FiXCircle className="h-4 w-4" />
+                            </button>
+                          )}
+                          
+                          {/* ปุ่มขอยกเลิกการลา */}
+                          {canCancelRequest(leave) && (
+                            <button 
+                              className="p-1 rounded-md text-orange-600 hover:text-orange-700 dark:text-orange-500 dark:hover:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-900/30 focus:outline-none"
+                              onClick={() => openCancelModal(leave.id)}
+                              title={session.user.id === leave.employeeId ? "ขอยกเลิกการลา" : "ขอยกเลิกการลาแทน"}
+                            >
+                              <FiXSquare className="h-4 w-4" />
+                            </button>
+                          )}
+                          
+                          {/* ปุ่มอนุมัติการยกเลิก */}
+                          {canApproveCancelRequest(leave) && (
+                            <button 
+                              className="p-1 rounded-md text-green-600 hover:text-green-700 dark:text-green-500 dark:hover:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30 focus:outline-none"
+                              onClick={() => openApproveCancelModal(leave.id)}
+                              title="อนุมัติการยกเลิก"
+                            >
+                              <FiCheckCircle className="h-4 w-4" />
+                            </button>
+                          )}
+                          
+                          {/* ปุ่มไม่อนุมัติการยกเลิก */}
+                          {canApproveCancelRequest(leave) && (
+                            <button 
+                              className="p-1 rounded-md text-red-600 hover:text-red-700 dark:text-red-500 dark:hover:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 focus:outline-none"
+                              onClick={() => openRejectCancelModal(leave.id)}
+                              title="ปฏิเสธการยกเลิก"
+                            >
+                              <FiXCircle className="h-4 w-4" />
+                            </button>
+                          )}
+                          
+                          {/* ปุ่มลบ */}
+                          {canDelete(leave) && (
+                            <button 
+                              className="p-1 rounded-md text-red-600 hover:text-red-700 dark:text-red-500 dark:hover:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 focus:outline-none"
+                              onClick={() => confirmDelete(leave.id)}
+                              title="ลบ"
+                            >
+                              <FiTrash2 className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
               </div>
             </div>
-          ))}
+          
+          {/* Pagination ตามแบบของ shadcn/ui */}
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-gray-500 dark:text-gray-400">
+              แสดง {((currentPage - 1) * pageSize) + 1} ถึง {Math.min(currentPage * pageSize, filteredLeaves.length)} จากทั้งหมด {filteredLeaves.length} รายการ
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => handlePageChange(1)}
+                disabled={currentPage === 1}
+                className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 w-8 p-0"
+                aria-label="Go to first page"
+                title="หน้าแรก"
+              >
+                <span className="sr-only">หน้าแรก</span>
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                  <path d="m11 17-5-5 5-5"></path>
+                  <path d="m18 17-5-5 5-5"></path>
+                </svg>
+              </button>
+              <button
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 w-8 p-0"
+                aria-label="Go to previous page"
+                title="หน้าก่อนหน้า"
+              >
+                <span className="sr-only">หน้าก่อนหน้า</span>
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                  <path d="m15 18-6-6 6-6"></path>
+                </svg>
+              </button>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  // สร้างปุ่มหน้าแบบมีขีดจำกัด 5 หน้า
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    // ถ้ามีไม่เกิน 5 หน้า แสดงทั้งหมด
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    // ถ้าอยู่หน้าต้นๆ แสดง 1-5
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    // ถ้าอยู่หน้าท้ายๆ แสดง totalPages-4 ถึง totalPages
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    // ถ้าอยู่ตรงกลาง แสดงหน้าปัจจุบันและหน้ารอบๆ
+                    pageNum = currentPage - 2 + i;
+                  }
+                  
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => handlePageChange(pageNum)}
+                      aria-label={`Page ${pageNum}`}
+                      aria-current={currentPage === pageNum ? "page" : undefined}
+                      className={`inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 h-8 w-8 ${
+                        currentPage === pageNum
+                          ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                          : "border border-input bg-background hover:bg-accent hover:text-accent-foreground"
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+                {totalPages > 5 && currentPage < totalPages - 2 && (
+                  <>
+                    <span className="text-gray-500 dark:text-gray-400">...</span>
+                    <button
+                      onClick={() => handlePageChange(totalPages)}
+                      aria-label={`Page ${totalPages}`}
+                      className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 w-8"
+                    >
+                      {totalPages}
+                    </button>
+                  </>
+                )}
+              </div>
+              <button
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 w-8 p-0"
+                aria-label="Go to next page"
+                title="หน้าถัดไป"
+              >
+                <span className="sr-only">หน้าถัดไป</span>
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                  <path d="m9 18 6-6-6-6"></path>
+                </svg>
+              </button>
+              <button
+                onClick={() => handlePageChange(totalPages)}
+                disabled={currentPage === totalPages}
+                className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 w-8 p-0"
+                aria-label="Go to last page"
+                title="หน้าสุดท้าย"
+              >
+                <span className="sr-only">หน้าสุดท้าย</span>
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                  <path d="m13 17 5-5-5-5"></path>
+                  <path d="m6 17 5-5-5-5"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+          
+          {/* ตัวเลือกขนาดหน้า */}
+          <div className="flex items-center space-x-2">
+            <span className="text-sm text-gray-500 dark:text-gray-400">แสดงต่อหน้า</span>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setCurrentPage(1); // รีเซ็ตกลับไปหน้าแรกเมื่อเปลี่ยนจำนวนรายการต่อหน้า
+              }}
+              className="flex h-8 w-20 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <option value={5}>5</option>
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
         </div>
       ) : (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 text-center">
+        <div className="bg-white dark:bg-gray-800 border rounded-lg shadow-sm p-8 text-center">
           <FiCalendar className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500 mb-4" />
           <p className="text-lg text-gray-600 dark:text-gray-300">ไม่พบข้อมูลการลา</p>
         </div>
       )}
       
       {/* Modal สำหรับระบุเหตุผลการไม่อนุมัติ */}
-      {showRejectModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-              <div className="absolute inset-0 bg-gray-500 dark:bg-gray-900 opacity-75"></div>
-            </div>
-            
-            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-            
-            <div className="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-              <div className="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                <div className="sm:flex sm:items-start">
-                  <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-900/30 sm:mx-0 sm:h-10 sm:w-10">
-                    <FiAlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
-                  </div>
-                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-gray-100" id="modal-title">
-                      ไม่อนุมัติการลา
-                    </h3>
-                    <div className="mt-2">
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        กรุณาระบุเหตุผลที่ไม่อนุมัติการลานี้ (ไม่บังคับ)
-                      </p>
-                      <div className="mt-2">
-                        <textarea
-                          rows="3"
-                          className="field-input"
-                          placeholder="ระบุเหตุผลที่ไม่อนุมัติ"
-                          value={rejectReason}
-                          onChange={(e) => setRejectReason(e.target.value)}
-                        ></textarea>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+      <AlertDialog open={showRejectModal} onOpenChange={setShowRejectModal}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <div className="flex items-start">
+              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
+                <FiAlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
               </div>
-              <div className="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                <LoadingButton
-                  type="button"
-                  onClick={handleReject}
-                  loading={actionLoading}
-                  disabled={actionLoading}
-                  className="btn btn-danger w-full sm:w-auto sm:ml-3"
-                >
-                  <FiXCircle className="mr-1.5 h-4 w-4" />
-                  <span>ไม่อนุมัติ</span>
-                </LoadingButton>
-                <button
-                  type="button"
-                  onClick={() => setShowRejectModal(false)}
-                  disabled={actionLoading}
-                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-gray-800 text-base font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-                >
-                  ยกเลิก
-                </button>
+              <div className="ml-4">
+                <AlertDialogTitle>ไม่อนุมัติการลา</AlertDialogTitle>
+                <AlertDialogDescription>
+                  กรุณาระบุเหตุผลที่ไม่อนุมัติการลานี้ (ไม่บังคับ)
+                </AlertDialogDescription>
               </div>
             </div>
+          </AlertDialogHeader>
+          <div className="mt-3">
+            <textarea
+              rows="3"
+              className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              placeholder="ระบุเหตุผลที่ไม่อนุมัติ"
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+            ></textarea>
           </div>
-        </div>
-      )}
+          <AlertDialogFooter className="mt-4">
+            <AlertDialogCancel
+              disabled={actionLoading}
+              onClick={() => setShowRejectModal(false)}
+            >
+              ยกเลิก
+            </AlertDialogCancel>
+            <LoadingButton
+              type="button"
+              onClick={handleReject}
+              loading={actionLoading}
+              disabled={actionLoading}
+              className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-destructive text-destructive-foreground hover:bg-destructive/90 h-10 px-4 py-2"
+            >
+              <FiXCircle className="mr-1.5 h-4 w-4" />
+              <span>ไม่อนุมัติ</span>
+            </LoadingButton>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       
       {/* Modal สำหรับระบุเหตุผลการอนุมัติ */}
-      {showApproveModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-              <div className="absolute inset-0 bg-gray-500 dark:bg-gray-900 opacity-75"></div>
+      <AlertDialog open={showApproveModal} onOpenChange={setShowApproveModal}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <div className="flex items-start">
+              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
+                <FiCheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
+              </div>
+              <div className="ml-4">
+                <AlertDialogTitle>อนุมัติการลา</AlertDialogTitle>
+                <AlertDialogDescription>
+                  กรุณาระบุเหตุผลหรือบันทึกเพิ่มเติม (ไม่บังคับ)
+                </AlertDialogDescription>
+              </div>
+            </div>
+          </AlertDialogHeader>
+          <div className="mt-3">
+            <textarea
+              rows="3"
+              className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              placeholder="ระบุบันทึกเพิ่มเติม"
+              value={approveReason}
+              onChange={(e) => setApproveReason(e.target.value)}
+            ></textarea>
+          </div>
+          <AlertDialogFooter className="mt-4">
+            <AlertDialogCancel
+              disabled={actionLoading}
+              onClick={() => setShowApproveModal(false)}
+            >
+              ยกเลิก
+            </AlertDialogCancel>
+            <LoadingButton
+              type="button"
+              onClick={handleApprove}
+              loading={actionLoading}
+              disabled={actionLoading}
+              className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
+            >
+              <FiCheckCircle className="mr-1.5 h-4 w-4" />
+              <span>อนุมัติ</span>
+            </LoadingButton>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      
+      {/* Modal สำหรับขอยกเลิกการลา */}
+      <AlertDialog open={showCancelModal} onOpenChange={setShowCancelModal}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <div className="flex items-start">
+              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900/30">
+                <FiXSquare className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+              </div>
+              <div className="ml-4">
+                <AlertDialogTitle>{cancelModalTitle}</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {cancelModalDescription}
+                </AlertDialogDescription>
+              </div>
+            </div>
+          </AlertDialogHeader>
+          <div className="mt-3">
+            <textarea
+              rows="3"
+              className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              placeholder="ระบุเหตุผลในการขอยกเลิก"
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+            ></textarea>
+          </div>
+          <AlertDialogFooter className="mt-4">
+            <AlertDialogCancel
+              disabled={actionLoading}
+              onClick={() => setShowCancelModal(false)}
+            >
+              ยกเลิก
+            </AlertDialogCancel>
+            <LoadingButton
+              type="button"
+              onClick={handleCancelRequest}
+              loading={actionLoading}
+              disabled={actionLoading}
+              className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-orange-600 text-white hover:bg-orange-700 h-10 px-4 py-2"
+            >
+              <FiXSquare className="mr-1.5 h-4 w-4" />
+              <span>ขอยกเลิก</span>
+            </LoadingButton>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      
+      {/* Modal ยืนยันการอนุมัติการยกเลิกการลา */}
+      <AlertDialog open={showApproveCancelModal} onOpenChange={setShowApproveCancelModal}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>ยืนยันการอนุมัติยกเลิกการลา</AlertDialogTitle>
+            <AlertDialogDescription>
+              คุณต้องการอนุมัติการขอยกเลิกการลานี้ใช่หรือไม่?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="mb-4">
+            <label className="block text-gray-700 dark:text-gray-300 mb-2">ความคิดเห็น (ไม่บังคับ)</label>
+            <textarea
+              rows="3"
+              className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              placeholder="ระบุความคิดเห็นเพิ่มเติม (ถ้ามี)"
+              value={cancelApprovalComment}
+              onChange={(e) => setCancelApprovalComment(e.target.value)}
+            ></textarea>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={actionLoading}>ยกเลิก</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={(e) => {
+                e.preventDefault();
+                handleApproveCancel();
+              }}
+              className="bg-primary hover:bg-primary/90"
+              disabled={actionLoading}
+            >
+              {actionLoading ? (
+                <div className="flex items-center">
+                  <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                  <span>กำลังดำเนินการ</span>
+                </div>
+              ) : (
+                <span>อนุมัติการยกเลิก</span>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Modal ยืนยันการไม่อนุมัติการยกเลิกการลา */}
+      <AlertDialog open={showRejectCancelModal} onOpenChange={setShowRejectCancelModal}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>ยืนยันการไม่อนุมัติยกเลิกการลา</AlertDialogTitle>
+            <AlertDialogDescription>
+              คุณต้องการไม่อนุมัติการขอยกเลิกการลานี้ใช่หรือไม่?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="mb-4">
+            <label className="block text-gray-700 dark:text-gray-300 mb-2">เหตุผลในการไม่อนุมัติ</label>
+            <textarea
+              rows="3"
+              className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              placeholder="ระบุเหตุผลในการไม่อนุมัติ"
+              value={cancelApprovalComment}
+              onChange={(e) => setCancelApprovalComment(e.target.value)}
+            ></textarea>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={actionLoading}>ยกเลิก</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={(e) => {
+                e.preventDefault();
+                handleRejectCancel();
+              }}
+              className="bg-red-600 hover:bg-red-700 text-white"
+              disabled={actionLoading}
+            >
+              {actionLoading ? (
+                <div className="flex items-center">
+                  <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                  <span>กำลังดำเนินการ</span>
+                </div>
+              ) : (
+                <span>ไม่อนุมัติการยกเลิก</span>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      
+      {/* AlertDialog สำหรับการลบข้อมูล */}
+      <AlertDialog open={alertDialogOpen} onOpenChange={setAlertDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <div className="flex items-start">
+              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
+                <FiTrash2 className="h-6 w-6 text-red-600 dark:text-red-400" />
+              </div>
+              <div className="ml-4">
+                <AlertDialogTitle>ยืนยันการลบข้อมูล</AlertDialogTitle>
+                <AlertDialogDescription>
+                  คุณต้องการลบข้อมูลการลานี้ใช่หรือไม่? การกระทำนี้ไม่สามารถเรียกคืนได้
+                </AlertDialogDescription>
+              </div>
+            </div>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => setAlertDialogOpen(false)}
+              disabled={actionLoading}
+            >
+              ยกเลิก
+            </AlertDialogCancel>
+            <LoadingButton
+              type="button"
+              onClick={() => {
+                if (selectedDeleteLeaveId) {
+                  handleDelete(selectedDeleteLeaveId);
+                }
+                setAlertDialogOpen(false);
+              }}
+              loading={actionLoading}
+              disabled={actionLoading}
+              className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-destructive text-destructive-foreground hover:bg-destructive/90 h-10 px-4 py-2"
+            >
+              <FiTrash2 className="mr-1.5 h-4 w-4" />
+              <span>ลบข้อมูล</span>
+            </LoadingButton>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      
+      {/* Edit Leave Sheet */}
+      <Sheet open={isEditSheetOpen} onOpenChange={setIsEditSheetOpen}>
+        <SheetContent side="right" className="w-full max-w-xl overflow-y-auto">
+          <SheetHeader className="border-b pb-4 mb-4">
+            <SheetTitle className="text-lg">แก้ไขข้อมูลการลา</SheetTitle>
+            <SheetDescription>
+              กรุณาแก้ไขข้อมูลการลาและกดบันทึกเพื่อดำเนินการต่อ
+            </SheetDescription>
+          </SheetHeader>
+          
+          <form onSubmit={handleUpdateLeave} className="space-y-6">
+            <div className="space-y-2">
+              <label htmlFor="leaveType" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                ประเภทการลา <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="leaveType"
+                name="leaveType"
+                value={editFormData.leaveType}
+                onChange={handleEditFormChange}
+                required
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="">เลือกประเภทการลา</option>
+                <option value="ลาป่วย">ลาป่วย</option>
+                <option value="ลากิจ">ลากิจ</option>
+                <option value="ลาพักร้อน">ลาพักร้อน</option>
+                <option value="ลาคลอด">ลาคลอด</option>
+                <option value="ลาบวช">ลาบวช</option>
+                <option value="ลาเพื่อการศึกษา">ลาเพื่อการศึกษา</option>
+                <option value="ลาเพื่อรับราชการทหาร">ลาเพื่อรับราชการทหาร</option>
+                <option value="อื่นๆ">อื่นๆ</option>
+              </select>
             </div>
             
-            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                วันที่เริ่มลา <span className="text-red-500">*</span>
+              </label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <div className="relative">
+                    <Input
+                      value={startDate ? format(startDate, 'dd/MM/yyyy') : ''}
+                      className="pl-10"
+                      placeholder="เลือกวันที่เริ่มลา"
+                      readOnly
+                    />
+                    <FiCalendar className="absolute left-3 top-2.5 h-4 w-4 text-gray-500 dark:text-gray-400" />
+                  </div>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={startDate}
+                    onSelect={setStartDate}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
             
-            <div className="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-              <div className="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                <div className="sm:flex sm:items-start">
-                  <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-green-100 dark:bg-green-900/30 sm:mx-0 sm:h-10 sm:w-10">
-                    <FiCheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                วันที่สิ้นสุด <span className="text-red-500">*</span>
+              </label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <div className="relative">
+                    <Input
+                      value={endDate ? format(endDate, 'dd/MM/yyyy') : ''}
+                      className="pl-10"
+                      placeholder="เลือกวันที่สิ้นสุด"
+                      readOnly
+                    />
+                    <FiCalendar className="absolute left-3 top-2.5 h-4 w-4 text-gray-500 dark:text-gray-400" />
                   </div>
-                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-gray-100" id="modal-title">
-                      อนุมัติการลา
-                    </h3>
-                    <div className="mt-2">
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        กรุณาระบุเหตุผลหรือบันทึกเพิ่มเติม (ไม่บังคับ)
-                      </p>
-                      <div className="mt-2">
-                        <textarea
-                          rows="3"
-                          className="field-input"
-                          placeholder="ระบุบันทึกเพิ่มเติม"
-                          value={approveReason}
-                          onChange={(e) => setApproveReason(e.target.value)}
-                        ></textarea>
-                      </div>
-                    </div>
-                  </div>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={endDate}
+                    onSelect={setEndDate}
+                    disabled={(date) => date < startDate}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            
+            <div className="space-y-2">
+              <label htmlFor="leaveFormat" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                รูปแบบการลา
+              </label>
+              <select
+                id="leaveFormat"
+                name="leaveFormat"
+                value={editFormData.leaveFormat}
+                onChange={handleEditFormChange}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="เต็มวัน">เต็มวัน</option>
+                <option value="ครึ่งวัน (ช่วงเช้า)">ครึ่งวัน (ช่วงเช้า)</option>
+                <option value="ครึ่งวัน (ช่วงบ่าย)">ครึ่งวัน (ช่วงบ่าย)</option>
+              </select>
+            </div>
+            
+            <div className="bg-slate-100 dark:bg-slate-800 p-3 rounded-md text-sm">
+              <p>จำนวนวันลาทั้งหมด: <span className="font-semibold">{editFormData.totalDays}</span> วัน</p>
+            </div>
+            
+            <div className="space-y-2">
+              <label htmlFor="reason" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                เหตุผลการลา <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                id="reason"
+                name="reason"
+                value={editFormData.reason}
+                onChange={handleEditFormChange}
+                required
+                rows={4}
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              />
+            </div>
+            
+            <div className="space-y-3">
+              <div className="flex items-center">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  เอกสารแนบ (ถ้ามี)
+                </label>
+                <div className="ml-2 p-1 rounded-full bg-blue-50 dark:bg-blue-900/30">
+                  <FiInfo className="h-3 w-3 text-blue-500" />
                 </div>
               </div>
-              <div className="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                <LoadingButton
-                  type="button"
-                  onClick={handleApprove}
-                  loading={actionLoading}
-                  disabled={actionLoading}
-                  className="btn btn-success w-full sm:w-auto sm:ml-3"
-                >
-                  <FiCheckCircle className="mr-1.5 h-4 w-4" />
-                  <span>อนุมัติ</span>
-                </LoadingButton>
+              
+              {/* แสดงไฟล์ที่มีอยู่เดิม */}
+              {editFormData.attachments && editFormData.attachments.length > 0 && (
+                <div className="mb-4">
+                  <div className="flex items-center mb-2 border-b dark:border-gray-700 pb-1">
+                    <FiPaperclip className="h-4 w-4 text-primary mr-1.5" />
+                    <h3 className="text-sm font-medium">ไฟล์ที่แนบไว้แล้ว ({editFormData.attachments.length})</h3>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 space-y-2">
+                    {editFormData.attachments.map((attachment, index) => {
+                      const fileName = attachment.split('/').pop();
+                      const fileExt = fileName.split('.').pop()?.toLowerCase();
+                      
+                      // เลือกไอคอนตามประเภทไฟล์
+                      let FileIcon = FiFileText;
+                      if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExt)) {
+                        FileIcon = FiImage;
+                      } else if (fileExt === 'pdf') {
+                        FileIcon = FiFile;
+                      } else if (['zip', 'rar', '7z'].includes(fileExt)) {
+                        FileIcon = FiArchive;
+                      }
+                      
+                      return (
+                        <div key={index} className="flex justify-between items-center p-2 rounded-md bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/70 transition-colors">
+                          <div className="text-sm truncate flex items-center">
+                            <div className="h-8 w-8 flex items-center justify-center rounded bg-primary/10 text-primary mr-2">
+                              <FileIcon className="h-4 w-4" />
+                            </div>
+                            <div className="flex flex-col">
+                              <a 
+                                href={attachment} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="hover:text-primary hover:underline font-medium truncate max-w-[300px]"
+                              >
+                                {fileName}
+                              </a>
+                              <span className="text-xs text-gray-500">เปิดดูในแท็บใหม่</span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeAttachment(index)}
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30 p-2 rounded-full transition-colors"
+                            title="ลบไฟล์"
+                          >
+                            <FiTrash2 size={16} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              
+              {/* ส่วนอัปโหลดไฟล์ใหม่ */}
+              <div 
+                className="rounded-lg border border-dashed border-slate-300 dark:border-slate-700 p-4 bg-slate-50 dark:bg-slate-800/50 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
+                onDragOver={handleDragOver}
+                onDragEnter={handleDragEnter}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
+                <div className="flex flex-col items-center text-center">
+                  <FiUploadCloud className="h-10 w-10 text-slate-400 mb-2" />
+                  <div className="mb-2">
+                    <p className="text-sm text-slate-500">ลากไฟล์มาวางที่นี่ หรือ</p>
+                  </div>
+                  <label className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 cursor-pointer">
+                    <FiFileText className="mr-1.5 h-4 w-4" />
+                    <span>เลือกไฟล์</span>
+                    <input
+                      type="file"
+                      onChange={handleFileChange}
+                      className="hidden"
+                      multiple
+                    />
+                  </label>
+                  <p className="text-xs text-gray-500 mt-2">รองรับไฟล์ PDF, รูปภาพ, เอกสาร (.zip ไม่เกิน 5MB/ไฟล์)</p>
+                </div>
+              </div>
+              
+              {/* แสดงไฟล์ที่จะอัปโหลด */}
+              {filesToUpload.length > 0 && (
+                <div className="mt-3">
+                  <div className="flex items-center mb-2 border-b dark:border-gray-700 pb-1">
+                    <FiUpload className="h-4 w-4 text-primary mr-1.5" />
+                    <h3 className="text-sm font-medium">ไฟล์ที่เลือก ({filesToUpload.length})</h3>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 space-y-2">
+                    {filesToUpload.map((file, index) => {
+                      const fileExt = file.name.split('.').pop()?.toLowerCase();
+                      
+                      // เลือกไอคอนตามประเภทไฟล์
+                      let FileIcon = FiFileText;
+                      if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExt)) {
+                        FileIcon = FiImage;
+                      } else if (fileExt === 'pdf') {
+                        FileIcon = FiFile;
+                      } else if (['zip', 'rar', '7z'].includes(fileExt)) {
+                        FileIcon = FiArchive;
+                      }
+                      
+                      return (
+                        <div key={index} className="flex justify-between items-center p-2 rounded-md bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/70 transition-colors">
+                          <div className="text-sm truncate flex items-center">
+                            <div className="h-8 w-8 flex items-center justify-center rounded bg-primary/10 text-primary mr-2">
+                              <FileIcon className="h-4 w-4" />
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="font-medium truncate max-w-[300px]">{file.name}</span>
+                              <span className="text-xs text-gray-500">{(file.size / 1024).toFixed(1)} KB</span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeFile(index)}
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30 p-2 rounded-full transition-colors"
+                            title="ลบไฟล์"
+                          >
+                            <FiTrash2 size={16} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <SheetFooter>
+              <SheetClose asChild>
                 <button
                   type="button"
-                  onClick={() => setShowApproveModal(false)}
-                  disabled={actionLoading}
-                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-gray-800 text-base font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                  className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2"
                 >
                   ยกเลิก
                 </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+              </SheetClose>
+              <LoadingButton
+                type="submit"
+                loading={actionLoading}
+                disabled={actionLoading}
+                className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2"
+              >
+                <FiEdit className="mr-1.5 h-4 w-4" />
+                <span>บันทึกการแก้ไข</span>
+              </LoadingButton>
+            </SheetFooter>
+          </form>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 } 

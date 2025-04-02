@@ -88,6 +88,15 @@ export const authOptions = {
           return null;
         }
         
+        // เพิ่มการตรวจสอบค่า token
+        if (!token.id) {
+          console.error('Missing ID in token:', token);
+          return {
+            ...session,
+            error: 'missing_user_id'
+          };
+        }
+        
         // ตรวจสอบและกำหนดค่าให้กับ session.user ถ้า token มีข้อมูล
         session.user = session.user || {};
         session.user.id = token.id;
@@ -103,6 +112,11 @@ export const authOptions = {
         session.user.position = token.position;
         session.user.image = token.image;
         session.user.tokenVersion = token.tokenVersion;
+        
+        // เพิ่ม log เพื่อตรวจสอบว่า user.id ถูกกำหนดค่าหรือไม่
+        console.log(`Session created/updated for user ${session.user.email}, ID: ${session.user.id || 'undefined'}`);
+      } else {
+        console.warn('No token data available for session');
       }
       return session;
     }
