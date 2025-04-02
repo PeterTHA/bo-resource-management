@@ -17,23 +17,30 @@ export function TeamMembersCard() {
   
   // ใช้วันที่ปัจจุบันในรูปแบบที่เหมาะสมสำหรับการเปรียบเทียบ
   const getCurrentDateFormatted = () => {
+    // ใช้ UTC ในการคำนวณวันที่ปัจจุบันเพื่อหลีกเลี่ยงปัญหา time zone
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
     const day = String(now.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    const formatted = `${year}-${month}-${day}`;
+    console.log('Current date formatted:', formatted);
+    return formatted;
   };
   
   const [currentDate] = useState(getCurrentDateFormatted());
   
-  // ฟังก์ชันเพื่อแปลงวันที่ให้เป็นรูปแบบเดียวกัน
+  // ฟังก์ชันเพื่อแปลงวันที่ให้เป็นรูปแบบเดียวกันโดยไม่คำนึงถึง time zone
   const formatDateForComparison = (dateString) => {
     if (!dateString) return "";
+    
     const date = new Date(dateString);
+    // ดึงเฉพาะค่าวันที่จากวันที่ที่ได้รับ โดยไม่คำนึงถึง time zone
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    const formatted = `${year}-${month}-${day}`;
+    
+    return formatted;
   };
 
   useEffect(() => {
@@ -57,17 +64,57 @@ export function TeamMembersCard() {
         
         // ดึงข้อมูลการลาของทีม (วันนี้)
         try {
-          const calendarResponse = await fetch(`/api/employee-calendar/all-data?startDate=${currentDate}&endDate=${currentDate}`);
+          // แปลงวันที่เป็น Date Object และส่ง toISOString() เพื่อให้มั่นใจว่าใช้ UTC time เดียวกัน
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          console.log('Fetching leaves for date:', today.toISOString());
+          
+          const calendarResponse = await fetch(`/api/employee-calendar/all-data?startDate=${today.toISOString()}&endDate=${today.toISOString()}`);
           const calendarData = await calendarResponse.json();
           
-          if (calendarData.success && calendarData.data && calendarData.data.leaves && isMounted) {
-            // กรองเฉพาะข้อมูลการลาที่สถานะเป็น approved หรือ waiting_for_approve
-            const activeLeaves = calendarData.data.leaves.filter(leave => 
-              leave.status === 'approved' || leave.status === 'waiting_for_approve'
-            );
+          if (calendarData.success && calendarData.data) {
+            console.log('Calendar data:', calendarData.data);
             
-            if (isMounted) {
-              setTeamLeaves(activeLeaves);
+            // เตรียมข้อมูลสถานะการทำงาน
+            if (calendarData.data.workStatuses && isMounted) {
+              // จัดกลุ่มข้อมูลสถานะการทำงานตาม employeeId
+              const workStatusByEmployee = calendarData.data.workStatuses.reduce((acc, status) => {
+                if (!acc[status.employeeId]) {
+                  acc[status.employeeId] = [];
+                }
+                acc[status.employeeId].push(status);
+                return acc;
+              }, {});
+              
+              console.log('Work status by employee:', workStatusByEmployee);
+              
+              // อัพเดทข้อมูลสมาชิกทีมด้วยข้อมูลสถานะการทำงาน
+              if (membersData.data && membersData.data.length > 0) {
+                const updatedMembers = membersData.data.map(member => {
+                  return {
+                    ...member,
+                    workStatuses: workStatusByEmployee[member.id] || []
+                  };
+                });
+                
+                if (isMounted) {
+                  setTeamMembers(updatedMembers);
+                }
+              }
+            }
+            
+            // เก็บข้อมูลการลา
+            if (calendarData.data.leaves && isMounted) {
+              // กรองเฉพาะข้อมูลการลาที่สถานะเป็น approved หรือ waiting_for_approve
+              const activeLeaves = calendarData.data.leaves.filter(leave => 
+                leave.status === 'approved' || leave.status === 'waiting_for_approve'
+              );
+              
+              console.log('Found active leaves:', activeLeaves.length);
+              
+              if (isMounted) {
+                setTeamLeaves(activeLeaves);
+              }
             }
           }
         } catch (calendarErr) {
@@ -106,15 +153,24 @@ export function TeamMembersCard() {
   const getTodayWorkStatus = (workStatuses) => {
     if (!workStatuses || workStatuses.length === 0) return 'OFFICE';
     
+    // สร้างวันที่ปัจจุบันแบบเดียวกับที่ใช้ดึงข้อมูล
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayFormatted = formatDateForComparison(today);
+    
+    console.log('Looking for work status matching:', todayFormatted);
+    
     // ค้นหาสถานะการทำงานของวันนี้โดยเปรียบเทียบวันที่อย่างถูกต้อง
     const todayStatus = workStatuses.find(status => {
       if (!status.date) return false;
       const statusDate = formatDateForComparison(status.date);
-      return statusDate === currentDate;
+      const isMatch = statusDate === todayFormatted;
+      if (isMatch) console.log('Found matching work status:', status.status);
+      return isMatch;
     });
     
-    // ถ้ามีสถานะของวันนี้ให้ใช้ค่านั้น ถ้าไม่มีให้ใช้สถานะล่าสุด
-    return todayStatus ? todayStatus.status : workStatuses[0].status;
+    // ถ้ามีสถานะของวันนี้ให้ใช้ค่านั้น ถ้าไม่มีให้ใช้ค่าดีฟอลต์ OFFICE
+    return todayStatus ? todayStatus.status : 'OFFICE';
   };
 
   // ฟังก์ชั่นสำหรับแสดงไอคอนตามสถานะการทำงาน

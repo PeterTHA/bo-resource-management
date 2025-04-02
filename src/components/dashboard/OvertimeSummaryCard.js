@@ -25,58 +25,8 @@ export function OvertimeSummaryCard() {
         }
         
         setOvertimeData(data.data);
-        
-        // คำนวณชั่วโมงทำงานล่วงเวลาแยกตามเดือน (เฉพาะที่อนุมัติแล้ว)
-        const approvedOvertimes = data.data.summary.APPROVED || [];
-        const currentYear = new Date().getFullYear();
-        
-        // สร้างข้อมูลตั้งต้นสำหรับทุกเดือนในปีนี้
-        const thaiMonthNames = [
-          'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
-          'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
-        ];
-        
-        const monthStats = {};
-        
-        // สร้างข้อมูลเริ่มต้นสำหรับทุกเดือนในปีปัจจุบัน
-        for (let i = 0; i < 12; i++) {
-          const monthName = `${thaiMonthNames[i]} ${currentYear}`;
-          const key = `${currentYear}-${i}`;
-          
-          monthStats[key] = {
-            name: monthName,
-            hours: 0,
-            count: 0
-          };
-        }
-        
-        // เพิ่มข้อมูลจริงจาก approved overtimes
-        approvedOvertimes.forEach(ot => {
-          const date = new Date(ot.date);
-          const year = getYear(date);
-          
-          // เฉพาะข้อมูลของปีปัจจุบัน
-          if (year === currentYear) {
-            const month = getMonth(date);
-            const key = `${year}-${month}`;
-            
-            if (monthStats[key]) {
-              monthStats[key].hours += parseFloat(ot.totalHours) || 0;
-              monthStats[key].count += 1;
-            }
-          }
-        });
-        
-        // เรียงลำดับตามเดือน (มกราคม-ธันวาคม)
-        setMonthlyStats(
-          Object.entries(monthStats)
-            .sort((a, b) => {
-              const [yearA, monthA] = a[0].split('-').map(Number);
-              const [yearB, monthB] = b[0].split('-').map(Number);
-              return monthA - monthB;
-            })
-            .map(([key, stats]) => stats)
-        );
+        // ใช้ข้อมูล monthlyStats ที่คำนวณจาก API แล้ว
+        setMonthlyStats(data.data.monthlyStats || []);
       } catch (err) {
         setError(err.message);
       } finally {

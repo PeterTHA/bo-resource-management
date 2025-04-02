@@ -34,94 +34,9 @@ export function LeaveSummaryCard() {
         const data = await response.json();
         
         if (data.success) {
-          setLeaveData(data.data);
-          
-          // จัดกลุ่มข้อมูลตามประเภทการลาและสถานะ
-          const byType = {};
-          data.data.forEach(leave => {
-            const type = leave.leaveType || 'ไม่ระบุ';
-            if (!byType[type]) {
-              byType[type] = {
-                total: 0,
-                totalDays: 0,
-                waiting_for_approve: [],
-                approved: [],
-                rejected: [],
-                canceled: []
-              };
-            }
-            
-            // เพิ่มเข้าไปใน arrays ตามสถานะ
-            if (leave.status === 'waiting_for_approve') {
-              byType[type].waiting_for_approve.push(leave);
-              byType[type].total++;  // นับเฉพาะ waiting และ approved
-              byType[type].totalDays += leave.totalDays || 0;  // นับวันเฉพาะ waiting และ approved
-            } else if (leave.status === 'approved') {
-              byType[type].approved.push(leave);
-              byType[type].total++;  // นับเฉพาะ waiting และ approved
-              byType[type].totalDays += leave.totalDays || 0;  // นับวันเฉพาะ waiting และ approved
-            } else if (leave.status === 'rejected') {
-              byType[type].rejected.push(leave);
-            } else if (leave.status === 'canceled') {
-              byType[type].canceled.push(leave);
-            }
-          });
-          
-          // เรียงลำดับประเภทการลาตามจำนวนทั้งหมด (มากไปน้อย)
-          const sortedByType = Object.fromEntries(
-            Object.entries(byType).sort((a, b) => b[1].total - a[1].total)
-          );
-          
-          setLeavesByType(sortedByType);
-          
-          // คำนวณข้อมูลการลาตามเดือน
-          const currentYear = new Date().getFullYear();
-          const thaiMonthNames = [
-            'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
-            'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
-          ];
-          
-          // สร้างข้อมูลเริ่มต้นสำหรับทุกเดือนในปีปัจจุบัน
-          const monthStats = {};
-          for (let i = 0; i < 12; i++) {
-            const monthName = `${thaiMonthNames[i]} ${currentYear}`;
-            const key = `${currentYear}-${i}`;
-            
-            monthStats[key] = {
-              name: monthName,
-              days: 0,
-              count: 0
-            };
-          }
-          
-          // เพิ่มข้อมูลจริงจาก approved leaves
-          const approvedLeaves = data.data.filter(leave => leave.status === 'approved');
-          approvedLeaves.forEach(leave => {
-            const startDate = new Date(leave.startDate);
-            const year = startDate.getFullYear();
-            
-            // เฉพาะข้อมูลของปีปัจจุบัน
-            if (year === currentYear) {
-              const month = startDate.getMonth();
-              const key = `${year}-${month}`;
-              
-              if (monthStats[key]) {
-                monthStats[key].days += leave.totalDays || 0;
-                monthStats[key].count += 1;
-              }
-            }
-          });
-          
-          // เรียงลำดับตามเดือน (มกราคม-ธันวาคม)
-          setMonthlyStats(
-            Object.entries(monthStats)
-              .sort((a, b) => {
-                const [yearA, monthA] = a[0].split('-').map(Number);
-                const [yearB, monthB] = b[0].split('-').map(Number);
-                return monthA - monthB;
-              })
-              .map(([key, stats]) => stats)
-          );
+          // ใช้ข้อมูลที่คำนวณมาจาก API
+          setLeavesByType(data.data.byType);
+          setMonthlyStats(data.data.monthlyStats || []);
           
           setError(null);
         } else {
@@ -138,20 +53,16 @@ export function LeaveSummaryCard() {
     fetchLeaveData();
   }, []);
 
-  // คำนวณจำนวนรวมของวันลาทั้งหมด
+  // คำนวณจำนวนรวมของวันลาทั้งหมด จากข้อมูลที่ได้จาก API
   const totalLeaveDays = useMemo(() => {
     if (!leavesByType) return 0;
-    return Object.values(leavesByType).reduce((total, data) => total + data.totalDays, 0);
+    return leavesByType.reduce((total, data) => total + data.totalDays, 0);
   }, [leavesByType]);
 
-  // คำนวณจำนวนรวมของวันลาที่อนุมัติแล้ว
+  // คำนวณจำนวนรวมของวันลาที่อนุมัติแล้ว จากข้อมูลที่ได้จาก API
   const totalApprovedDays = useMemo(() => {
     if (!leavesByType) return 0;
-    return Object.values(leavesByType).reduce((total, data) => {
-      // คำนวณจำนวนวันลาที่อนุมัติของแต่ละประเภท
-      const approvedDays = data.approved.reduce((sum, leave) => sum + (leave.totalDays || 0), 0);
-      return total + approvedDays;
-    }, 0);
+    return leavesByType.reduce((total, data) => total + data.approved.days, 0);
   }, [leavesByType]);
 
   // คำนวณเปอร์เซ็นต์การเปลี่ยนแปลงเทียบกับเดือนที่แล้ว (สมมติว่าเพิ่มขึ้น 10%)
@@ -198,41 +109,41 @@ export function LeaveSummaryCard() {
       
       <CardContent className="flex-1 pb-0 px-4">
         {/* สถิติการลาแยกประเภท */}
-        {leavesByType && Object.keys(leavesByType).length > 0 ? (
+        {leavesByType && leavesByType.length > 0 ? (
           <div className="space-y-3">
-            {Object.entries(leavesByType).map(([type, data], index) => (
+            {leavesByType.map((leaveData, index) => (
               <div key={index} className="border rounded-md p-4 hover:bg-muted/50 transition-colors">
                 <div className="flex items-center mb-2">
                   <div
                     className="h-3 w-3 rounded-full mr-2"
-                    style={{ backgroundColor: COLORS[type] || COLORS.default }}
+                    style={{ backgroundColor: COLORS[leaveData.type] || COLORS.default }}
                   ></div>
-                  <span className="font-medium">{type}</span>
+                  <span className="font-medium">{leaveData.type}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">จำนวนครั้ง:</span>
-                    <span className="font-medium">{data.total} ครั้ง</span>
+                    <span className="font-medium">{leaveData.total} ครั้ง</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">จำนวนวัน:</span>
-                    <span className="font-medium">{data.totalDays} วัน</span>
+                    <span className="font-medium">{leaveData.totalDays} วัน</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">อนุมัติแล้ว:</span>
-                    <span className="font-medium">{data.approved.length} ครั้ง</span>
+                    <span className="font-medium">{leaveData.approved.count} ครั้ง</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">รออนุมัติ:</span>
-                    <span className="font-medium">{data.waiting_for_approve.length} ครั้ง</span>
+                    <span className="font-medium">{leaveData.waiting_for_approve.count} ครั้ง</span>
                   </div>
                 </div>
                 <div className="mt-3 w-full bg-gray-200 rounded-full h-1.5">
                   <div 
                     className="h-1.5 rounded-full" 
                     style={{ 
-                      width: `${Math.min(100, (data.totalDays / (totalLeaveDays || 1)) * 100)}%`,
-                      backgroundColor: COLORS[type] || COLORS.default
+                      width: `${Math.min(100, (leaveData.totalDays / (totalLeaveDays || 1)) * 100)}%`,
+                      backgroundColor: COLORS[leaveData.type] || COLORS.default
                     }}
                   />
                 </div>

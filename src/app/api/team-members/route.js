@@ -14,7 +14,11 @@ export async function GET() {
       );
     }
 
-    // ดึงข้อมูลพนักงานในทีมเดียวกัน
+    // ดึงเฉพาะข้อมูลวันปัจจุบัน
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // ดึงข้อมูลพนักงานในทีมเดียวกัน - ลดจำนวนที่ select ลงเหลือเฉพาะที่จำเป็น
     const employees = await prisma.employee.findMany({
       where: {
         teamId: session.user.teamId,
@@ -25,30 +29,18 @@ export async function GET() {
         firstName: true,
         lastName: true,
         positionTitle: true,
-        department: {
-          select: {
-            name: true
-          }
-        },
-        teamData: {
-          select: {
-            name: true
-          }
-        },
         image: true,
         workStatuses: {
           where: {
             date: {
-              gte: new Date(new Date().setDate(new Date().getDate() - 7))
+              equals: today
             }
           },
           orderBy: {
             date: 'desc'
           },
-          take: 7,
+          take: 1,
           select: {
-            id: true,
-            date: true,
             status: true
           }
         }
@@ -58,36 +50,63 @@ export async function GET() {
       }
     });
 
-    // แปลงข้อมูลให้อยู่ในรูปแบบที่ต้องการ
+    // ดึงข้อมูลการลาของวันนี้
+    const todayLeaves = await prisma.leave.findMany({
+      where: {
+        employeeId: {
+          in: employees.map(emp => emp.id)
+        },
+        startDate: {
+          lte: today
+        },
+        endDate: {
+          gte: today
+        },
+        OR: [
+          { status: 'approved' },
+          { status: 'waiting_for_approve' }
+        ]
+      },
+      select: {
+        employeeId: true,
+        leaveType: true,
+        status: true
+      }
+    });
+
+    // สร้างตัวแปรชั่วคราวเพื่อเก็บความสัมพันธ์ระหว่าง id พนักงานกับการลา
+    const employeeLeaveMap = {};
+    todayLeaves.forEach(leave => {
+      employeeLeaveMap[leave.employeeId] = leave;
+    });
+
+    // แปลงข้อมูลให้อยู่ในรูปแบบที่ต้องการและรวมกับข้อมูลการลา
     const formattedEmployees = employees.map(employee => {
-      const { teamData, workStatuses, department, ...employeeData } = employee;
+      const todayStatus = employee.workStatuses[0]?.status || 'OFFICE';
+      const todayLeave = employeeLeaveMap[employee.id];
+      
+      const status = todayLeave ? 'LEAVE' : todayStatus;
+      
       return {
-        ...employeeData,
-        department: department?.name || 'ไม่ระบุแผนก',
-        teamName: teamData?.name || 'ไม่มีทีม',
-        workStatuses: workStatuses.map(status => ({
-          id: status.id,
-          date: status.date,
-          status: status.status
-        }))
+        id: employee.id,
+        firstName: employee.firstName || '',
+        lastName: employee.lastName || '',
+        positionTitle: employee.positionTitle || '',
+        image: employee.image || null,
+        workStatuses: [{
+          status: status
+        }],
+        // เพิ่มข้อมูลการลาถ้ามี
+        leave: todayLeave ? {
+          leaveType: todayLeave.leaveType,
+          status: todayLeave.status
+        } : null
       };
     });
 
-    // ตรวจสอบและแปลงข้อมูลให้ถูกต้อง
-    const validatedEmployees = formattedEmployees.map(employee => ({
-      id: employee.id,
-      firstName: employee.firstName,
-      lastName: employee.lastName,
-      positionTitle: employee.positionTitle || '',
-      department: employee.department || 'ไม่ระบุแผนก',
-      teamName: employee.teamName || 'ไม่มีทีม',
-      image: employee.image || null,
-      workStatuses: employee.workStatuses || []
-    }));
-
     return NextResponse.json({
       success: true,
-      data: validatedEmployees
+      data: formattedEmployees
     });
 
   } catch (error) {

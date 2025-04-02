@@ -15,6 +15,7 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
+    const dashboardMode = searchParams.get('dashboardMode') === 'true';
 
     if (!startDate || !endDate) {
       return NextResponse.json({ 
@@ -26,9 +27,105 @@ export async function GET(request) {
     // แปลงวันที่เป็น Date object
     const startDateTime = new Date(startDate);
     const endDateTime = new Date(endDate);
+    
+    // ต้องแน่ใจว่าใช้ UTC time ไม่ตัด timezone ทิ้ง
+    console.log('Start date from client:', startDate);
+    console.log('End date from client:', endDate);
+    console.log('Parsed start date:', startDateTime.toISOString());
+    console.log('Parsed end date:', endDateTime.toISOString());
+    
+    // ตั้งเวลาให้ครอบคลุมทั้งวัน
     startDateTime.setHours(0, 0, 0, 0);
     endDateTime.setHours(23, 59, 59, 999);
+    
+    console.log('Adjusted start date:', startDateTime.toISOString());
+    console.log('Adjusted end date:', endDateTime.toISOString());
 
+    // หากเป็นโหมด Dashboard ให้ดึงเฉพาะข้อมูลจำเป็น
+    if (dashboardMode) {
+      // สำหรับ Dashboard เราต้องการเพียงข้อมูลสมาชิกในทีมและสถานะของวันที่ที่ระบุ
+      console.log('Running in dashboard mode for date:', startDateTime.toISOString());
+      
+      // ดึงข้อมูลพนักงานในทีมเดียวกัน
+      const employees = await prisma.employee.findMany({
+        where: {
+          teamId: session.user.teamId,
+          isActive: true
+        },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          image: true
+        },
+        orderBy: {
+          firstName: 'asc'
+        }
+      });
+
+      // ดึงสถานะการทำงานของวันที่ที่ระบุ - ใช้ startDateTime ที่ได้รับจาก URL
+      const employeeIds = employees.map(emp => emp.id);
+      const workStatuses = await prisma.workStatus.findMany({
+        where: {
+          employeeId: {
+            in: employeeIds
+          },
+          date: {
+            equals: startDateTime
+          }
+        },
+        select: {
+          id: true,
+          employeeId: true,
+          status: true,
+          date: true,
+        }
+      });
+
+      console.log('Found work statuses:', workStatuses.length);
+
+      // ดึงข้อมูลการลาที่ซ้อนทับกับวันที่ที่ระบุ - ใช้วันที่ที่ได้รับจาก URL
+      const leaves = await prisma.leave.findMany({
+        where: {
+          employeeId: {
+            in: employeeIds
+          },
+          startDate: {
+            lte: endDateTime
+          },
+          endDate: {
+            gte: startDateTime
+          },
+          OR: [
+            { status: 'approved' },
+            { status: 'waiting_for_approve' }
+          ]
+        },
+        select: {
+          id: true,
+          employeeId: true,
+          leaveType: true,
+          startDate: true,
+          endDate: true,
+          status: true
+        }
+      });
+      
+      console.log('Found leaves:', leaves.length);
+      
+      // ส่งข้อมูลกลับ
+      return NextResponse.json({
+        success: true,
+        data: {
+          employees,
+          workStatuses,
+          leaves,
+          overtimes: []
+        }
+      });
+    }
+
+    // กรณีไม่ใช่ dashboard mode ให้ดึงข้อมูลตามปกติ (ดึงข้อมูลทั้งหมด)
     // ดึงข้อมูลพนักงานที่ active พร้อมกับข้อมูลที่เกี่ยวข้อง
     const employees = await prisma.employee.findMany({
       where: {

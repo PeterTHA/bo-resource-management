@@ -14,78 +14,135 @@ export async function GET() {
       );
     }
 
-    // ดึงข้อมูลสรุปการทำงานล่วงเวลาทั้งหมด
-    const overtimeSummary = await prisma.overtime.findMany({
-      where: {
-        employeeId: session.user.id
-      },
-      select: {
-        id: true,
-        date: true,
-        startTime: true,
-        endTime: true,
-        totalHours: true,
-        status: true,
-        reason: true,
-        employee: {
-          select: {
-            firstName: true,
-            lastName: true,
-            department: true,
-            teamData: {
-              select: {
-                name: true
-              }
-            }
+    // ดึงข้อมูลปีปัจจุบัน
+    const currentYear = new Date().getFullYear();
+    const startOfYear = new Date(currentYear, 0, 1);
+    const endOfYear = new Date(currentYear, 11, 31, 23, 59, 59);
+
+    // คำนวณสถิติสรุปโดยใช้ Prisma aggregate
+    const [approved, pending, totalStats] = await Promise.all([
+      // จำนวนและชั่วโมงรวมของรายการที่อนุมัติแล้ว
+      prisma.overtime.aggregate({
+        where: {
+          employeeId: session.user.id,
+          OR: [
+            { status: 'APPROVED' },
+            { status: 'approved' },
+            { status: 'อนุมัติ' }
+          ],
+          date: {
+            gte: startOfYear,
+            lte: endOfYear
+          }
+        },
+        _count: {
+          id: true
+        },
+        _sum: {
+          totalHours: true
+        }
+      }),
+      
+      // จำนวนรายการที่รออนุมัติ
+      prisma.overtime.count({
+        where: {
+          employeeId: session.user.id,
+          OR: [
+            { status: 'PENDING' },
+            { status: 'pending' },
+            { status: 'waiting_for_approve' }
+          ],
+          date: {
+            gte: startOfYear,
+            lte: endOfYear
           }
         }
+      }),
+      
+      // จำนวนรวมทั้งหมด
+      prisma.overtime.count({
+        where: {
+          employeeId: session.user.id,
+          date: {
+            gte: startOfYear,
+            lte: endOfYear
+          }
+        }
+      })
+    ]);
+
+    // ดึงข้อมูลรายเดือนสำหรับปีปัจจุบัน - เฉพาะรายการที่อนุมัติแล้ว
+    const approvedOvertimes = await prisma.overtime.findMany({
+      where: {
+        employeeId: session.user.id,
+        OR: [
+          { status: 'APPROVED' },
+          { status: 'approved' },
+          { status: 'อนุมัติ' }
+        ],
+        date: {
+          gte: startOfYear,
+          lte: endOfYear
+        }
       },
-      orderBy: {
-        createdAt: 'desc'
+      select: {
+        date: true,
+        totalHours: true
       }
     });
 
-    // แบ่งข้อมูลตาม status
-    const overtimesByStatus = {
-      PENDING: overtimeSummary.filter(ot => 
-        ot.status === 'PENDING' || 
-        ot.status === 'pending' || 
-        ot.status === 'waiting_for_approve' || 
-        ot.status?.toLowerCase() === 'pending'),
-      APPROVED: overtimeSummary.filter(ot => 
-        ot.status === 'APPROVED' || 
-        ot.status === 'approved' || 
-        ot.status === 'อนุมัติ' || 
-        ot.status?.toLowerCase() === 'approved'),
-      REJECTED: overtimeSummary.filter(ot => 
-        ot.status === 'REJECTED' || 
-        ot.status === 'rejected' || 
-        ot.status === 'ไม่อนุมัติ' || 
-        ot.status?.toLowerCase() === 'rejected'),
-      CANCELLED: overtimeSummary.filter(ot => 
-        ot.status === 'CANCELLED' || 
-        ot.status === 'cancelled' || 
-        ot.status === 'ยกเลิก' || 
-        ot.status?.toLowerCase() === 'cancelled' || 
-        ot.isCancelled === true)
-    };
+    // เตรียมข้อมูลสถิติรายเดือน
+    const thaiMonthNames = [
+      'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+      'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+    ];
+    
+    // สร้างข้อมูลเริ่มต้นสำหรับทุกเดือน
+    const monthStats = {};
+    for (let i = 0; i < 12; i++) {
+      const monthName = `${thaiMonthNames[i]} ${currentYear}`;
+      const key = `${currentYear}-${i}`;
+      
+      monthStats[key] = {
+        name: monthName,
+        hours: 0,
+        count: 0
+      };
+    }
+    
+    // เพิ่มข้อมูลจริงจาก approved overtimes
+    approvedOvertimes.forEach(ot => {
+      const date = new Date(ot.date);
+      const month = date.getMonth();
+      const key = `${currentYear}-${month}`;
+      
+      if (monthStats[key]) {
+        monthStats[key].hours += parseFloat(ot.totalHours) || 0;
+        monthStats[key].count += 1;
+      }
+    });
+    
+    // เรียงลำดับตามเดือน
+    const monthlyStats = Object.values(monthStats);
 
-    // คำนวณสถิติ
+    // สร้างสถิติรวม
     const stats = {
-      pending: overtimesByStatus.PENDING.length,
-      approved: overtimesByStatus.APPROVED.length,
-      rejected: overtimesByStatus.REJECTED.length,
-      cancelled: overtimesByStatus.CANCELLED.length,
-      total: overtimeSummary.length,
-      totalHours: overtimeSummary.reduce((sum, ot) => sum + (ot.totalHours || 0), 0),
-      approvedHours: overtimesByStatus.APPROVED.reduce((sum, ot) => sum + (ot.totalHours || 0), 0)
+      pending: pending,
+      approved: approved._count.id,
+      rejected: 0, // ไม่จำเป็นต้องดึงข้อมูลนี้ตอนแสดง Dashboard
+      cancelled: 0, // ไม่จำเป็นต้องดึงข้อมูลนี้ตอนแสดง Dashboard
+      total: totalStats,
+      approvedHours: approved._sum.totalHours || 0
     };
 
     return NextResponse.json({
       success: true,
       data: {
-        summary: overtimesByStatus,
-        stats
+        summary: {
+          APPROVED: approvedOvertimes
+        },
+        stats,
+        monthlyStats
       }
     });
 
