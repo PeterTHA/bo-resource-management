@@ -44,8 +44,6 @@ export async function GET() {
       }
     });
 
-    console.log('Leave data format (first item):', leaveSummary?.[0]);
-
     // แปลงข้อมูลให้อยู่ในรูปแบบที่ต้องการ
     const formattedLeaves = leaveSummary.map(leave => {
       return {
@@ -60,8 +58,6 @@ export async function GET() {
         department: leave.employee.department?.name || 'ไม่ระบุแผนก'
       };
     });
-
-    console.log('Formatted leaves (first item):', formattedLeaves[0]);
 
     return NextResponse.json({
       success: true,

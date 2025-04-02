@@ -12,22 +12,16 @@ export default function HomePage() {
   const [isRedirecting, setIsRedirecting] = useState(false);
 
   useEffect(() => {
-    if (status === 'loading') return;
-
-    if (isRedirecting) return;
+    if (status === "loading") return;
     
-    setIsRedirecting(true);
+    let targetPath = '/login';
     
-    console.log('หน้าแรก: สถานะ session =', status, 'กำลังเปลี่ยนเส้นทาง...');
+    if (status === "authenticated") {
+      targetPath = '/dashboard';
+    }
     
-    const targetPath = session ? '/dashboard' : '/login';
-    
-    setTimeout(() => {
-      console.log(`หน้าแรก: กำลังนำทางไปยัง ${targetPath}`);
-      router.push(targetPath);
-    }, 100);
-    
-  }, [session, status, router, isRedirecting]);
+    router.replace(targetPath);
+  }, [status, router]);
 
   return (
     <div className="min-h-screen flex items-center justify-center">

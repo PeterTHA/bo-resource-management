@@ -28,7 +28,6 @@ export async function middleware(req) {
 
   // เส้นทางสาธารณะให้ผ่านไปเลย
   if (isPublicPath(pathname)) {
-    console.log(`[Middleware] Public path: ${pathname}, allowing access`);
     return NextResponse.next();
   }
 
@@ -39,42 +38,23 @@ export async function middleware(req) {
       secret: process.env.NEXTAUTH_SECRET
     });
     
-    console.log(`[Middleware] Token check for ${pathname}: ${token ? 'Found' : 'Not found'}`);
-    
-    // หน้าแรก (/)
-    if (pathname === '/') {
-      if (token) {
-        console.log('[Middleware] Root path with token, redirecting to dashboard');
-        return NextResponse.redirect(new URL('/dashboard', req.url));
-      }
-      console.log('[Middleware] Root path without token, redirecting to login');
-      return NextResponse.redirect(new URL('/login', req.url));
+    // ถ้ามี session token ให้เปลี่ยนเส้นทางไปที่หน้า dashboard
+    if (pathname === "/" && token) {
+      return NextResponse.redirect(new URL("/dashboard", req.url));
     }
-
-    // ถ้าไม่มี token และไม่ใช่หน้าสาธารณะ
-    if (!token) {
-      console.log(`[Middleware] No token for protected path: ${pathname}`);
-      
-      // สำหรับ API endpoint
-      if (pathname.startsWith('/api/')) {
-        return new NextResponse(
-          JSON.stringify({ success: false, message: 'กรุณาเข้าสู่ระบบ' }),
-          { status: 401, headers: { 'content-type': 'application/json' } }
-        );
-      }
-      
-      // สำหรับหน้าทั่วไป
-      return NextResponse.redirect(new URL('/login', req.url));
+    
+    // ถ้าไม่มี session token และอยู่ที่หน้าแรก ให้เปลี่ยนเส้นทางไปที่หน้า login
+    if (pathname === "/" && !token) {
+      return NextResponse.redirect(new URL("/login", req.url));
     }
 
     // สำหรับ admin path แต่ผู้ใช้ไม่ใช่ admin
     if (token.role !== 'admin' && adminPaths.some(path => pathname.startsWith(path))) {
-      console.log(`[Middleware] Non-admin access to admin path: ${pathname}`);
-      
+      // กรณีเกิดข้อผิดพลาดกับ API
       if (pathname.startsWith('/api/')) {
         return new NextResponse(
-          JSON.stringify({ success: false, message: 'ไม่มีสิทธิ์เข้าถึง' }),
-          { status: 403, headers: { 'content-type': 'application/json' } }
+          JSON.stringify({ success: false, message: 'เกิดข้อผิดพลาด' }),
+          { status: 500, headers: { 'content-type': 'application/json' } }
         );
       }
       
@@ -82,7 +62,6 @@ export async function middleware(req) {
     }
 
     // ผ่านการตรวจสอบทั้งหมด
-    console.log(`[Middleware] Access granted for: ${pathname}`);
     return NextResponse.next();
   } catch (error) {
     console.error(`[Middleware] Error:`, error);

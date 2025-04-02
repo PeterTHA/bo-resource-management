@@ -1,65 +1,47 @@
 import React from 'react';
+import { FiAlertCircle, FiAlertTriangle, FiInfo, FiCheckCircle } from 'react-icons/fi';
 
-export default function ErrorMessage({ message, type = 'error' }) {
+// แก้ไข export เป็น export const เพื่อให้สามารถนำเข้าได้ทั้งแบบ default และ named import
+export const ErrorMessage = ({ message, type = 'error' }) => {
   if (!message) return null;
   
   const getAlertClass = () => {
     switch (type) {
       case 'error':
-        return 'alert-error';
+        return 'bg-destructive/15 text-destructive';
       case 'warning':
-        return 'alert-warning';
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-400';
       case 'info':
-        return 'alert-info';
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-400';
       case 'success':
-        return 'alert-success';
+        return 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-400';
       default:
-        return 'alert-error';
+        return 'bg-destructive/15 text-destructive';
     }
   };
   
   const getIcon = () => {
     switch (type) {
       case 'error':
-        return (
-          <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        );
+        return <FiAlertCircle className="h-4 w-4" />;
       case 'warning':
-        return (
-          <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-        );
+        return <FiAlertTriangle className="h-4 w-4" />;
       case 'info':
-        return (
-          <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        );
+        return <FiInfo className="h-4 w-4" />;
       case 'success':
-        return (
-          <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        );
+        return <FiCheckCircle className="h-4 w-4" />;
       default:
-        return (
-          <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        );
+        return <FiAlertCircle className="h-4 w-4" />;
     }
   };
   
   return (
-    <div className={`alert ${getAlertClass()} mb-6`}>
+    <div className={`flex items-center gap-2 rounded-md px-3 py-2.5 text-sm ${getAlertClass()}`}>
       {getIcon()}
       <span>{message}</span>
     </div>
   );
-}
+};
 
 // สำหรับข้อความ error ที่เกี่ยวกับการเชื่อมต่อฐานข้อมูล
 export function ConnectionErrorMessage() {
@@ -69,4 +51,7 @@ export function ConnectionErrorMessage() {
       type="error" 
     />
   );
-} 
+}
+
+// ส่งออกเป็น default export ด้วย
+export default ErrorMessage; 

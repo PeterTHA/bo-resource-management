@@ -192,8 +192,13 @@ export default function EmployeeCalendarPage() {
   const [viewMode, setViewMode] = useState('week'); // 'week', 'month'
   const [selectedDepartment, setSelectedDepartment] = useState('all');
   const [departments, setDepartments] = useState([]);
+  const [selectedTeam, setSelectedTeam] = useState('all'); // เพิ่ม state สำหรับทีมที่เลือก
+  const [teams, setTeams] = useState([]); // เพิ่ม state สำหรับเก็บรายการทีม
   const [isDataFetching, setIsDataFetching] = useState(false);
   const [hasCheckedPermissions, setHasCheckedPermissions] = useState(false);
+  const [employeesByTeam, setEmployeesByTeam] = useState([]); // เพิ่ม state สำหรับเก็บพนักงานแยกตามทีม
+  const [currentUserData, setCurrentUserData] = useState(null); // เพิ่ม state สำหรับเก็บข้อมูลผู้ใช้ปัจจุบัน
+  const [teamsData, setTeamsData] = useState({}); // เพิ่ม state สำหรับเก็บข้อมูลทีม
 
   // เพิ่ม ref สำหรับเก็บ AbortController
   const abortControllerRef = useRef(null);
@@ -207,11 +212,147 @@ export default function EmployeeCalendarPage() {
   // เพิ่ม state เพื่อเก็บสิทธิ์การแก้ไขของพนักงานแต่ละคน
   const [employeePermissions, setEmployeePermissions] = useState({});
   
+  // ฟังก์ชันสำหรับดึงข้อมูลแผนกทั้งหมด
+  const fetchDepartments = async () => {
+    try {
+      const res = await fetch('/api/departments');
+      const data = await res.json();
+      
+      if (Array.isArray(data)) {
+        // สร้างรายการแผนกเฉพาะชื่อแผนก
+        const departmentNames = data
+          .filter(dept => dept && dept.name)
+          .map(dept => dept.name)
+          .sort();
+        
+        setDepartments(departmentNames);
+      } else if (data.data && Array.isArray(data.data)) {
+        // สร้างรายการแผนกเฉพาะชื่อแผนก
+        const departmentNames = data.data
+          .filter(dept => dept && dept.name)
+          .map(dept => dept.name)
+          .sort();
+        
+        setDepartments(departmentNames);
+      }
+    } catch (error) {
+      console.error('Error fetching departments:', error);
+    }
+  };
+  
+  // ฟังก์ชันสำหรับดึงข้อมูลทีมทั้งหมด
+  const fetchTeamsData = async () => {
+    try {
+      setLoading(true);
+      
+      // ลองดึงข้อมูลจาก API ก่อน
+      const res = await fetch('/api/teams');
+      const data = await res.json();
+      
+      if (data.success && data.data && Array.isArray(data.data)) {
+        // แปลงข้อมูลทีมให้อยู่ในรูปแบบ Object โดยใช้ ID เป็น key
+        const teamsObj = {};
+        data.data.forEach(team => {
+          teamsObj[team.id] = team;
+        });
+        setTeamsData(teamsObj);
+        
+        // เก็บรายชื่อทีมสำหรับใช้ในการกรอง
+        const teamNames = data.data
+          .filter(team => team && team.name)
+          .map(team => team.name)
+          .sort();
+        
+        setTeams(teamNames);
+        console.log('ดึงข้อมูลทีมสำเร็จ:', teamNames.length, 'ทีม');
+      } else {
+        // ถ้าไม่สามารถดึงข้อมูลจาก API ได้ ให้ใช้ข้อมูลจากพนักงาน
+        console.log('ไม่สามารถดึงข้อมูลทีมจาก API ได้ ใช้ข้อมูลจากพนักงานแทน');
+        extractTeamsFromEmployees();
+      }
+    } catch (error) {
+      console.error('Error fetching teams data:', error);
+      // ในกรณีที่เกิดข้อผิดพลาด ให้ใช้ข้อมูลจากพนักงาน
+      extractTeamsFromEmployees();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ฟังก์ชันสำหรับดึงข้อมูลทีมจากพนักงาน
+  const extractTeamsFromEmployees = () => {
+    if (!employees || employees.length === 0) {
+      console.log('ไม่มีข้อมูลพนักงานสำหรับดึงข้อมูลทีม');
+      return;
+    }
+
+    // เก็บข้อมูลทีมจากพนักงาน
+    const teamsFromEmployees = {};
+    const teamNameSet = new Set();
+    
+    employees.forEach(employee => {
+      // รวบรวมข้อมูลทีมจากหลายแหล่ง
+      let teamName = null;
+      let teamId = null;
+      
+      if (employee.teamName) {
+        teamName = employee.teamName;
+      } else if (employee.team) {
+        if (typeof employee.team === 'string') {
+          teamName = employee.team;
+        } else if (employee.team.name) {
+          teamName = employee.team.name;
+          teamId = employee.team.id;
+        }
+      } else if (employee.teamId) {
+        teamId = employee.teamId;
+      }
+      
+      if (teamName) {
+        teamNameSet.add(teamName);
+        
+        if (teamId) {
+          teamsFromEmployees[teamId] = { id: teamId, name: teamName };
+        }
+      }
+    });
+    
+    // อัปเดตข้อมูลทีม
+    if (Object.keys(teamsFromEmployees).length > 0) {
+      setTeamsData(teamsFromEmployees);
+    }
+    
+    // อัปเดตรายชื่อทีมสำหรับใช้ในการกรอง
+    const teamNameArray = Array.from(teamNameSet).sort();
+    setTeams(teamNameArray);
+    console.log('ดึงข้อมูลทีมจากพนักงานสำเร็จ:', teamNameArray.length, 'ทีม');
+  };
+  
+  // useEffect สำหรับดึงข้อมูลแผนก
+  useEffect(() => {
+    if (session) {
+      fetchDepartments();
+    }
+  }, [session]);
+  
+  // useEffect สำหรับดึงข้อมูลทีม
+  useEffect(() => {
+    if (session) {
+      fetchTeamsData();
+    }
+  }, [session]);
+  
+  // useEffect สำหรับดึงข้อมูลทีมจากพนักงานเมื่อข้อมูลพนักงานเปลี่ยนแปลง
+  useEffect(() => {
+    if (employees.length > 0 && teams.length === 0) {
+      console.log('มีข้อมูลพนักงานแต่ไม่มีข้อมูลทีม ทำการดึงข้อมูลทีมจากพนักงาน');
+      extractTeamsFromEmployees();
+    }
+  }, [employees]);
+  
   // useEffect สำหรับตรวจสอบสิทธิ์ของพนักงานทุกคน
   useEffect(() => {
     if (session && employees.length > 0) {
-      console.log('Computing permissions for all employees...');
-      
       // สร้าง object เพื่อเก็บข้อมูลการมีสิทธิ์แก้ไขของพนักงานแต่ละคน
       const permissions = {};
       
@@ -221,7 +362,6 @@ export default function EmployeeCalendarPage() {
         permissions[employee.id] = canEditEmployeeWorkStatus(employee, today);
       });
       
-      console.log('Employee permissions:', permissions);
       // อัปเดต state เพื่อเก็บสิทธิ์การแก้ไข
       setEmployeePermissions(permissions);
       
@@ -230,276 +370,11 @@ export default function EmployeeCalendarPage() {
     }
   }, [session, employees]);
   
-  // ฟังก์ชันตรวจสอบสิทธิ์การแก้ไขสถานะการทำงานของพนักงาน
-  const canEditEmployeeWorkStatus = (employee, date = null) => {
-    if (!session || !session.user) return false;
-    
-    // สร้างวันปัจจุบันสำหรับตรวจสอบวันที่
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    // ใช้ date ที่ส่งเข้ามาหรือใช้ selectedDate ถ้าไม่มีการส่งค่ามา
-    const currentDay = new Date(date || selectedDate || today);
-    currentDay.setHours(0, 0, 0, 0);
-    
-    // อนุญาตให้แก้ไขข้อมูลได้เฉพาะวันปัจจุบันและอนาคตเท่านั้น (ยกเว้น admin)
-    const isValidDate = currentDay >= today;
-    
-    // ตรวจสอบบทบาทของผู้ใช้
-    const isAdmin = session.user.role === 'admin';
-    const isSupervisor = session.user.role === 'supervisor';
-    const isSameUser = session.user.id === employee.id;
-    
-    // แสดงข้อมูลการตรวจสอบ
-    console.log('PERMISSION CHECK:', {
-      user: `${session.user.firstName || ''} ${session.user.lastName || ''}`,
-      role: session.user.role,
-      employee: `${employee.firstName || ''} ${employee.lastName || ''}`,
-      userTeam: session.user.userTeam || session.user.userTeamId,
-      employeeTeam: employee.team || employee.teamId
-    });
-    
-    // 1. กรณีเป็น admin - มีสิทธิ์ทั้งหมด
-    if (isAdmin) {
-      console.log(`✅ ADMIN ACCESS GRANTED`);
-      return true; // admin สามารถแก้ไขได้ทุกวัน แม้จะเป็นวันที่ผ่านมาแล้ว
-    }
-    
-    // 2. กรณีเป็นเจ้าของข้อมูล - แก้ไขตัวเองได้
-    if (isSameUser) {
-      console.log(`✅ SELF ACCESS GRANTED`);
-      return isValidDate; // แก้ไขตัวเองได้เฉพาะวันปัจจุบันและอนาคต
-    }
-    
-    // 3. กรณีเป็น supervisor - สามารถแก้ไขได้เฉพาะคนในทีมตัวเอง
-    if (isSupervisor) {
-      // ดึงและตรวจสอบ team ของ supervisor และพนักงาน
-      let userTeamId = null;
-      let employeeTeamId = null;
-      
-      // ตรวจสอบหาค่า teamId ของ user จากหลายแหล่ง
-      if (session.user.userTeam && typeof session.user.userTeam === 'object') {
-        userTeamId = session.user.userTeam.id;
-      } else if (typeof session.user.userTeam === 'string') {
-        userTeamId = session.user.userTeam;
-      } else if (session.user.userTeamId) {
-        userTeamId = session.user.userTeamId;
-      } else if (session.user.teamId) {
-        userTeamId = session.user.teamId;
-      } else if (session.user.team && typeof session.user.team === 'object') {
-        userTeamId = session.user.team.id;
-      } else if (typeof session.user.team === 'string') {
-        userTeamId = session.user.team;
-      }
-      
-      // ตรวจสอบหาค่า teamId ของ employee จากหลายแหล่ง
-      if (employee.team && typeof employee.team === 'object') {
-        employeeTeamId = employee.team.id;
-      } else if (typeof employee.team === 'string') {
-        employeeTeamId = employee.team;
-      } else if (employee.teamId) {
-        employeeTeamId = employee.teamId;
-      } else if (employee.userTeamId) {
-        employeeTeamId = employee.userTeamId;
-      } else if (employee.userTeam && typeof employee.userTeam === 'object') {
-        employeeTeamId = employee.userTeam.id;
-      } else if (typeof employee.userTeam === 'string') {
-        employeeTeamId = employee.userTeam;
-      }
-      
-      console.log('TEAM CHECK:', {
-        userTeamId,
-        employeeTeamId,
-      });
-      
-      // ตรวจสอบว่าอยู่ในทีมเดียวกันหรือไม่
-      const isSameTeam = userTeamId && employeeTeamId && userTeamId === employeeTeamId;
-      
-      if (isSameTeam) {
-        console.log(`✅ SUPERVISOR ACCESS GRANTED (Same Team)`);
-        return isValidDate;
-      }
-      
-      // ถ้ามีปัญหากับการตรวจสอบ teamId ลองตรวจสอบจากแผนกแทน
-      if (!userTeamId || !employeeTeamId) {
-        const isSameDepartment = session.user.departmentId && 
-                               employee.departmentId && 
-                               session.user.departmentId === employee.departmentId;
-                               
-        if (isSameDepartment) {
-          console.log(`✅ SUPERVISOR ACCESS GRANTED (Same Department - Fallback)`);
-          return isValidDate;
-        }
-      }
-      
-      console.log(`❌ SUPERVISOR ACCESS DENIED - Not in same team`);
-      return false;
-    }
-    
-    // 4. กรณีอื่นๆ (พนักงานทั่วไป) - ไม่มีสิทธิ์แก้ไขข้อมูลคนอื่น
-    console.log(`❌ ACCESS DENIED - Regular employee cannot edit others`);
-    return false;
-  };
-
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/login');
     }
   }, [status, router]);
-
-  // แยก fetchData ออกมาเป็น function ต่างหาก
-  const fetchCalendarData = async () => {
-    if (!session || isDataFetching) return;
-
-    try {
-      setIsDataFetching(true);
-
-      // ยกเลิก request เก่าถ้ามี
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-
-      // สร้าง AbortController ใหม่
-      abortControllerRef.current = new AbortController();
-      const signal = abortControllerRef.current.signal;
-
-      // คำนวณช่วงวันที่
-      const startDate = getStartDate();
-      const endDate = getEndDate();
-      
-      console.log('Fetching calendar data for range:', startDate.toISOString(), 'to', endDate.toISOString());
-      
-      // เรียก API ใหม่เพียงครั้งเดียว
-      const response = await fetch(
-        `/api/employee-calendar/all-data?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`,
-        { signal }
-      );
-
-      const data = await response.json();
-
-      if (data.success) {
-        console.log('API response success - Total employees:', data.data.employees?.length || 0);
-        console.log('API response success - Total workStatuses:', data.data.workStatuses?.length || 0);
-        console.log('API response success - Total leaves:', data.data.leaves?.length || 0);
-        console.log('API response success - Total overtimes:', data.data.overtimes?.length || 0);
-        
-        // บันทึกข้อมูลแต่ละประเภทลงใน state
-        setEmployees(data.data.employees || []);
-        setWorkStatuses(data.data.workStatuses || []);
-        setLeaves(data.data.leaves || []);
-        setOvertimes(data.data.overtimes || []);
-
-        // อัปเดตรายชื่อแผนก
-        const uniqueDepartments = [...new Set(data.data.employees.map(emp => {
-          return emp.department?.name || 'ไม่ระบุแผนก';
-        }))];
-        setDepartments(uniqueDepartments);
-        
-        // แสดงข้อมูลทั้งหมดจำแนกตาม teamId เพื่อความสะดวกในการตรวจสอบ
-        const employeesByTeam = {};
-        data.data.employees.forEach(emp => {
-          // ระบุ teamId ที่จะใช้
-          let teamIdentifier = 'no-team';
-          if (emp.teamId) {
-            teamIdentifier = emp.teamId;
-          } else if (emp.team) {
-            if (typeof emp.team === 'string') {
-              teamIdentifier = emp.team;
-            } else if (emp.team.id) {
-              teamIdentifier = emp.team.id;
-            } else if (emp.team.name) {
-              teamIdentifier = emp.team.name;
-            }
-          }
-          
-          // สร้างกลุ่ม team ถ้ายังไม่มี
-          if (!employeesByTeam[teamIdentifier]) {
-            employeesByTeam[teamIdentifier] = [];
-          }
-          
-          // เพิ่มข้อมูลพนักงานในกลุ่ม
-          employeesByTeam[teamIdentifier].push({
-            id: emp.id,
-            name: `${emp.firstName || ''} ${emp.lastName || ''}`,
-            teamId: emp.teamId,
-            team: emp.team,
-            departmentId: emp.departmentId
-          });
-        });
-        
-        console.log('Employees grouped by team:', employeesByTeam);
-        
-        // Log ข้อมูลตัวอย่างของแต่ละประเภท
-        if (data.data.employees?.length > 0) {
-          // แสดงข้อมูลพนักงานตัวอย่าง ที่มี teamId
-          const employeesWithTeam = data.data.employees.filter(emp => emp.teamId || (emp.team && (typeof emp.team === 'string' || emp.team.id)));
-          if (employeesWithTeam.length > 0) {
-            console.log('Sample employee with team:', {
-              id: employeesWithTeam[0].id,
-              name: `${employeesWithTeam[0].firstName || ''} ${employeesWithTeam[0].lastName || ''}`,
-              teamId: employeesWithTeam[0].teamId,
-              team: employeesWithTeam[0].team,
-              teamName: employeesWithTeam[0].teamName,
-              userTeam: employeesWithTeam[0].userTeam,
-              userTeamId: employeesWithTeam[0].userTeamId,
-              departmentId: employeesWithTeam[0].departmentId,
-              department: employeesWithTeam[0].department
-            });
-          } else {
-            console.log('No employees with team data found!');
-          }
-          
-          // แสดงข้อมูลของ session.user
-          console.log('Current session user:', {
-            id: session.user.id,
-            name: `${session.user.firstName || ''} ${session.user.lastName || ''}`,
-            role: session.user.role,
-            teamId: session.user.teamId,
-            userTeamId: session.user.userTeamId,
-            userTeam: session.user.userTeam,
-            team: session.user.team,
-            teamName: session.user.teamName,
-            departmentId: session.user.departmentId
-          });
-        }
-        
-        // ให้ปรับอัพเดตข้อมูล session user ด้วย
-        if (session.user.id) {
-          const currentUserData = data.data.employees.find(emp => emp.id === session.user.id);
-          if (currentUserData) {
-            console.log('Current user data from API:', {
-              id: currentUserData.id,
-              name: `${currentUserData.firstName || ''} ${currentUserData.lastName || ''}`,
-              teamId: currentUserData.teamId,
-              team: currentUserData.team,
-              teamName: currentUserData.teamName,
-              userTeam: currentUserData.userTeam,
-              userTeamId: currentUserData.userTeamId,
-              departmentId: currentUserData.departmentId,
-              department: currentUserData.department
-            });
-          }
-        }
-      } else {
-        console.error('API response failed:', data.message);
-        setError('ไม่สามารถดึงข้อมูลปฏิทินพนักงานได้');
-      }
-    } catch (error) {
-      if (error.name !== 'AbortError') {
-        console.error('Error fetching calendar data:', error);
-        setError('เกิดข้อผิดพลาดในการดึงข้อมูล');
-      }
-    } finally {
-      setIsDataFetching(false);
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (session) {
-      fetchCalendarData();
-    }
-  }, [currentDate, session, selectedDepartment]);
 
   // ฟังก์ชันสำหรับการนำทางปฏิทิน
   const goToPrevious = () => {
@@ -639,9 +514,6 @@ export default function EmployeeCalendarPage() {
     const day = String(dateObj.getDate()).padStart(2, '0');
     const localDateStr = `${year}-${month}-${day}`;
     
-    // สร้าง console.log เพื่อตรวจสอบวันที่
-    console.log(`Checking status for employee ${employeeId} on date: ${localDateStr}`);
-    
     const employeeWorkStatus = workStatuses.find(workStatus => {
       const wsDate = new Date(workStatus.date);
       wsDate.setHours(0, 0, 0, 0);
@@ -664,15 +536,6 @@ export default function EmployeeCalendarPage() {
       return overtime.employeeId === employeeId && otDateStr === localDateStr &&
              (overtime.status === 'approved' || overtime.status === 'waiting_for_approve');
     });
-    
-    // แสดง console.log เพื่อตรวจสอบข้อมูลที่พบ
-    if (employeeWorkStatus) {
-      console.log(`Found work status for ${employeeId} on ${localDateStr}: ${employeeWorkStatus.status}`);
-    }
-    
-    if (employeeOvertime) {
-      console.log(`Found overtime for ${employeeId} on ${localDateStr}: ${employeeOvertime.hours} hours`);
-    }
 
     // ถ้ามีทั้ง work status และ OT
     if (employeeWorkStatus && employeeOvertime) {
@@ -711,6 +574,62 @@ export default function EmployeeCalendarPage() {
     }
 
     return null;
+  };
+
+  // ฟังก์ชันตรวจสอบสิทธิ์การแก้ไขสถานะการทำงานของพนักงาน
+  const canEditEmployeeWorkStatus = (employee, date = null) => {
+    if (!session || !session.user) return false;
+    
+    // สร้างวันปัจจุบันสำหรับตรวจสอบวันที่
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+  
+    // ใช้ date ที่ส่งเข้ามาหรือใช้ selectedDate ถ้าไม่มีการส่งค่ามา
+    const currentDay = new Date(date || selectedDate || today);
+    currentDay.setHours(0, 0, 0, 0);
+    
+    // อนุญาตให้แก้ไขข้อมูลได้เฉพาะวันปัจจุบันและอนาคตเท่านั้น (ยกเว้น admin)
+    const isValidDate = currentDay >= today;
+    
+    // ตรวจสอบบทบาทของผู้ใช้
+    const isAdmin = session.user.role === 'admin';
+    const isSupervisor = session.user.role === 'supervisor';
+    
+    // ตรวจสอบว่าเป็นผู้ใช้คนเดียวกันกับที่ต้องการแก้ไขหรือไม่
+    const isSelf = session.user.id === employee.id;
+    
+    // ถ้าเป็น admin สามารถแก้ไขได้เสมอ
+    if (isAdmin) {
+      return true;
+    }
+    
+    // ถ้าเป็นตัวเอง สามารถแก้ไขได้เฉพาะวันปัจจุบันและอนาคต
+    if (isSelf && isValidDate) {
+      return true;
+    }
+    
+    // ถ้าเป็น supervisor ตรวจสอบว่าเป็นพนักงานในทีมหรือไม่
+    if (isSupervisor && isValidDate) {
+      // ตรวจสอบว่าพนักงานอยู่ในทีมเดียวกันหรือไม่
+      const userTeamId = session.user.teamId || (session.user.team?.id || null);
+      const employeeTeamId = employee.teamId || (employee.team?.id || null);
+      
+      if (userTeamId && employeeTeamId) {
+        return userTeamId === employeeTeamId;
+      }
+      
+      // ถ้าไม่มีข้อมูลทีม ลองตรวจสอบจากแผนก
+      const userDepartment = session.user.department || (session.user.departmentData?.name || null);
+      const employeeDepartment = employee.department || (employee.departmentData?.name || null);
+      
+      if (userDepartment && employeeDepartment) {
+        return userDepartment === employeeDepartment;
+      }
+      
+      return false;
+    }
+    
+    return false;
   };
 
   // ฟังก์ชันสำหรับการเปิด Modal สถานะการทำงาน
@@ -758,8 +677,8 @@ export default function EmployeeCalendarPage() {
     currentDay.setHours(0, 0, 0, 0);
     
     const isViewOnlyMode = viewOnlyMode || 
-                           ((currentDay < today) && session.user.role !== 'admin') || 
-                           !canEdit;
+                          ((currentDay < today) && session.user.role !== 'admin') || 
+                          !canEdit;
     
     setIsWorkStatusModalOpen({ 
       isOpen: true, 
@@ -770,70 +689,194 @@ export default function EmployeeCalendarPage() {
     });
   };
 
-  // ฟังก์ชันสำหรับการจัดการเมื่อบันทึกข้อมูลสถานะการทำงาน
+  // จัดการการบันทึกสถานะการทำงาน
   const handleWorkStatusSave = async (newWorkStatus) => {
-    // กรณีมี flag forceRefresh หรือมีการอัพเดทหลายรายการ ให้ดึงข้อมูลใหม่ทั้งหมด
-    if (newWorkStatus?.forceRefresh || newWorkStatus?.multipleUpdate) {
+    try {
+      // ถ้า newWorkStatus เป็น null หมายถึงมีการลบข้อมูล
+      if (newWorkStatus === null) {
+        // รีเฟรชข้อมูลหลังจากลบ
+        await refreshAfterSave();
+        return;
+      }
+      
+      // รับข้อมูลที่บันทึกและอัปเดต UI
+      if (newWorkStatus.forceRefresh) {
+        await refreshAfterSave(newWorkStatus);
+      } else {
+        // อัปเดตเฉพาะข้อมูลในหน่วยความจำ (ไม่ต้องเรียก API ใหม่)
+        setWorkStatuses(prevStatuses => {
+          // หาและอัปเดตสถานะที่มีอยู่แล้ว หรือเพิ่มใหม่
+          const index = prevStatuses.findIndex(s => s.id === newWorkStatus.id);
+          
+          if (index >= 0) {
+            // อัปเดตข้อมูลที่มีอยู่แล้ว
+            const updatedStatuses = [...prevStatuses];
+            updatedStatuses[index] = newWorkStatus;
+            return updatedStatuses;
+          } else {
+            // เพิ่มข้อมูลใหม่
+            return [...prevStatuses, newWorkStatus];
+          }
+        });
+        
+        // ปิด modal หลังจากบันทึกสำเร็จ
+        setIsWorkStatusModalOpen({ isOpen: false, viewOnly: false });
+      }
+    } catch (error) {
+      console.error('Error handling work status save:', error);
+    }
+  };
+
+  // รีเฟรชข้อมูลหลังจากบันทึก
+  const refreshAfterSave = async (savedData) => {
+    try {
+      setLoading(true); // เพิ่มการเซ็ต loading เป็น true เมื่อเริ่มโหลดข้อมูล
+      // ดึงข้อมูลใหม่ตามช่วงวันที่ปัจจุบัน
       const startDate = getStartDate();
       const endDate = getEndDate();
       
-      try {
-        console.log('Refreshing data after save - fetching from new API');
+      const response = await fetch(`/api/employee-calendar?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        // อัปเดตข้อมูลทั้งหมด
+        setEmployees(data.data.employees || []);
+        setWorkStatuses(data.data.workStatuses || []);
+        setLeaves(data.data.leaves || []);
+        setOvertimes(data.data.overtimes || []);
         
-        // ใช้ API ใหม่ที่รวมทุกอย่าง
-        const response = await fetch(
-          `/api/employee-calendar/all-data?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`
-        );
-        
-        const data = await response.json();
-        
-        if (data.success) {
-          console.log('API response success after save - Total leaves:', data.data.leaves?.length || 0);
-          
-          setEmployees(data.data.employees || []);
-          setWorkStatuses(data.data.workStatuses || []);
-          setLeaves(data.data.leaves || []);
-          setOvertimes(data.data.overtimes || []);
-          
-          toast.success('อัพเดทข้อมูลสำเร็จ');
-        } else {
-          console.error('API response failed after save:', data.message);
-          toast.error('เกิดข้อผิดพลาดในการรีเฟรชข้อมูล');
-        }
-      } catch (error) {
-        console.error('Error refreshing data:', error);
+        toast.success('อัปเดตข้อมูลสำเร็จ');
+      } else {
         toast.error('เกิดข้อผิดพลาดในการรีเฟรชข้อมูล');
       }
-      return;
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+      toast.error('เกิดข้อผิดพลาดในการรีเฟรชข้อมูล');
+    } finally {
+      // ปิด modal หลังจากที่โหลดข้อมูลเรียบร้อยแล้ว
+      setIsWorkStatusModalOpen({ isOpen: false, viewOnly: false });
+      setLoading(false);
     }
-
-    // กรณีลบข้อมูล
-    if (newWorkStatus === null && selectedWorkStatus) {
-      setWorkStatuses(prev => prev.filter(ws => ws.id !== selectedWorkStatus.id));
-      return;
-    }
-
-    // กรณีอัพเดทหรือเพิ่มข้อมูลเดียว
-    setWorkStatuses(prev => {
-      const existingIndex = prev.findIndex(ws => ws.id === newWorkStatus.id);
-      if (existingIndex !== -1) {
-        const updated = [...prev];
-        updated[existingIndex] = newWorkStatus;
-        return updated;
-      }
-      return [...prev, newWorkStatus];
-    });
   };
 
-  // กรองพนักงานตามแผนก
-  const filteredEmployees = selectedDepartment === 'all'
-    ? employees
-    : employees.filter(emp => {
-        const deptName = emp.department?.name || 'ไม่ระบุแผนก';
-        return deptName === selectedDepartment;
+  // ฟังก์ชันดึงข้อมูลปฏิทิน
+  const fetchCalendarData = async () => {
+    setIsDataFetching(true);
+    setLoading(true); // เพิ่มการเซ็ต loading เป็น true เมื่อเริ่มโหลดข้อมูล
+    
+    try {
+      // ยกเลิกคำขอ API ก่อนหน้า (ถ้ามี)
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      
+      // สร้าง AbortController ใหม่
+      abortControllerRef.current = new AbortController();
+      
+      const startDate = getStartDate();
+      const endDate = getEndDate();
+      
+      const response = await fetch(`/api/employee-calendar?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`, {
+        signal: abortControllerRef.current.signal
       });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        // จัดเตรียมข้อมูลและจัดกลุ่มตามทีมสำหรับการแสดงผล
+        setEmployees(data.data.employees || []);
+        setWorkStatuses(data.data.workStatuses || []);
+        setLeaves(data.data.leaves || []);
+        setOvertimes(data.data.overtimes || []);
+        
+        // กรองและจัดกลุ่มพนักงานตามทีม
+        const employeesByTeamMap = {};
+        
+        // ใช้ข้อมูลทีมใหม่ ถ้ามี
+        if (data.data.employees && data.data.employees.length > 0) {
+          data.data.employees.forEach(employee => {
+            // ใช้ teamName หรือ teamData.name หรือตัวแปร defaultTeam
+            const teamName = employee.teamName || 
+                            (employee.teamData && employee.teamData.name) || 
+                            (employee.team && employee.team.name) || 
+                            'ไม่ระบุทีม';
+            
+            // สร้าง key ของทีมถ้ายังไม่มี
+            if (!employeesByTeamMap[teamName]) {
+              employeesByTeamMap[teamName] = [];
+            }
+            
+            // เพิ่มพนักงานเข้าไปในทีม
+            employeesByTeamMap[teamName].push(employee);
+          });
+        }
+        
+        // เรียงลำดับชื่อทีมตามตัวอักษร
+        const sortedTeamNames = Object.keys(employeesByTeamMap).sort();
+        
+        // สร้าง array ของทีมพร้อมสมาชิก
+        const teams = sortedTeamNames.map(teamName => ({
+          name: teamName,
+          members: employeesByTeamMap[teamName]
+        }));
+        
+        // ตั้งค่า state
+        setEmployeesByTeam(teams);
+        
+        // ดึงข้อมูลผู้ใช้ปัจจุบัน (เพื่อใช้ในการตรวจสอบสิทธิ์)
+        if (session && session.user) {
+          const currentUserData = data.data.employees.find(e => e.id === session.user.id);
+          
+          if (currentUserData) {
+            setCurrentUserData(currentUserData);
+          }
+        }
+        
+        setError('');
+      } else {
+        setError(data.message || 'ไม่สามารถดึงข้อมูลได้');
+      }
+    } catch (err) {
+      // ไม่แสดงข้อความ error ถ้าเป็นการยกเลิกโดยตั้งใจ
+      if (err.name !== 'AbortError') {
+        console.error('Error fetching calendar data:', err);
+        setError('เกิดข้อผิดพลาดในการดึงข้อมูล');
+      }
+    } finally {
+      setIsDataFetching(false);
+      setLoading(false); // เพิ่มการเซ็ต loading เป็น false เมื่อโหลดข้อมูลเสร็จสิ้น
+    }
+  };
 
-  if (status === 'loading' || loading) {
+  useEffect(() => {
+    if (session) {
+      fetchCalendarData();
+    }
+  }, [currentDate, session, selectedDepartment, selectedTeam]);
+
+  // กรองพนักงานตามแผนกและทีม
+  const filteredEmployees = employees.filter(emp => {
+    // กรองตามแผนก
+    const deptName = typeof emp.department === 'object' && emp.department !== null 
+      ? emp.department.name 
+      : emp.department || 'ไม่ระบุแผนก';
+    
+    // กรองตามทีม
+    const teamName = emp.teamName || 
+      (emp.teamData && emp.teamData.name) || 
+      (emp.team && typeof emp.team === 'object' && emp.team.name) ||
+      (emp.team && typeof emp.team === 'string' ? emp.team : null) ||
+      (emp.teamId && teamsData[emp.teamId] ? teamsData[emp.teamId].name : 'ไม่ระบุทีม');
+    
+    // เงื่อนไขการกรอง
+    const matchesDepartment = selectedDepartment === 'all' || deptName === selectedDepartment;
+    const matchesTeam = selectedTeam === 'all' || teamName === selectedTeam;
+    
+    return matchesDepartment && matchesTeam;
+  });
+
+  // แสดง loading ถ้ากำลังโหลดข้อมูลและยังไม่มีข้อมูลพนักงาน
+  if (status === 'loading' || (loading && employees.length === 0)) {
     return (
       <div className="container mx-auto px-4 py-8">
         <LoadingPage message="กำลังโหลดข้อมูลปฏิทินพนักงาน..." />
@@ -910,31 +953,68 @@ export default function EmployeeCalendarPage() {
           <h2 className="text-lg font-semibold mb-3 flex items-center">
             <FiFilter className="mr-2" /> กรองข้อมูล
           </h2>
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setSelectedDepartment('all')}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
-                selectedDepartment === 'all'
-                  ? 'bg-primary-600 text-white shadow-md'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600'
-              }`}
-            >
-              ทั้งหมด
-            </button>
+          <div className="flex flex-col space-y-4">
+            {/* กรองตามแผนก */}
+            <div>
+              <h3 className="text-sm font-medium mb-2">แผนก</h3>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setSelectedDepartment('all')}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                    selectedDepartment === 'all'
+                      ? 'bg-primary-600 text-white shadow-md'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  ทั้งหมด
+                </button>
+                
+                {departments.map(dept => (
+                  <button
+                    key={dept}
+                    onClick={() => setSelectedDepartment(dept)}
+                    className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                      selectedDepartment === dept
+                        ? 'bg-primary-600 text-white shadow-md'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600'
+                    }`}
+                  >
+                    {dept}
+                  </button>
+                ))}
+              </div>
+            </div>
             
-            {departments.map(dept => (
-              <button
-                key={dept}
-                onClick={() => setSelectedDepartment(dept)}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
-                  selectedDepartment === dept
-                    ? 'bg-primary-600 text-white shadow-md'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600'
-                }`}
-              >
-                {dept}
-              </button>
-            ))}
+            {/* กรองตามทีม */}
+            <div>
+              <h3 className="text-sm font-medium mb-2">ทีม</h3>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setSelectedTeam('all')}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                    selectedTeam === 'all'
+                      ? 'bg-primary-600 text-white shadow-md'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  ทั้งหมด
+                </button>
+                
+                {teams.map(team => (
+                  <button
+                    key={team}
+                    onClick={() => setSelectedTeam(team)}
+                    className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                      selectedTeam === team
+                        ? 'bg-primary-600 text-white shadow-md'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600'
+                    }`}
+                  >
+                    {team}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
         
@@ -1025,6 +1105,11 @@ export default function EmployeeCalendarPage() {
                                   }
                                 }
                                 
+                                // ถ้ามี teamId แต่ไม่มี teamName ให้ค้นหาชื่อทีมจาก teamsData
+                                if (!teamName && teamId && teamsData[teamId]) {
+                                  teamName = teamsData[teamId].name;
+                                }
+                                
                                 // แสดงผลทีม
                                 if (teamName || teamId) {
                                   return (
@@ -1032,7 +1117,7 @@ export default function EmployeeCalendarPage() {
                                       <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                                       </svg>
-                                      ทีม: {teamName || (teamId ? (teamId.length > 8 ? teamId.substring(0, 8) + '...' : teamId) : 'ไม่ระบุทีม')}
+                                      ทีม: {teamName || (teamId && teamsData[teamId] ? teamsData[teamId].name : (teamId ? 'รหัสทีม: ' + teamId : 'ไม่ระบุทีม'))}
                                     </span>
                                   );
                                 } else {

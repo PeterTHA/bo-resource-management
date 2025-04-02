@@ -1,47 +1,42 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '../../../lib/auth';
-import { getStatistics } from '../../../lib/db-prisma';
+import { auth } from '@/lib/auth';
+import { getCurrentDate } from '@/lib/date-utils';
+import { getLeavesByDate, getOvertimesByDate } from '@/lib/db-prisma';
 
 // GET - ดึงข้อมูลสถิติสำหรับหน้า Dashboard
-export async function GET(request) {
+export async function GET(req) {
   try {
-    // ตรวจสอบสิทธิ์การเข้าถึง API
-    const session = await getServerSession(authOptions);
-    console.log('Dashboard API - Session:', session ? 'มีข้อมูล session' : 'ไม่มีข้อมูล session');
+    // ตรวจสอบสิทธิ์การเข้าถึง
+    const session = await auth();
     
-    // ต้องมี session จึงจะสามารถเข้าถึงข้อมูลได้
     if (!session) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          message: 'กรุณาเข้าสู่ระบบเพื่อเข้าถึงข้อมูล',
-          notAuthenticated: true 
-        },
-        { status: 401 }
-      );
+      return NextResponse.json({ success: false, message: 'กรุณาเข้าสู่ระบบ' }, { status: 401 });
     }
     
-    // ดึงข้อมูลสถิติจาก Prisma
-    const result = await getStatistics();
+    // ดึงวันที่ปัจจุบัน
+    const currentDate = getCurrentDate();
     
-    if (!result.success) {
-      return NextResponse.json(
-        {
-          success: false, 
-          message: result.message || 'เกิดข้อผิดพลาดในการดึงข้อมูลสถิติ', 
-          connectionError: result.connectionError
-        },
-        { status: 500 }
-      );
-    }
+    // ดึงข้อมูลการลาของวันนี้
+    const todayLeaves = await getLeavesByDate(currentDate, currentDate);
     
-    return NextResponse.json({ success: true, data: result.data }, { status: 200 });
+    // ดึงข้อมูล overtime ของวันนี้
+    const todayOvertimes = await getOvertimesByDate(currentDate, currentDate);
+    
+    // ส่งข้อมูลกลับไป
+    return NextResponse.json({
+      success: true,
+      data: {
+        todayLeaves: todayLeaves || [],
+        todayOvertimes: todayOvertimes || [],
+        user: {
+          id: session.user.id,
+          name: `${session.user.firstName} ${session.user.lastName}`,
+          role: session.user.role
+        }
+      }
+    });
   } catch (error) {
-    console.error('Error in GET /api/dashboard:', error);
-    return NextResponse.json(
-      { success: false, message: error.message || 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์' },
-      { status: 500 }
-    );
+    console.error('Error in dashboard API:', error);
+    return NextResponse.json({ success: false, message: 'เกิดข้อผิดพลาดบนเซิร์ฟเวอร์' }, { status: 500 });
   }
 } 

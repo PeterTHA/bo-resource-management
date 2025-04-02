@@ -12,83 +12,69 @@ export const authOptions = {
         password: { label: 'Password', type: 'password' }
       },
       async authorize(credentials) {
-        try {
-          if (!credentials?.email || !credentials?.password) {
-            console.log('ไม่ได้ระบุอีเมลหรือรหัสผ่าน');
-            return null;
-          }
+        if (!credentials?.email || !credentials?.password) {
+          throw new Error('กรุณาระบุอีเมลและรหัสผ่าน');
+        }
 
-          // ดึงข้อมูลพนักงานจาก Prisma พร้อมข้อมูลทีมและแผนก
-          const user = await prisma.employee.findUnique({
+        // ค้นหาพนักงานจากอีเมล
+        let user;
+        
+        try {
+          user = await prisma.employee.findUnique({
             where: { email: credentials.email },
             include: {
               department: true,
               teamData: true
             }
           });
-          
-          if (!user) {
-            console.log('ไม่พบผู้ใช้งาน');
-            return null;
-          }
-          
-          // ตรวจสอบสถานะการใช้งาน
-          if (!user.isActive) {
-            console.log('บัญชีผู้ใช้นี้ถูกระงับ');
-            return null;
-          }
-          
-          // ตรวจสอบรหัสผ่าน
-          const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
-          
-          if (!isPasswordValid) {
-            console.log('รหัสผ่านไม่ถูกต้อง');
-            return null;
-          }
-          
-          console.log('ล็อกอินสำเร็จสำหรับ:', user.email);
-          
-          // ส่งข้อมูลผู้ใช้กลับไป (ไม่รวมรหัสผ่าน)
-          return {
-            id: user.id,
-            email: user.email,
-            name: `${user.firstName} ${user.lastName}`,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            role: user.role,
-            employeeId: user.employeeId,
-            departmentId: user.departmentId,
-            department: user.department?.name || null,
-            teamId: user.teamId,
-            team: user.teamData?.name || null,
-            position: user.position,
-            image: user.image || null
-          };
         } catch (error) {
-          console.error('เกิดข้อผิดพลาดในการเข้าสู่ระบบ:', error);
-          return null;
+          throw new Error('ไม่สามารถเชื่อมต่อกับฐานข้อมูลได้');
         }
+        
+        if (!user) {
+          throw new Error('ไม่พบผู้ใช้งาน');
+        }
+        
+        if (user.isActive === false) {
+          throw new Error('บัญชีผู้ใช้นี้ถูกระงับ');
+        }
+
+        // ตรวจสอบรหัสผ่าน
+        const isMatch = await bcrypt.compare(credentials.password, user.password);
+        
+        if (!isMatch) {
+          throw new Error('รหัสผ่านไม่ถูกต้อง');
+        }
+
+        return {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
+          employeeId: user.employeeId,
+          teamId: user.teamId,
+          departmentId: user.departmentId
+        };
       }
     })
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    jwt: async ({ token, user, account }) => {
       if (user) {
-        console.log('การสร้าง JWT token ใหม่สำหรับผู้ใช้:', user.email);
-        
-        // เมื่อสร้าง token ใหม่ (login ครั้งแรก)
+        // สร้าง token ใหม่จากข้อมูล user ที่ได้รับจาก authorize
         token.id = user.id;
         token.email = user.email;
-        token.role = user.role;
         token.firstName = user.firstName;
         token.lastName = user.lastName;
+        token.role = user.role;
         token.employeeId = user.employeeId;
         token.departmentId = user.departmentId;
         token.department = user.department;
         token.teamId = user.teamId;
-        token.team = user.team;
+        token.team = user.teamData?.name || null;
         token.position = user.position;
-        token.image = user.image;
+        token.image = user.image || null;
         // เพิ่ม timestamp เพื่อเช็คเวอร์ชันของ token
         token.tokenVersion = Date.now();
       }

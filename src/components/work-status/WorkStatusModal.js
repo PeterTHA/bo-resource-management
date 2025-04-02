@@ -318,7 +318,6 @@ export default function WorkStatusModal({ isOpen, onClose, employee, date, onSav
 
                       return `${formatTime(startTimeDate)} - ${formatTime(endTimeDate)}`;
                     } catch (error) {
-                      console.log('Error parsing OT time:', error, overtimeData);
                       return 'เวลาไม่ถูกต้อง';
                     }
                   })()}

@@ -11,29 +11,26 @@ export const authOptionsPostgres = {
         password: { label: 'รหัสผ่าน', type: 'password' }
       },
       async authorize(credentials) {
-        console.log('Attempting login with:', credentials.email);
-        
         if (!credentials?.email || !credentials?.password) {
-          console.log('Missing email or password');
           throw new Error('กรุณาระบุอีเมลและรหัสผ่าน');
         }
 
         const result = await getEmployeeByEmail(credentials.email);
-        console.log('Employee lookup result:', result);
         
         if (!result.success) {
-          console.log('User not found');
           throw new Error('ไม่พบบัญชีผู้ใช้');
         }
 
         const employee = result.data;
         
         const isMatch = await bcrypt.compare(credentials.password, employee.password);
-        console.log('Password match result:', isMatch);
 
         if (!isMatch) {
-          console.log('Password incorrect');
           throw new Error('รหัสผ่านไม่ถูกต้อง');
+        }
+
+        if (employee.isActive === false) {
+          throw new Error('Account is suspended');
         }
 
         return {
@@ -72,4 +69,60 @@ export const authOptionsPostgres = {
     maxAge: 24 * 60 * 60, // 1 day
   },
   secret: process.env.NEXTAUTH_SECRET || 'your-secret-key',
-}; 
+};
+
+export async function loginWithCredentials(credentials) {
+  if (!credentials?.email || !credentials?.password) {
+    return { success: false, error: 'Missing email or password' };
+  }
+
+  try {
+    const db = getPostgresDb();
+    if (!db) {
+      return { success: false, error: 'Database connection failed' };
+    }
+
+    // หาผู้ใช้จากฐานข้อมูล
+    const result = await db.query(
+      `SELECT * FROM "Employee" WHERE email = $1`,
+      [credentials.email]
+    );
+
+    if (result.rows.length === 0) {
+      return { success: false, error: 'User not found' };
+    }
+
+    const user = result.rows[0];
+    
+    // ตรวจสอบรหัสผ่าน
+    const isMatch = await bcrypt.compare(credentials.password, user.password);
+    
+    if (!isMatch) {
+      return { success: false, error: 'Invalid password' };
+    }
+    
+    // ถ้าบัญชีถูกระงับ ไม่อนุญาตให้เข้าสู่ระบบ
+    if (user.isActive === false) {
+      return { success: false, error: 'Account is suspended' };
+    }
+
+    // เข้าสู่ระบบสำเร็จ ส่งข้อมูลผู้ใช้กลับไป
+    return {
+      success: true,
+      user: {
+        id: user.id,
+        employeeId: user.employeeId,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        department: user.department,
+        position: user.position,
+        role: user.role || 'employee',
+        teamId: user.teamId,
+        image: user.image
+      }
+    };
+  } catch (error) {
+    return { success: false, error: 'Server error' };
+  }
+} 
