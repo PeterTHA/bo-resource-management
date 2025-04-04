@@ -1246,31 +1246,48 @@ export default function OvertimePage() {
         <AlertDialog open={showApproveModal} onOpenChange={setShowApproveModal}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>อนุมัติการทำงานล่วงเวลา</AlertDialogTitle>
-              <AlertDialogDescription>
-                คุณต้องการอนุมัติการทำงานล่วงเวลานี้ใช่หรือไม่
-              </AlertDialogDescription>
-              <div className="mt-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  ความคิดเห็น (ไม่บังคับ)
-                </label>
-                <textarea
-                  id="approve-comment"
-                  rows="3"
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                  value={approveComment}
-                  onChange={(e) => setApproveComment(e.target.value)}
-                ></textarea>
+              <div className="flex items-start">
+                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
+                  <FiCheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
+                </div>
+                <div className="ml-4">
+                  <AlertDialogTitle>อนุมัติการทำงานล่วงเวลา</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    คุณต้องการอนุมัติการทำงานล่วงเวลานี้ใช่หรือไม่?
+                  </AlertDialogDescription>
+                </div>
               </div>
             </AlertDialogHeader>
-            <AlertDialogFooter>
+            <div className="mt-3">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                ความคิดเห็น (ไม่บังคับ)
+              </label>
+              <textarea
+                rows="3"
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="ระบุบันทึกเพิ่มเติม"
+                value={approveComment}
+                onChange={(e) => setApproveComment(e.target.value)}
+              ></textarea>
+            </div>
+            <AlertDialogFooter className="mt-4">
               <AlertDialogCancel disabled={actionLoading}>ยกเลิก</AlertDialogCancel>
-              <AlertDialogAction
+              <AlertDialogAction 
                 onClick={() => handleApprove(selectedOvertimeId, approveComment)}
                 disabled={actionLoading}
-                className="bg-green-600 text-white hover:bg-green-700"
+                className="bg-green-600 text-white hover:bg-green-700 inline-flex items-center"
               >
-                {actionLoading ? 'กำลังดำเนินการ...' : 'อนุมัติ'}
+                {actionLoading ? (
+                  <div className="flex items-center">
+                    <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-opacity-20 border-t-white rounded-full"></div>
+                    <span>กำลังดำเนินการ</span>
+                  </div>
+                ) : (
+                  <>
+                    <FiCheckCircle className="mr-1.5 h-4 w-4" />
+                    <span>อนุมัติ</span>
+                  </>
+                )}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -1282,28 +1299,45 @@ export default function OvertimePage() {
         <AlertDialog open={showRejectModal} onOpenChange={setShowRejectModal}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>ไม่อนุมัติการทำงานล่วงเวลา</AlertDialogTitle>
-              <AlertDialogDescription>
-                กรุณาระบุเหตุผลที่ไม่อนุมัติ
-              </AlertDialogDescription>
-              <div className="mt-4">
-                <textarea
-                  value={rejectReason}
-                  onChange={(e) => setRejectReason(e.target.value)}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                  rows="4"
-                  placeholder="ระบุเหตุผลที่ไม่อนุมัติ (ไม่บังคับ)"
-                ></textarea>
+              <div className="flex items-start">
+                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
+                  <FiXCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
+                </div>
+                <div className="ml-4">
+                  <AlertDialogTitle>ไม่อนุมัติการทำงานล่วงเวลา</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    กรุณาระบุเหตุผลที่ไม่อนุมัติการทำงานล่วงเวลานี้
+                  </AlertDialogDescription>
+                </div>
               </div>
             </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={actionLoading}>ยกเลิก</AlertDialogCancel>
+            <div className="mt-3">
+              <textarea
+                rows="3"
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="ระบุเหตุผลที่ไม่อนุมัติ (ไม่บังคับ)"
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+              ></textarea>
+            </div>
+            <AlertDialogFooter className="mt-4">
+              <AlertDialogCancel disabled={isSubmitting}>ยกเลิก</AlertDialogCancel>
               <AlertDialogAction 
                 onClick={(e) => handleReject(e)}
                 disabled={isSubmitting}
-                className="bg-red-600 text-white hover:bg-red-700"
+                className="bg-red-600 text-white hover:bg-red-700 inline-flex items-center"
               >
-                {isSubmitting ? 'กำลังดำเนินการ...' : 'ไม่อนุมัติ'}
+                {isSubmitting ? (
+                  <div className="flex items-center">
+                    <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-opacity-20 border-t-white rounded-full"></div>
+                    <span>กำลังดำเนินการ</span>
+                  </div>
+                ) : (
+                  <>
+                    <FiXCircle className="mr-1.5 h-4 w-4" />
+                    <span>ไม่อนุมัติ</span>
+                  </>
+                )}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -1315,28 +1349,45 @@ export default function OvertimePage() {
         <AlertDialog open={showCancelModal} onOpenChange={setShowCancelModal}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>ขอยกเลิกการทำงานล่วงเวลา</AlertDialogTitle>
-              <AlertDialogDescription>
-                กรุณาระบุเหตุผลการขอยกเลิก
-              </AlertDialogDescription>
-              <div className="mt-4">
-                <textarea
-                  value={cancelReason}
-                  onChange={(e) => setCancelReason(e.target.value)}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                  rows="4"
-                  placeholder="กรุณาระบุเหตุผล"
-                ></textarea>
+              <div className="flex items-start">
+                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900/30">
+                  <FiXCircle className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+                </div>
+                <div className="ml-4">
+                  <AlertDialogTitle>ขอยกเลิกการทำงานล่วงเวลา</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    กรุณาระบุเหตุผลในการขอยกเลิกการทำงานล่วงเวลานี้
+                  </AlertDialogDescription>
+                </div>
               </div>
             </AlertDialogHeader>
-            <AlertDialogFooter>
+            <div className="mt-3">
+              <textarea
+                rows="3"
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="ระบุเหตุผลในการขอยกเลิก"
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+              ></textarea>
+            </div>
+            <AlertDialogFooter className="mt-4">
               <AlertDialogCancel disabled={actionLoading}>ยกเลิก</AlertDialogCancel>
               <AlertDialogAction 
                 onClick={handleCancelRequest}
                 disabled={actionLoading || !cancelReason.trim()}
-                className="bg-orange-600 text-white hover:bg-orange-700"
+                className="bg-orange-600 text-white hover:bg-orange-700 inline-flex items-center"
               >
-                ยืนยันการขอยกเลิก
+                {actionLoading ? (
+                  <div className="flex items-center">
+                    <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-opacity-20 border-t-white rounded-full"></div>
+                    <span>กำลังดำเนินการ</span>
+                  </div>
+                ) : (
+                  <>
+                    <FiXCircle className="mr-1.5 h-4 w-4" />
+                    <span>ยืนยันการขอยกเลิก</span>
+                  </>
+                )}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -1348,28 +1399,45 @@ export default function OvertimePage() {
         <AlertDialog open={showRejectCancelModal} onOpenChange={setShowRejectCancelModal}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>ไม่อนุมัติการยกเลิกการทำงานล่วงเวลา</AlertDialogTitle>
-              <AlertDialogDescription>
-                กรุณาระบุเหตุผลการไม่อนุมัติการยกเลิก
-              </AlertDialogDescription>
-              <div className="mt-4">
-                <textarea
-                  value={cancelReason}
-                  onChange={(e) => setCancelReason(e.target.value)}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                  rows="4"
-                  placeholder="กรุณาระบุเหตุผล"
-                ></textarea>
+              <div className="flex items-start">
+                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
+                  <FiXCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
+                </div>
+                <div className="ml-4">
+                  <AlertDialogTitle>ไม่อนุมัติการยกเลิกการทำงานล่วงเวลา</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    กรุณาระบุเหตุผลการไม่อนุมัติการยกเลิก
+                  </AlertDialogDescription>
+                </div>
               </div>
             </AlertDialogHeader>
-            <AlertDialogFooter>
+            <div className="mt-3">
+              <textarea
+                rows="3"
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="ระบุเหตุผล"
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+              ></textarea>
+            </div>
+            <AlertDialogFooter className="mt-4">
               <AlertDialogCancel disabled={actionLoading}>ยกเลิก</AlertDialogCancel>
               <AlertDialogAction 
                 onClick={handleRejectCancel}
                 disabled={actionLoading || !cancelReason.trim()}
-                className="bg-red-600 text-white hover:bg-red-700"
+                className="bg-red-600 text-white hover:bg-red-700 inline-flex items-center"
               >
-                ยืนยันการไม่อนุมัติการยกเลิก
+                {actionLoading ? (
+                  <div className="flex items-center">
+                    <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-opacity-20 border-t-white rounded-full"></div>
+                    <span>กำลังดำเนินการ</span>
+                  </div>
+                ) : (
+                  <>
+                    <FiXCircle className="mr-1.5 h-4 w-4" />
+                    <span>ไม่อนุมัติการยกเลิก</span>
+                  </>
+                )}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -1381,19 +1449,36 @@ export default function OvertimePage() {
         <AlertDialog open={showDeleteConfirmModal} onOpenChange={setShowDeleteConfirmModal}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>ยืนยันการลบข้อมูล</AlertDialogTitle>
-              <AlertDialogDescription>
-                คุณต้องการลบข้อมูลการทำงานล่วงเวลานี้ใช่หรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้
-              </AlertDialogDescription>
+              <div className="flex items-start">
+                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
+                  <FiTrash2 className="h-6 w-6 text-red-600 dark:text-red-400" />
+                </div>
+                <div className="ml-4">
+                  <AlertDialogTitle>ยืนยันการลบข้อมูล</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    คุณต้องการลบข้อมูลการทำงานล่วงเวลานี้ใช่หรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้
+                  </AlertDialogDescription>
+                </div>
+              </div>
             </AlertDialogHeader>
-            <AlertDialogFooter>
+            <AlertDialogFooter className="mt-4">
               <AlertDialogCancel disabled={actionLoading}>ยกเลิก</AlertDialogCancel>
               <AlertDialogAction 
                 onClick={confirmDelete}
                 disabled={actionLoading}
-                className="bg-red-600 text-white hover:bg-red-700"
+                className="bg-red-600 text-white hover:bg-red-700 inline-flex items-center"
               >
-                {actionLoading ? 'กำลังดำเนินการ...' : 'ลบข้อมูล'}
+                {actionLoading ? (
+                  <div className="flex items-center">
+                    <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-opacity-20 border-t-white rounded-full"></div>
+                    <span>กำลังดำเนินการ</span>
+                  </div>
+                ) : (
+                  <>
+                    <FiTrash2 className="mr-1.5 h-4 w-4" />
+                    <span>ลบข้อมูล</span>
+                  </>
+                )}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -1405,19 +1490,48 @@ export default function OvertimePage() {
         <AlertDialog open={showApproveCancelConfirmModal} onOpenChange={setShowApproveCancelConfirmModal}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>อนุมัติการยกเลิกการทำงานล่วงเวลา</AlertDialogTitle>
-              <AlertDialogDescription>
-                คุณต้องการอนุมัติการยกเลิกการทำงานล่วงเวลานี้ใช่หรือไม่?
-              </AlertDialogDescription>
+              <div className="flex items-start">
+                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30">
+                  <FiCheckCircle className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div className="ml-4">
+                  <AlertDialogTitle>อนุมัติการยกเลิกการทำงานล่วงเวลา</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    คุณต้องการอนุมัติการยกเลิกการทำงานล่วงเวลานี้ใช่หรือไม่?
+                  </AlertDialogDescription>
+                </div>
+              </div>
             </AlertDialogHeader>
-            <AlertDialogFooter>
+            <div className="mt-3">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                ความคิดเห็น (ไม่บังคับ)
+              </label>
+              <textarea
+                rows="3"
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="ระบุความคิดเห็นเพิ่มเติม"
+                value={approveComment}
+                onChange={(e) => setApproveComment(e.target.value)}
+              ></textarea>
+            </div>
+            <AlertDialogFooter className="mt-4">
               <AlertDialogCancel disabled={actionLoading}>ยกเลิก</AlertDialogCancel>
               <AlertDialogAction 
                 onClick={confirmApproveCancel}
                 disabled={actionLoading}
-                className="bg-green-600 text-white hover:bg-green-700"
+                className="bg-blue-600 text-white hover:bg-blue-700 inline-flex items-center"
               >
-                {actionLoading ? 'กำลังดำเนินการ...' : 'อนุมัติการยกเลิก'}
+                {actionLoading ? (
+                  <div className="flex items-center">
+                    <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-opacity-20 border-t-white rounded-full"></div>
+                    <span>กำลังดำเนินการ</span>
+                  </div>
+                ) : (
+                  <>
+                    <FiCheckCircle className="mr-1.5 h-4 w-4" />
+                    <span>อนุมัติการยกเลิก</span>
+                  </>
+                )}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
