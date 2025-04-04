@@ -8,7 +8,7 @@ import Image from 'next/image';
 
 // เปลี่ยนจาก Heroicons เป็น react-icons
 import { FiCheckCircle, FiXCircle, FiTrash2, FiPlus, FiFilter, FiClock, FiUser, 
-         FiFileText, FiDownload, FiInfo, FiEdit, FiCalendar, FiSearch } from 'react-icons/fi';
+         FiFileText, FiDownload, FiInfo, FiEdit, FiCalendar, FiSearch, FiChevronUp, FiChevronDown } from 'react-icons/fi';
 import { LoadingPage } from '../../components/ui/LoadingSpinner';
 import ErrorMessage from '../../components/ui/ErrorMessage';
 
@@ -52,6 +52,11 @@ export default function OvertimePage() {
     cancelled: 0,
     pendingCancel: 0
   });
+  // เพิ่ม state สำหรับการจัดเรียงและแบ่งหน้า
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [sortField, setSortField] = useState('createdAt');
+  const [sortDirection, setSortDirection] = useState('desc');
 
   // ฟังก์ชันดึงข้อมูลการทำงานล่วงเวลา - ย้ายออกจาก useEffect
   const fetchOvertimes = async () => {
@@ -334,21 +339,21 @@ export default function OvertimePage() {
    * คืนสีของ badge ตามสถานะ
    */
   const getStatusBadgeClass = (status) => {
-    if (status === 'waiting_for_approve' || status === 'รออนุมัติ') return 'badge-warning';
-    if (status === 'approved' || status === 'อนุมัติ') return 'badge-success';
-    if (status === 'rejected' || status === 'ไม่อนุมัติ') return 'badge-error';
-    if (status === 'canceled' || status === 'ยกเลิกแล้ว') return 'badge-info';
-    return 'badge-neutral'; // คืนค่าเริ่มต้นถ้าไม่ตรงกับเงื่อนไข
+    if (status === 'waiting_for_approve' || status === 'รออนุมัติ') return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400';
+    if (status === 'approved' || status === 'อนุมัติ') return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
+    if (status === 'rejected' || status === 'ไม่อนุมัติ') return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
+    if (status === 'canceled' || status === 'ยกเลิกแล้ว') return 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400';
+    return 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400';
   };
 
   /**
    * คืนสีของ badge ตามสถานะการยกเลิก
    */
   const getCancelStatusBadgeClass = (status) => {
-    if (status === 'waiting_for_approve') return 'badge-warning';
-    if (status === 'approved') return 'badge-info';
-    if (status === 'rejected') return 'badge-error';
-    return 'badge-neutral';
+    if (status === 'waiting_for_approve') return 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400';
+    if (status === 'approved') return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400';
+    if (status === 'rejected') return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
+    return 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400';
   };
 
   const filteredOvertimes = useMemo(() => {
@@ -385,8 +390,68 @@ export default function OvertimePage() {
       );
     }
     
-    return filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); // เรียงตามวันที่สร้าง ล่าสุดอยู่บนสุด
-  }, [overtimes, filter, searchQuery]);
+    // จัดเรียงข้อมูล
+    const sortedData = [...filtered].sort((a, b) => {
+      let aValue = a[sortField];
+      let bValue = b[sortField];
+      
+      // จัดการกับข้อมูลที่เป็น nested properties
+      if (sortField === 'employee') {
+        aValue = `${a.employee?.firstName || ''} ${a.employee?.lastName || ''}`;
+        bValue = `${b.employee?.firstName || ''} ${b.employee?.lastName || ''}`;
+      }
+      
+      // จัดการกับค่า null หรือ undefined
+      if (aValue === undefined || aValue === null) aValue = '';
+      if (bValue === undefined || bValue === null) bValue = '';
+      
+      // จัดเรียงตามประเภทข้อมูล
+      if (typeof aValue === 'string') {
+        const comparison = aValue.localeCompare(bValue);
+        return sortDirection === 'asc' ? comparison : -comparison;
+      } else if (sortField === 'date' || sortField === 'createdAt') {
+        const aDate = aValue ? new Date(aValue) : new Date(0);
+        const bDate = bValue ? new Date(bValue) : new Date(0);
+        return sortDirection === 'asc' ? aDate - bDate : bDate - aDate;
+      } else {
+        return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+      }
+    });
+    
+    return sortedData;
+  }, [overtimes, filter, searchQuery, sortField, sortDirection]);
+
+  // คำนวณการแบ่งหน้า
+  const totalPages = Math.ceil(filteredOvertimes.length / pageSize);
+  const paginatedOvertimes = filteredOvertimes.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
+
+  // ฟังก์ชันสำหรับเปลี่ยนหน้า
+  const handlePageChange = (newPage) => {
+    setCurrentPage(newPage);
+  };
+
+  // ฟังก์ชันสำหรับเปลี่ยนการจัดเรียง
+  const handleSort = (field) => {
+    if (sortField === field) {
+      // ถ้าคลิกฟิลด์เดิม ให้สลับทิศทางการเรียง
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // ถ้าคลิกฟิลด์ใหม่ ให้เรียงจากมากไปน้อย (desc) เป็นค่าเริ่มต้น
+      setSortField(field);
+      setSortDirection('desc');
+    }
+  };
+
+  // ฟังก์ชันสำหรับแสดงไอคอนการจัดเรียง
+  const renderSortIcon = (field) => {
+    if (sortField !== field) {
+      return <span className="text-gray-400">↕</span>;
+    }
+    return sortDirection === 'asc' ? <FiChevronUp className="inline-block ml-1" /> : <FiChevronDown className="inline-block ml-1" />;
+  };
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
@@ -520,7 +585,46 @@ export default function OvertimePage() {
     );
   };
 
-  // ตรวจสอบว่าสามารถอนุมัติหรือปฏิเสธการยกเลิกได้หรือไม่
+  // เพิ่มฟังก์ชันใหม่สำหรับตรวจสอบว่าเป็นการทำงานล่วงเวลาที่กำลังรอการยกเลิกหรือไม่
+  const isDuringCancel = (overtime) => {
+    if (!overtime) return false;
+    
+    // ตรวจสอบจาก cancelStatus โดยตรง
+    if (overtime.status === 'approved' && overtime.cancelStatus === 'waiting_for_approve') {
+      return true;
+    }
+    
+    // ตรวจสอบกรณีที่อาจมีใน approvals
+    if (overtime.approvals && Array.isArray(overtime.approvals)) {
+      // เรียงลำดับการดำเนินการจากใหม่ไปเก่า
+      const sortedApprovals = [...overtime.approvals].sort((a, b) => 
+        new Date(b.createdAt) - new Date(a.createdAt)
+      );
+      
+      // หาคำขอยกเลิกล่าสุด
+      const lastCancelRequest = sortedApprovals.find(a => 
+        a.type === 'request_cancel' && a.status === 'completed'
+      );
+      
+      if (lastCancelRequest) {
+        // ตรวจสอบว่ามีการตอบกลับหลังจากคำขอยกเลิกล่าสุดหรือไม่
+        const hasResponseAfterRequest = sortedApprovals.some(a => 
+          (a.type === 'approve_cancel' || a.type === 'reject_cancel') && 
+          a.status === 'completed' && 
+          new Date(a.createdAt) > new Date(lastCancelRequest.createdAt)
+        );
+        
+        // ถ้าไม่มีการตอบกลับหลังจากคำขอยกเลิกล่าสุด แสดงว่ากำลังรอการยกเลิก
+        if (!hasResponseAfterRequest) {
+          return true;
+        }
+      }
+    }
+    
+    return false;
+  };
+
+  // แก้ไขส่วนของการตรวจสอบ canManageCancelRequest โดยใช้ฟังก์ชัน isDuringCancel
   const canManageCancelRequest = (overtime) => {
     if (!session || !overtime) return false;
     
@@ -531,22 +635,8 @@ export default function OvertimePage() {
     // ถ้าไม่ใช่แอดมินหรือหัวหน้างาน ไม่สามารถจัดการคำขอยกเลิกได้
     if (!isAdmin && !isSupervisor) return false;
     
-    // ตรวจสอบว่ามี approvals ข้อมูลและมีรูปแบบถูกต้อง
-    if (!overtime.approvals || !Array.isArray(overtime.approvals)) return false;
-    
-    // เรียงลำดับตาม createdAt จากใหม่ไปเก่า
-    const sortedApprovals = [...overtime.approvals].sort((a, b) => 
-      new Date(b.createdAt) - new Date(a.createdAt)
-    );
-    
-    // หาการกระทำล่าสุดที่เกี่ยวข้องกับการขอยกเลิก
-    const latestCancelAction = sortedApprovals.find(a => 
-      ['request_cancel', 'approve_cancel', 'reject_cancel'].includes(a.type) && 
-      a.status === 'completed'
-    );
-    
-    // ถ้ามีคำขอยกเลิกล่าสุดที่รอพิจารณา
-    if (latestCancelAction && latestCancelAction.type === 'request_cancel') {
+    // ตรวจสอบว่ากำลังอยู่ในสถานะรอยกเลิกหรือไม่
+    if (isDuringCancel(overtime)) {
       // หัวหน้างานต้องอยู่แผนกเดียวกับพนักงาน
       if (isSupervisor) {
         return !overtime.employee?.departmentId || !session.user.departmentId || 
@@ -555,7 +645,7 @@ export default function OvertimePage() {
       return true; // แอดมินสามารถจัดการได้เสมอ
     }
     
-    return false; // ไม่มีคำขอยกเลิกล่าสุดที่รอพิจารณา
+    return false; // ไม่ได้อยู่ในสถานะรอการยกเลิก
   };
 
   // ฟังก์ชันสำหรับการขอยกเลิกการทำงานล่วงเวลา
@@ -794,14 +884,20 @@ export default function OvertimePage() {
                 <thead className="bg-gray-50 dark:bg-gray-800 border-b">
                   <tr className="text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                     <th className="px-6 py-3">
-                      <div className="flex items-center">
-                        วันที่ทำงานล่วงเวลา
-                      </div>
+                      <button 
+                        onClick={() => handleSort('date')} 
+                        className="flex items-center cursor-pointer hover:text-gray-700 dark:hover:text-gray-200"
+                      >
+                        วันที่ทำงานล่วงเวลา {renderSortIcon('date')}
+                      </button>
                     </th>
                     <th className="px-6 py-3">
-                      <div className="flex items-center">
-                        พนักงาน
-                      </div>
+                      <button 
+                        onClick={() => handleSort('employee')} 
+                        className="flex items-center cursor-pointer hover:text-gray-700 dark:hover:text-gray-200"
+                      >
+                        พนักงาน {renderSortIcon('employee')}
+                      </button>
                     </th>
                     <th className="px-6 py-3">
                       <div className="flex items-center">
@@ -809,20 +905,26 @@ export default function OvertimePage() {
                       </div>
                     </th>
                     <th className="px-6 py-3">
-                      <div className="flex items-center">
-                        สถานะ
-                      </div>
+                      <button 
+                        onClick={() => handleSort('status')} 
+                        className="flex items-center cursor-pointer hover:text-gray-700 dark:hover:text-gray-200"
+                      >
+                        สถานะ {renderSortIcon('status')}
+                      </button>
                     </th>
                     <th className="px-6 py-3">
-                      <div className="flex items-center">
-                        วันที่สร้าง
-                      </div>
+                      <button 
+                        onClick={() => handleSort('createdAt')} 
+                        className="flex items-center cursor-pointer hover:text-gray-700 dark:hover:text-gray-200"
+                      >
+                        วันที่สร้าง {renderSortIcon('createdAt')}
+                      </button>
                     </th>
                     <th className="px-6 py-3 text-center">จัดการ</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-900">
-                  {filteredOvertimes.map((overtime) => (
+                  {paginatedOvertimes.map((overtime) => (
                     <tr 
                       key={overtime.id} 
                       className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
@@ -872,7 +974,7 @@ export default function OvertimePage() {
                         <div className="flex flex-col gap-1">
                           {(() => {
                             // ตรวจสอบสถานะการยกเลิก
-                            if (overtime.isCancelled) {
+                            if (overtime.isCancelled || overtime.status === 'canceled' || overtime.cancelStatus === 'approved') {
                               return (
                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400">
                                   ยกเลิกแล้ว
@@ -880,53 +982,25 @@ export default function OvertimePage() {
                               );
                             }
                             
-                            // ตรวจสอบสถานะรอยกเลิกจาก approvals
-                            if (overtime.status === 'approved' && overtime.cancelStatus === 'waiting_for_approve') {
+                            // ตรวจสอบสถานะรอยกเลิก
+                            if (isDuringCancel(overtime)) {
                               return (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400">
-                                  รอยกเลิก
-                                </span>
+                                <div className="flex flex-col gap-1">
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400">
+                                    ขอยกเลิก
+                                  </span>
+                                  <span className="text-xs text-gray-500 dark:text-gray-400">(รออนุมัติการยกเลิก)</span>
+                                </div>
                               );
                             }
                             
                             // แสดงสถานะปกติ
-                            let bgClass = '';
-                            switch(overtime.status) {
-                              case 'waiting_for_approve':
-                                bgClass = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400';
-                                return (
-                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${bgClass}`}>
-                                    รออนุมัติ
-                                  </span>
-                                );
-                              case 'approved':
-                                bgClass = 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
-                                return (
-                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${bgClass}`}>
-                                    อนุมัติ
-                                  </span>
-                                );
-                              case 'rejected':
-                                bgClass = 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
-                                return (
-                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${bgClass}`}>
-                                    ไม่อนุมัติ
-                                  </span>
-                                );
-                              case 'canceled':
-                                bgClass = 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400';
-                                return (
-                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${bgClass}`}>
-                                    ยกเลิกแล้ว
-                                  </span>
-                                );
-                              default:
-                                return (
-                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400">
-                                    {getStatusText(overtime.status)}
-                                  </span>
-                                );
-                            }
+                            const bgClass = getStatusBadgeClass(overtime.status);
+                            return (
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${bgClass}`}>
+                                {getStatusText(overtime.status)}
+                              </span>
+                            );
                           })()}
                         </div>
                       </td>
@@ -1058,6 +1132,70 @@ export default function OvertimePage() {
               </table>
             </div>
           </div>
+          
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex justify-center mt-4">
+              <div className="join">
+                <button
+                  className="join-item btn btn-sm"
+                  onClick={() => handlePageChange(1)}
+                  disabled={currentPage === 1}
+                >
+                  «
+                </button>
+                <button
+                  className="join-item btn btn-sm"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                >
+                  ‹
+                </button>
+                
+                {[...Array(totalPages)].map((_, index) => {
+                  const pageNumber = index + 1;
+                  // แสดงเฉพาะหน้าปัจจุบัน หน้าก่อนหน้า และหน้าถัดไป
+                  if (
+                    pageNumber === 1 ||
+                    pageNumber === totalPages ||
+                    Math.abs(pageNumber - currentPage) <= 1
+                  ) {
+                    return (
+                      <button
+                        key={pageNumber}
+                        className={`join-item btn btn-sm ${currentPage === pageNumber ? 'btn-active' : ''}`}
+                        onClick={() => handlePageChange(pageNumber)}
+                      >
+                        {pageNumber}
+                      </button>
+                    );
+                  } else if (
+                    (pageNumber === 2 && currentPage > 3) ||
+                    (pageNumber === totalPages - 1 && currentPage < totalPages - 2)
+                  ) {
+                    // แสดงจุดไข่ปลาเมื่อมีหน้าที่ไม่ได้แสดง
+                    return <span key={pageNumber} className="join-item btn btn-sm btn-disabled">...</span>;
+                  }
+                  return null;
+                })}
+                
+                <button
+                  className="join-item btn btn-sm"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                >
+                  ›
+                </button>
+                <button
+                  className="join-item btn btn-sm"
+                  onClick={() => handlePageChange(totalPages)}
+                  disabled={currentPage === totalPages}
+                >
+                  »
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 text-center">
