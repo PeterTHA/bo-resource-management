@@ -8,7 +8,7 @@ import Image from 'next/image';
 
 // เปลี่ยนจาก Heroicons เป็น react-icons
 import { FiCheckCircle, FiXCircle, FiTrash2, FiPlus, FiFilter, FiClock, FiUser, 
-         FiFileText, FiDownload, FiInfo, FiMessageCircle, FiEdit, FiCalendar } from 'react-icons/fi';
+         FiFileText, FiDownload, FiInfo, FiEdit, FiCalendar, FiSearch } from 'react-icons/fi';
 import { LoadingPage } from '../../components/ui/LoadingSpinner';
 import ErrorMessage from '../../components/ui/ErrorMessage';
 
@@ -30,6 +30,7 @@ export default function OvertimePage() {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [employeeFilter, setEmployeeFilter] = useState('all');
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
@@ -64,16 +65,17 @@ export default function OvertimePage() {
         // คำนวณจำนวนข้อมูลแต่ละสถานะ
         const counts = {
           all: data.data.length,
-          pending: data.data.filter(overtime => overtime.status === 'waiting_for_approve').length,
+          waiting_for_approve: data.data.filter(overtime => overtime.status === 'waiting_for_approve').length,
           approved: data.data.filter(overtime => 
-            overtime.status === 'approved'
+            overtime.status === 'approved' && 
+            (!overtime.cancelStatus || overtime.cancelStatus !== 'waiting_for_approve')
           ).length,
           rejected: data.data.filter(overtime => overtime.status === 'rejected').length,
-          cancelled: data.data.filter(overtime => 
+          canceled: data.data.filter(overtime => 
             overtime.status === 'canceled' || 
             overtime.isCancelled === true
           ).length,
-          pendingCancel: data.data.filter(overtime => 
+          pending_cancel: data.data.filter(overtime => 
             overtime.status === 'approved' && overtime.cancelStatus === 'waiting_for_approve'
           ).length
         };
@@ -350,41 +352,41 @@ export default function OvertimePage() {
   };
 
   const filteredOvertimes = useMemo(() => {
-    return overtimes.filter(overtime => {
-      // ตรวจสอบว่ารายการอยู่ในสถานะรอยกเลิกหรือไม่ โดยดูจาก approvals
-      const isPendingCancel = (() => {
-        if (!overtime.approvals || !Array.isArray(overtime.approvals)) return false;
-        
-        // เรียงลำดับตาม createdAt จากใหม่ไปเก่า
-        const sortedApprovals = [...overtime.approvals].sort((a, b) => 
-          new Date(b.createdAt) - new Date(a.createdAt)
-        );
-        
-        // หาการกระทำล่าสุดที่เกี่ยวข้องกับการขอยกเลิก
-        const latestCancelRelatedAction = sortedApprovals.find(a => 
-          ['request_cancel', 'approve_cancel', 'reject_cancel'].includes(a.type) && 
-          a.status === 'completed'
-        );
-        
-        // ถ้ามีการขอยกเลิกและเป็นแอคชั่นล่าสุด และไม่มีการดำเนินการต่อ จะถือว่ากำลังรอยกเลิก
-        return latestCancelRelatedAction && 
-               latestCancelRelatedAction.type === 'request_cancel' &&
-               overtime.status === 'approved';
-      })();
-      
-      // กรองตามสถานะ
-      if (filter === 'pending' && overtime.status !== 'waiting_for_approve') return false;
-      if (filter === 'approved' && (overtime.status !== 'approved' || isPendingCancel)) return false;
-      if (filter === 'rejected' && overtime.status !== 'rejected') return false;
-      if (filter === 'cancelled' && overtime.status !== 'canceled' && !overtime.isCancelled) return false;
-      if (filter === 'pendingCancel' && !isPendingCancel) return false;
-      
-      // กรองตามพนักงาน
-      if (employeeFilter !== 'all' && overtime.employeeId !== employeeFilter) return false;
-      
-      return true;
-    }).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); // เรียงตามวันที่สร้าง ล่าสุดอยู่บนสุด
-  }, [overtimes, filter, employeeFilter]);
+    let filtered = overtimes;
+    
+    // กรองตามสถานะ
+    if (filter === 'waiting_for_approve') {
+      filtered = overtimes.filter(overtime => overtime.status === 'waiting_for_approve');
+    } else if (filter === 'approved') {
+      filtered = overtimes.filter(overtime => 
+        overtime.status === 'approved' && 
+        (!overtime.cancelStatus || overtime.cancelStatus !== 'waiting_for_approve')
+      );
+    } else if (filter === 'rejected') {
+      filtered = overtimes.filter(overtime => overtime.status === 'rejected');
+    } else if (filter === 'canceled') {
+      filtered = overtimes.filter(overtime => 
+        overtime.status === 'canceled' || 
+        overtime.isCancelled === true
+      );
+    } else if (filter === 'pending_cancel') {
+      filtered = overtimes.filter(overtime => 
+        overtime.status === 'approved' && overtime.cancelStatus === 'waiting_for_approve'
+      );
+    }
+    
+    // ค้นหาตามข้อความ
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(overtime => 
+        overtime.employee?.firstName?.toLowerCase().includes(query) ||
+        overtime.employee?.lastName?.toLowerCase().includes(query) ||
+        overtime.reason?.toLowerCase().includes(query)
+      );
+    }
+    
+    return filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); // เรียงตามวันที่สร้าง ล่าสุดอยู่บนสุด
+  }, [overtimes, filter, searchQuery]);
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
@@ -650,101 +652,37 @@ export default function OvertimePage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-        <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 flex items-center">
-          <FiClock className="mr-2 text-primary" /> รายการทำงานล่วงเวลา
+    <div className="container mx-auto p-4 max-w-7xl">
+      <div className="flex flex-col sm:flex-row justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold mb-4 sm:mb-0">
+          การทำงานล่วงเวลา
         </h1>
-        <Link
-          href="/overtime/add"
-          className="btn btn-primary inline-flex items-center justify-center text-white shadow-md hover:shadow-lg"
-        >
-          <FiPlus className="mr-1.5 h-4 w-4" /> <span>ขอทำงานล่วงเวลา</span>
-        </Link>
-      </div>
-      
-      {error && <ErrorMessage message={error} type="error" />}
-      {success && <ErrorMessage message={success} type="success" />}
-      
-      {/* Dashboard สรุปสถิติการทำงานล่วงเวลา */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-6 gap-4 mb-6">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 border-l-4 border-blue-500 dark:border-blue-400 transition-all duration-200 hover:shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">ทั้งหมด</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{statusCounts.all}</p>
-            </div>
-            <div className="bg-blue-100 dark:bg-blue-900/30 p-3 rounded-full">
-              <FiClock className="h-5 w-5 text-blue-500 dark:text-blue-400" />
-            </div>
-          </div>
-        </div>
         
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 border-l-4 border-yellow-500 dark:border-yellow-400 transition-all duration-200 hover:shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">รออนุมัติ</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{statusCounts.pending}</p>
-            </div>
-            <div className="bg-yellow-100 dark:bg-yellow-900/30 p-3 rounded-full">
-              <FiClock className="h-5 w-5 text-yellow-500 dark:text-yellow-400" />
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 border-l-4 border-green-500 dark:border-green-400 transition-all duration-200 hover:shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">อนุมัติแล้ว</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{statusCounts.approved}</p>
-            </div>
-            <div className="bg-green-100 dark:bg-green-900/30 p-3 rounded-full">
-              <FiCheckCircle className="h-5 w-5 text-green-500 dark:text-green-400" />
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 border-l-4 border-red-500 dark:border-red-400 transition-all duration-200 hover:shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">ไม่อนุมัติ</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{statusCounts.rejected}</p>
-            </div>
-            <div className="bg-red-100 dark:bg-red-900/30 p-3 rounded-full">
-              <FiXCircle className="h-5 w-5 text-red-500 dark:text-red-400" />
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 border-l-4 border-purple-500 dark:border-purple-400 transition-all duration-200 hover:shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">ยกเลิกแล้ว</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{statusCounts.cancelled}</p>
-            </div>
-            <div className="bg-purple-100 dark:bg-purple-900/30 p-3 rounded-full">
-              <FiXCircle className="h-5 w-5 text-purple-500 dark:text-purple-400" />
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 border-l-4 border-orange-500 dark:border-orange-400 transition-all duration-200 hover:shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">รอยกเลิก</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{statusCounts.pendingCancel}</p>
-            </div>
-            <div className="bg-orange-100 dark:bg-orange-900/30 p-3 rounded-full">
-              <FiXCircle className="h-5 w-5 text-orange-500 dark:text-orange-400" />
-            </div>
-          </div>
+        <div className="flex space-x-2">
+          {(session?.user?.role === 'employee' || session?.user?.role === 'supervisor') && (
+            <Link href="/overtime/create">
+              <button className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 px-4 py-2 bg-primary text-primary-foreground shadow hover:bg-primary/90">
+                <FiPlus className="mr-1" />
+                ขอทำงานล่วงเวลา
+              </button>
+            </Link>
+          )}
         </div>
       </div>
       
-      {/* ตัวกรองข้อมูล */}
+      {error && <ErrorMessage message={error} onClose={() => setError('')} />}
+      {success && (
+        <div className="alert alert-success mb-4 flex justify-between items-center">
+          <span>{success}</span>
+          <button onClick={() => setSuccess('')} className="btn btn-sm btn-ghost">
+            <FiXCircle />
+          </button>
+        </div>
+      )}
+      
       <div className="mb-6">
-        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md transition-colors duration-300">
-          <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-3 flex items-center">
+        <div className="bg-white dark:bg-gray-800 p-5 rounded-lg border shadow-sm">
+          <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4 flex items-center">
             <FiFilter className="mr-2" /> กรองข้อมูล
           </h2>
           
@@ -752,160 +690,153 @@ export default function OvertimePage() {
           <div className="flex flex-wrap gap-2 mb-4">
             <button
               onClick={() => setFilter('all')}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+              className={`inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 px-3 py-1.5 ${
                 filter === 'all'
-                  ? 'bg-blue-600 text-white shadow-md'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600'
+                  ? 'bg-primary text-primary-foreground shadow hover:bg-primary/90'
+                  : 'border border-input bg-background hover:bg-accent hover:text-accent-foreground'
               }`}
             >
               ทั้งหมด ({statusCounts.all})
             </button>
             <button
-              onClick={() => setFilter('pending')}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
-                filter === 'pending'
-                  ? 'bg-yellow-500 text-white shadow-md'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600'
+              onClick={() => setFilter('waiting_for_approve')}
+              className={`inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 px-3 py-1.5 ${
+                filter === 'waiting_for_approve'
+                  ? 'bg-yellow-500 text-white shadow hover:bg-yellow-600'
+                  : 'border border-input bg-background hover:bg-accent hover:text-accent-foreground'
               }`}
             >
-              รออนุมัติ ({statusCounts.pending})
+              รออนุมัติ ({statusCounts.waiting_for_approve})
             </button>
             <button
               onClick={() => setFilter('approved')}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+              className={`inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 px-3 py-1.5 ${
                 filter === 'approved'
-                  ? 'bg-green-600 text-white shadow-md'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600'
+                  ? 'bg-green-600 text-white shadow hover:bg-green-700'
+                  : 'border border-input bg-background hover:bg-accent hover:text-accent-foreground'
               }`}
             >
               อนุมัติแล้ว ({statusCounts.approved})
             </button>
             <button
               onClick={() => setFilter('rejected')}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+              className={`inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 px-3 py-1.5 ${
                 filter === 'rejected'
-                  ? 'bg-red-600 text-white shadow-md'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600'
+                  ? 'bg-red-600 text-white shadow hover:bg-red-700'
+                  : 'border border-input bg-background hover:bg-accent hover:text-accent-foreground'
               }`}
             >
               ไม่อนุมัติ ({statusCounts.rejected})
             </button>
             <button
-              onClick={() => setFilter('cancelled')}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
-                filter === 'cancelled'
-                  ? 'bg-purple-600 text-white shadow-md'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600'
+              onClick={() => setFilter('canceled')}
+              className={`inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 px-3 py-1.5 ${
+                filter === 'canceled'
+                  ? 'bg-purple-600 text-white shadow hover:bg-purple-700'
+                  : 'border border-input bg-background hover:bg-accent hover:text-accent-foreground'
               }`}
             >
-              ยกเลิกแล้ว ({statusCounts.cancelled})
+              ยกเลิกแล้ว ({statusCounts.canceled})
             </button>
             <button
-              onClick={() => setFilter('pendingCancel')}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
-                filter === 'pendingCancel'
-                  ? 'bg-orange-600 text-white shadow-md'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600'
+              onClick={() => setFilter('pending_cancel')}
+              className={`inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 px-3 py-1.5 ${
+                filter === 'pending_cancel'
+                  ? 'bg-orange-600 text-white shadow hover:bg-orange-700'
+                  : 'border border-input bg-background hover:bg-accent hover:text-accent-foreground'
               }`}
             >
-              รอยกเลิก ({statusCounts.pendingCancel})
+              รอยกเลิก ({statusCounts.pending_cancel})
             </button>
           </div>
           
-          {/* กรองตามพนักงาน */}
-          <div className="mt-3">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
-              กรองตามพนักงาน
-            </label>
-            <select 
-              className="select select-bordered w-full max-w-xs"
-              value={employeeFilter}
-              onChange={(e) => setEmployeeFilter(e.target.value)}
-            >
-              <option value="all">ทั้งหมด</option>
-              {employees.map(employee => (
-                <option key={employee.id} value={employee.id}>
-                  {employee.firstName} {employee.lastName}
-                </option>
-              ))}
-            </select>
+          <div className="flex flex-col sm:flex-row gap-4">
+            {/* ช่องค้นหา */}
+            <div className="flex-1 w-1/2">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 block">
+                ค้นหา
+              </label>
+              <div className="relative">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500 dark:text-gray-400"
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="m21 21-4.3-4.3" />
+                </svg>
+                <input
+                  type="search"
+                  placeholder="ค้นหาจากชื่อพนักงาน, ประเภทเวลา..."
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent pl-9 pr-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+            </div>
           </div>
         </div>
       </div>
       
-      {/* แสดงรายการการทำงานล่วงเวลาแบบการ์ด */}
+      {/* แสดงรายการการทำงานล่วงเวลาแบบตาราง */}
       {filteredOvertimes.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredOvertimes.map((overtime) => (
-            <div key={overtime.id} className="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow duration-300 cursor-pointer" onClick={() => navigateToOvertimeDetail(overtime.id)}>
-              <div className="card-body">
-                <div className="flex justify-between items-start">
-                  <h2 className="card-title">ทำงานล่วงเวลา</h2>
-                  <div className="flex flex-col gap-1 items-end">
-                    {/* แสดงสถานะการยกเลิกหรือรอยกเลิกถ้ามี */}
-                    {(() => {
-                      // ตรวจสอบสถานะการยกเลิกจาก approvals
-                      if (overtime.isCancelled) {
-                        return (
-                          <div className="badge badge-info badge-lg">ยกเลิกแล้ว</div>
-                        );
-                      }
-                      
-                      // ตรวจสอบสถานะรอยกเลิกจาก approvals
-                      if (overtime.approvals && Array.isArray(overtime.approvals)) {
-                        const sortedApprovals = [...overtime.approvals].sort((a, b) => 
-                          new Date(b.createdAt) - new Date(a.createdAt)
-                        );
-                        
-                        const latestCancelAction = sortedApprovals.find(a => 
-                          ['request_cancel', 'approve_cancel', 'reject_cancel'].includes(a.type) && 
-                          a.status === 'completed'
-                        );
-                        
-                        if (latestCancelAction && 
-                            latestCancelAction.type === 'request_cancel' && 
-                            overtime.status === 'approved') {
-                          return (
-                            <div className="badge badge-warning badge-lg">รออนุมัติการยกเลิก</div>
-                          );
-                        }
-                      }
-                      
-                      // แสดงสถานะปกติถ้าไม่มีการยกเลิก
-                      return (
-                        <div className={`badge ${getStatusBadgeClass(overtime.status)} badge-lg`}>
-                          {getStatusText(overtime.status)}
+        <div className="space-y-4">
+          <div className="rounded-md border">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 dark:bg-gray-800 border-b">
+                  <tr className="text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    <th className="px-6 py-3">
+                      <div className="flex items-center">
+                        วันที่ทำงานล่วงเวลา
+                      </div>
+                    </th>
+                    <th className="px-6 py-3">
+                      <div className="flex items-center">
+                        พนักงาน
+                      </div>
+                    </th>
+                    <th className="px-6 py-3">
+                      <div className="flex items-center">
+                        เวลาทำงาน
+                      </div>
+                    </th>
+                    <th className="px-6 py-3">
+                      <div className="flex items-center">
+                        สถานะ
+                      </div>
+                    </th>
+                    <th className="px-6 py-3">
+                      <div className="flex items-center">
+                        วันที่สร้าง
+                      </div>
+                    </th>
+                    <th className="px-6 py-3 text-center">จัดการ</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-900">
+                  {filteredOvertimes.map((overtime) => (
+                    <tr 
+                      key={overtime.id} 
+                      className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                    >
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <FiCalendar className="h-4 w-4 text-primary mr-2" />
+                          <span>{formatDate(overtime.date)}</span>
                         </div>
-                      );
-                    })()}
-                  </div>
-                </div>
-                
-                <div className="mt-2 space-y-3">
-                  <div className="flex gap-2 items-start">
-                    <FiCalendar size={18} className="mt-1 text-primary" />
-                    <div>
-                      <div className="font-semibold">วันที่ทำงานล่วงเวลา</div>
-                      <div>{formatDate(overtime.date)}</div>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2 items-start">
-                    <FiClock size={18} className="mt-1 text-primary" />
-                    <div>
-                      <div className="font-semibold">เวลาทำงาน</div>
-                      <div>{overtime.startTime} - {overtime.endTime} น. ({overtime.totalHours} ชั่วโมง)</div>
-                    </div>
-                  </div>
-                  
-                  <div className="flex gap-2 items-start">
-                    <FiUser size={18} className="mt-1 text-primary" />
-                    <div>
-                      <div className="font-semibold">พนักงาน</div>
-                      <div className="flex items-center gap-2">
-                        {overtime.employee?.image ? (
-                          <div className="avatar">
-                            <div className="w-8 h-8 rounded-full">
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          {overtime.employee?.image ? (
+                            <div className="h-8 w-8 rounded-full overflow-hidden">
                               <Image
                                 src={overtime.employee.image}
                                 alt={overtime.employee.firstName}
@@ -915,124 +846,218 @@ export default function OvertimePage() {
                                 unoptimized={isMockImage(overtime.employee.image)}
                               />
                             </div>
-                          </div>
-                        ) : (
-                          <div className="avatar placeholder">
-                            <div className="bg-primary text-primary-content w-8 h-8 rounded-full">
-                              <span>{overtime.employee?.firstName?.[0] || ''}{overtime.employee?.lastName?.[0] || ''}</span>
+                          ) : (
+                            <div className="flex h-8 w-8 rounded-full bg-primary text-primary-content items-center justify-center">
+                              <span className="text-xs font-medium">
+                                {overtime.employee?.firstName?.[0] || ''}{overtime.employee?.lastName?.[0] || ''}
+                              </span>
+                            </div>
+                          )}
+                          <div className="ml-1">
+                            <div className="text-sm font-medium text-gray-900 dark:text-gray-200">
+                              {overtime.employee?.firstName || ''} {overtime.employee?.lastName || ''}
                             </div>
                           </div>
-                        )}
-                        <span>
-                          {overtime.employee?.firstName || ''} {overtime.employee?.lastName || ''}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="flex justify-end mt-4 gap-2 flex-wrap">
-                  {/* ปุ่มแก้ไข */}
-                  {canEdit(overtime) && (
-                    <button 
-                      className="btn btn-info btn-sm"
-                      onClick={(e) => {
-                        e.stopPropagation(); // ป้องกันการนำทางเมื่อคลิกปุ่ม
-                        router.push(`/overtime/${overtime.id}/edit`);
-                      }}
-                      disabled={actionLoading}
-                    >
-                      <FiEdit size={16} className="mr-1" /> แก้ไข
-                    </button>
-                  )}
-                  
-                  {/* ปุ่มอนุมัติ */}
-                  {canApprove(overtime) && (
-                    <button 
-                      className="btn btn-success btn-sm"
-                      onClick={(e) => {
-                        e.stopPropagation(); // ป้องกันการนำทางเมื่อคลิกปุ่ม
-                        handleApprove(overtime.id);
-                      }}
-                      disabled={actionLoading}
-                    >
-                      <FiCheckCircle size={16} className="mr-1" /> อนุมัติ
-                    </button>
-                  )}
-                  
-                  {/* ปุ่มไม่อนุมัติ */}
-                  {canApprove(overtime) && (
-                    <button
-                      className="btn btn-error btn-sm text-white"
-                      onClick={(e) => {
-                        e.stopPropagation(); // ป้องกันการนำทางเมื่อคลิกปุ่ม
-                        handleShowRejectModal(overtime.id);
-                      }}
-                      disabled={actionLoading}
-                    >
-                      <FiXCircle size={16} className="mr-1" /> ไม่อนุมัติ
-                    </button>
-                  )}
-                  
-                  {/* ปุ่มลบ */}
-                  {canDelete(overtime) && (
-                    <button 
-                      className="btn btn-outline btn-error btn-sm"
-                      onClick={(e) => {
-                        e.stopPropagation(); // ป้องกันการนำทางเมื่อคลิกปุ่ม
-                        handleDelete(overtime.id);
-                      }}
-                      disabled={actionLoading}
-                    >
-                      <FiTrash2 size={16} />
-                    </button>
-                  )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900 dark:text-gray-200">
+                          {overtime.startTime} - {overtime.endTime} น.
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          ({overtime.totalHours} ชั่วโมง)
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex flex-col gap-1">
+                          {(() => {
+                            // ตรวจสอบสถานะการยกเลิก
+                            if (overtime.isCancelled) {
+                              return (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400">
+                                  ยกเลิกแล้ว
+                                </span>
+                              );
+                            }
+                            
+                            // ตรวจสอบสถานะรอยกเลิกจาก approvals
+                            if (overtime.status === 'approved' && overtime.cancelStatus === 'waiting_for_approve') {
+                              return (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400">
+                                  รอยกเลิก
+                                </span>
+                              );
+                            }
+                            
+                            // แสดงสถานะปกติ
+                            let bgClass = '';
+                            switch(overtime.status) {
+                              case 'waiting_for_approve':
+                                bgClass = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400';
+                                return (
+                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${bgClass}`}>
+                                    รออนุมัติ
+                                  </span>
+                                );
+                              case 'approved':
+                                bgClass = 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
+                                return (
+                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${bgClass}`}>
+                                    อนุมัติ
+                                  </span>
+                                );
+                              case 'rejected':
+                                bgClass = 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
+                                return (
+                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${bgClass}`}>
+                                    ไม่อนุมัติ
+                                  </span>
+                                );
+                              case 'canceled':
+                                bgClass = 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400';
+                                return (
+                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${bgClass}`}>
+                                    ยกเลิกแล้ว
+                                  </span>
+                                );
+                              default:
+                                return (
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400">
+                                    {getStatusText(overtime.status)}
+                                  </span>
+                                );
+                            }
+                          })()}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-500 dark:text-gray-400">
+                          {formatDate(overtime.createdAt)}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex justify-center items-center space-x-2">
+                          {/* ปุ่มดูรายละเอียด */}
+                          <button 
+                            onClick={() => navigateToOvertimeDetail(overtime.id)}
+                            className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-blue-600 dark:text-blue-400"
+                            title="ดูรายละเอียด"
+                          >
+                            <FiInfo className="h-4 w-4" />
+                          </button>
+                          
+                          {/* ปุ่มแก้ไข */}
+                          {canEdit(overtime) && (
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                router.push(`/overtime/${overtime.id}/edit`);
+                              }}
+                              className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-blue-600 dark:text-blue-400"
+                              title="แก้ไข"
+                              disabled={actionLoading}
+                            >
+                              <FiEdit className="h-4 w-4" />
+                            </button>
+                          )}
+                          
+                          {/* ปุ่มอนุมัติ */}
+                          {canApprove(overtime) && (
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleApprove(overtime.id);
+                              }}
+                              className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-green-600 dark:text-green-400"
+                              title="อนุมัติ"
+                              disabled={actionLoading}
+                            >
+                              <FiCheckCircle className="h-4 w-4" />
+                            </button>
+                          )}
+                          
+                          {/* ปุ่มไม่อนุมัติ */}
+                          {canApprove(overtime) && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleShowRejectModal(overtime.id);
+                              }}
+                              className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-red-600 dark:text-red-400"
+                              title="ไม่อนุมัติ"
+                              disabled={actionLoading}
+                            >
+                              <FiXCircle className="h-4 w-4" />
+                            </button>
+                          )}
+                          
+                          {/* ปุ่มลบ */}
+                          {canDelete(overtime) && (
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(overtime.id);
+                              }}
+                              className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-red-600 dark:text-red-400"
+                              title="ลบ"
+                              disabled={actionLoading}
+                            >
+                              <FiTrash2 className="h-4 w-4" />
+                            </button>
+                          )}
 
-                  {/* ปุ่มขอยกเลิกการทำงานล่วงเวลา */}
-                  {canCancelRequest(overtime) && (
-                    <button 
-                      className="btn btn-warning btn-sm"
-                      onClick={(e) => {
-                        e.stopPropagation(); // ป้องกันการนำทางเมื่อคลิกปุ่ม
-                        handleShowCancelModal(overtime.id);
-                      }}
-                      disabled={actionLoading}
-                    >
-                      <FiXCircle size={16} className="mr-1" /> ขอยกเลิก
-                    </button>
-                  )}
-                  
-                  {/* ปุ่มอนุมัติการยกเลิก */}
-                  {canManageCancelRequest(overtime) && (
-                    <button 
-                      className="btn btn-success btn-sm"
-                      onClick={(e) => {
-                        e.stopPropagation(); // ป้องกันการนำทางเมื่อคลิกปุ่ม
-                        handleApproveCancel(overtime.id);
-                      }}
-                      disabled={actionLoading}
-                    >
-                      <FiCheckCircle size={16} className="mr-1" /> อนุมัติยกเลิก
-                    </button>
-                  )}
+                          {/* ปุ่มขอยกเลิกการทำงานล่วงเวลา */}
+                          {canCancelRequest(overtime) && (
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleShowCancelModal(overtime.id);
+                              }}
+                              className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-orange-600 dark:text-orange-400"
+                              title="ขอยกเลิก"
+                              disabled={actionLoading}
+                            >
+                              <FiXCircle className="h-4 w-4" />
+                            </button>
+                          )}
+                          
+                          {/* ปุ่มอนุมัติการยกเลิก */}
+                          {canManageCancelRequest(overtime) && (
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleApproveCancel(overtime.id);
+                              }}
+                              className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-green-600 dark:text-green-400"
+                              title="อนุมัติยกเลิก"
+                              disabled={actionLoading}
+                            >
+                              <FiCheckCircle className="h-4 w-4" />
+                            </button>
+                          )}
 
-                  {/* ปุ่มไม่อนุมัติการยกเลิก */}
-                  {canManageCancelRequest(overtime) && (
-                    <button 
-                      className="btn btn-error btn-sm"
-                      onClick={(e) => {
-                        e.stopPropagation(); // ป้องกันการนำทางเมื่อคลิกปุ่ม
-                        openRejectCancelModal(overtime.id);
-                      }}
-                      disabled={actionLoading}
-                    >
-                      <FiXCircle size={16} className="mr-1" /> ไม่อนุมัติยกเลิก
-                    </button>
-                  )}
-                </div>
-              </div>
+                          {/* ปุ่มไม่อนุมัติการยกเลิก */}
+                          {canManageCancelRequest(overtime) && (
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openRejectCancelModal(overtime.id);
+                              }}
+                              className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-red-600 dark:text-red-400"
+                              title="ไม่อนุมัติยกเลิก"
+                              disabled={actionLoading}
+                            >
+                              <FiXCircle className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          ))}
+          </div>
         </div>
       ) : (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 text-center">
