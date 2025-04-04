@@ -11,6 +11,17 @@ import { FiCheckCircle, FiXCircle, FiTrash2, FiPlus, FiFilter, FiClock, FiUser,
          FiFileText, FiDownload, FiInfo, FiEdit, FiCalendar, FiSearch, FiChevronUp, FiChevronDown } from 'react-icons/fi';
 import { LoadingPage } from '../../components/ui/LoadingSpinner';
 import ErrorMessage from '../../components/ui/ErrorMessage';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 // เพิ่มฟังก์ชันตรวจสอบว่าเป็นรูปภาพจาก mock-images หรือไม่
 const isMockImage = (src) => {
@@ -36,6 +47,8 @@ export default function OvertimePage() {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showRejectCancelModal, setShowRejectCancelModal] = useState(false);
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+  const [showApproveCancelConfirmModal, setShowApproveCancelConfirmModal] = useState(false);
   const [selectedOvertimeId, setSelectedOvertimeId] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
   const [cancelReason, setCancelReason] = useState('');
@@ -139,13 +152,18 @@ export default function OvertimePage() {
   }, [session]);
 
   const handleDelete = async (id) => {
-    if (!confirm('คุณต้องการลบข้อมูลการทำงานล่วงเวลานี้ใช่หรือไม่?')) {
-      return;
-    }
+    // เปิด dialog ยืนยันการลบข้อมูล
+    setSelectedOvertimeId(id);
+    setShowDeleteConfirmModal(true);
+  };
+  
+  // ฟังก์ชันใหม่สำหรับการลบข้อมูลหลังจากยืนยัน
+  const confirmDelete = async () => {
+    if (!selectedOvertimeId) return;
     
     try {
       setActionLoading(true);
-      const res = await fetch(`/api/overtime/${id}`, {
+      const res = await fetch(`/api/overtime/${selectedOvertimeId}`, {
         method: 'DELETE',
       });
       
@@ -155,6 +173,8 @@ export default function OvertimePage() {
         setSuccess('ลบข้อมูลการทำงานล่วงเวลาเรียบร้อยแล้ว');
         // รีเฟรชข้อมูลการทำงานล่วงเวลา
         fetchOvertimes();
+        // ปิด dialog
+        setShowDeleteConfirmModal(false);
       } else {
         setError(data.message || 'เกิดข้อผิดพลาดในการลบข้อมูลการทำงานล่วงเวลา');
       }
@@ -380,13 +400,12 @@ export default function OvertimePage() {
       );
     }
     
-    // ค้นหาตามข้อความ
+    // ค้นหาเฉพาะชื่อพนักงานเท่านั้น
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
       filtered = filtered.filter(overtime => 
         overtime.employee?.firstName?.toLowerCase().includes(query) ||
-        overtime.employee?.lastName?.toLowerCase().includes(query) ||
-        overtime.reason?.toLowerCase().includes(query)
+        overtime.employee?.lastName?.toLowerCase().includes(query)
       );
     }
     
@@ -686,15 +705,19 @@ export default function OvertimePage() {
     }
   };
 
-  // ฟังก์ชันสำหรับการอนุมัติการยกเลิก
-  const handleApproveCancel = async (id) => {
-    if (!confirm('คุณต้องการอนุมัติการยกเลิกการทำงานล่วงเวลานี้ใช่หรือไม่?')) {
-      return;
-    }
+  // ฟังก์ชันสำหรับเปิด dialog การอนุมัติการยกเลิก
+  const handleApproveCancel = (id) => {
+    setSelectedOvertimeId(id);
+    setShowApproveCancelConfirmModal(true);
+  };
+  
+  // ฟังก์ชันใหม่สำหรับยืนยันการอนุมัติการยกเลิก
+  const confirmApproveCancel = async () => {
+    if (!selectedOvertimeId) return;
     
     try {
       setActionLoading(true);
-      const res = await fetch(`/api/overtime/${id}`, {
+      const res = await fetch(`/api/overtime/${selectedOvertimeId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -711,6 +734,8 @@ export default function OvertimePage() {
         setSuccess('อนุมัติการยกเลิกการทำงานล่วงเวลาเรียบร้อยแล้ว');
         // รีเฟรชข้อมูลการทำงานล่วงเวลา
         fetchOvertimes();
+        // ปิด dialog
+        setShowApproveCancelConfirmModal(false);
       } else {
         setError(data.message || 'เกิดข้อผิดพลาดในการอนุมัติการยกเลิกการทำงานล่วงเวลา');
       }
@@ -864,7 +889,7 @@ export default function OvertimePage() {
                 </svg>
                 <input
                   type="search"
-                  placeholder="ค้นหาจากชื่อพนักงาน, ประเภทเวลา..."
+                  placeholder="ค้นหาจากชื่อพนักงาน..."
                   className="flex h-9 w-full rounded-md border border-input bg-transparent pl-9 pr-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -885,14 +910,6 @@ export default function OvertimePage() {
                   <tr className="text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                     <th className="px-6 py-3">
                       <button 
-                        onClick={() => handleSort('date')} 
-                        className="flex items-center cursor-pointer hover:text-gray-700 dark:hover:text-gray-200"
-                      >
-                        วันที่ทำงานล่วงเวลา {renderSortIcon('date')}
-                      </button>
-                    </th>
-                    <th className="px-6 py-3">
-                      <button 
                         onClick={() => handleSort('employee')} 
                         className="flex items-center cursor-pointer hover:text-gray-700 dark:hover:text-gray-200"
                       >
@@ -900,9 +917,25 @@ export default function OvertimePage() {
                       </button>
                     </th>
                     <th className="px-6 py-3">
+                      <button 
+                        onClick={() => handleSort('date')} 
+                        className="flex items-center cursor-pointer hover:text-gray-700 dark:hover:text-gray-200"
+                      >
+                        วันที่ทำงานล่วงเวลา {renderSortIcon('date')}
+                      </button>
+                    </th>
+                    <th className="px-6 py-3">
                       <div className="flex items-center">
                         เวลาทำงาน
                       </div>
+                    </th>
+                    <th className="px-6 py-3">
+                      <button 
+                        onClick={() => handleSort('totalHours')} 
+                        className="flex items-center cursor-pointer hover:text-gray-700 dark:hover:text-gray-200"
+                      >
+                        จำนวนชั่วโมง {renderSortIcon('totalHours')}
+                      </button>
                     </th>
                     <th className="px-6 py-3">
                       <button 
@@ -929,12 +962,6 @@ export default function OvertimePage() {
                       key={overtime.id} 
                       className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                     >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <FiCalendar className="h-4 w-4 text-primary mr-2" />
-                          <span>{formatDate(overtime.date)}</span>
-                        </div>
-                      </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           {overtime.employee?.image ? (
@@ -963,11 +990,21 @@ export default function OvertimePage() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <FiCalendar className="h-4 w-4 text-primary mr-2" />
+                          <span>{formatDate(overtime.date)}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900 dark:text-gray-200">
                           {overtime.startTime} - {overtime.endTime} น.
                         </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                          ({overtime.totalHours} ชั่วโมง)
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900 dark:text-gray-200 font-medium">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                            {overtime.totalHours} ชั่วโมง
+                          </span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -1206,192 +1243,185 @@ export default function OvertimePage() {
 
       {/* Approve Modal */}
       {showApproveModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-              <div className="absolute inset-0 bg-gray-500 dark:bg-gray-900 opacity-75"></div>
-            </div>
-            
-            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-            
-            <div className="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-              <div className="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                <div className="sm:flex sm:items-start">
-                  <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-green-100 dark:bg-green-900 sm:mx-0 sm:h-10 sm:w-10">
-                    <FiCheckCircle className="h-6 w-6 text-green-600 dark:text-green-300" />
-                  </div>
-                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-gray-100" id="modal-title">
-                      อนุมัติการทำงานล่วงเวลา
-                    </h3>
-                    <div className="mt-2">
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        คุณต้องการอนุมัติการทำงานล่วงเวลานี้ใช่หรือไม่
-                      </p>
-                      <div className="mt-4">
-                        <label htmlFor="approve-comment" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                          ความคิดเห็น (ไม่บังคับ)
-                        </label>
-                        <textarea
-                          id="approve-comment"
-                          name="approve-comment"
-                          rows="3"
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                          value={approveComment}
-                          onChange={(e) => setApproveComment(e.target.value)}
-                        ></textarea>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+        <AlertDialog open={showApproveModal} onOpenChange={setShowApproveModal}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>อนุมัติการทำงานล่วงเวลา</AlertDialogTitle>
+              <AlertDialogDescription>
+                คุณต้องการอนุมัติการทำงานล่วงเวลานี้ใช่หรือไม่
+              </AlertDialogDescription>
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  ความคิดเห็น (ไม่บังคับ)
+                </label>
+                <textarea
+                  id="approve-comment"
+                  rows="3"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  value={approveComment}
+                  onChange={(e) => setApproveComment(e.target.value)}
+                ></textarea>
               </div>
-              <div className="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                <button
-                  type="button"
-                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm"
-                  onClick={(e) => handleApprove(selectedOvertimeId, approveComment)}
-                  disabled={actionLoading}
-                >
-                  {actionLoading ? 'กำลังดำเนินการ...' : 'อนุมัติ'}
-                </button>
-                <button
-                  type="button"
-                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700"
-                  onClick={() => setShowApproveModal(false)}
-                  disabled={actionLoading}
-                >
-                  ยกเลิก
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={actionLoading}>ยกเลิก</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => handleApprove(selectedOvertimeId, approveComment)}
+                disabled={actionLoading}
+                className="bg-green-600 text-white hover:bg-green-700"
+              >
+                {actionLoading ? 'กำลังดำเนินการ...' : 'อนุมัติ'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
 
       {/* Reject Modal */}
       {showRejectModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
-          <div className="bg-base-100 rounded-lg shadow-xl max-w-md w-full p-5">
-            <div className="flex items-center mb-4">
-              <div className="bg-error bg-opacity-20 p-2 rounded-full mr-3">
-                <FiXCircle className="text-error text-xl" />
+        <AlertDialog open={showRejectModal} onOpenChange={setShowRejectModal}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>ไม่อนุมัติการทำงานล่วงเวลา</AlertDialogTitle>
+              <AlertDialogDescription>
+                กรุณาระบุเหตุผลที่ไม่อนุมัติ
+              </AlertDialogDescription>
+              <div className="mt-4">
+                <textarea
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  rows="4"
+                  placeholder="ระบุเหตุผลที่ไม่อนุมัติ (ไม่บังคับ)"
+                ></textarea>
               </div>
-              <h3 className="text-lg font-bold">ไม่อนุมัติการทำงานล่วงเวลา</h3>
-            </div>
-            <div className="form-control mb-4">
-              <label className="label">
-                <span className="label-text text-base">กรุณาระบุเหตุผลที่ไม่อนุมัติ</span>
-              </label>
-              <textarea
-                value={rejectReason}
-                onChange={(e) => setRejectReason(e.target.value)}
-                className="textarea textarea-bordered w-full resize-none"
-                rows="4"
-                placeholder="ระบุเหตุผลที่ไม่อนุมัติ (ไม่บังคับ)"
-              ></textarea>
-            </div>
-            <div className="flex justify-end gap-3 mt-5">
-              <button
-                onClick={() => setShowRejectModal(false)}
-                className="btn btn-outline"
-                disabled={actionLoading}
-              >
-                ยกเลิก
-              </button>
-              <button
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={actionLoading}>ยกเลิก</AlertDialogCancel>
+              <AlertDialogAction 
                 onClick={(e) => handleReject(e)}
-                className="btn btn-error text-white"
                 disabled={isSubmitting}
+                className="bg-red-600 text-white hover:bg-red-700"
               >
                 {isSubmitting ? 'กำลังดำเนินการ...' : 'ไม่อนุมัติ'}
-              </button>
-            </div>
-          </div>
-        </div>
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
 
       {/* Cancel Modal */}
       {showCancelModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
-          <div className="bg-base-100 rounded-lg shadow-xl max-w-md w-full p-5">
-            <div className="flex items-center mb-4">
-              <div className="bg-warning bg-opacity-20 p-2 rounded-full mr-3">
-                <FiXCircle className="text-warning text-xl" />
+        <AlertDialog open={showCancelModal} onOpenChange={setShowCancelModal}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>ขอยกเลิกการทำงานล่วงเวลา</AlertDialogTitle>
+              <AlertDialogDescription>
+                กรุณาระบุเหตุผลการขอยกเลิก
+              </AlertDialogDescription>
+              <div className="mt-4">
+                <textarea
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  rows="4"
+                  placeholder="กรุณาระบุเหตุผล"
+                ></textarea>
               </div>
-              <h3 className="text-lg font-bold">รอยกเลิกการทำงานล่วงเวลา</h3>
-            </div>
-            <div className="form-control mb-4">
-              <label className="label">
-                <span className="label-text text-base">กรุณาระบุเหตุผลการรอยกเลิก</span>
-              </label>
-              <textarea
-                value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-                className="textarea textarea-bordered w-full resize-none"
-                rows="4"
-                placeholder="กรุณาระบุเหตุผล"
-              ></textarea>
-            </div>
-            <div className="flex justify-end gap-3 mt-5">
-              <button
-                onClick={() => setShowCancelModal(false)}
-                className="btn btn-outline"
-                disabled={actionLoading}
-              >
-                ยกเลิก
-              </button>
-              <button
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={actionLoading}>ยกเลิก</AlertDialogCancel>
+              <AlertDialogAction 
                 onClick={handleCancelRequest}
-                className="btn btn-warning"
                 disabled={actionLoading || !cancelReason.trim()}
+                className="bg-orange-600 text-white hover:bg-orange-700"
               >
-                ยืนยันการรอยกเลิก
-              </button>
-            </div>
-          </div>
-        </div>
+                ยืนยันการขอยกเลิก
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
 
       {/* Reject Cancel Modal */}
       {showRejectCancelModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
-          <div className="bg-base-100 rounded-lg shadow-xl max-w-md w-full p-5">
-            <div className="flex items-center mb-4">
-              <div className="bg-error bg-opacity-20 p-2 rounded-full mr-3">
-                <FiXCircle className="text-error text-xl" />
+        <AlertDialog open={showRejectCancelModal} onOpenChange={setShowRejectCancelModal}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>ไม่อนุมัติการยกเลิกการทำงานล่วงเวลา</AlertDialogTitle>
+              <AlertDialogDescription>
+                กรุณาระบุเหตุผลการไม่อนุมัติการยกเลิก
+              </AlertDialogDescription>
+              <div className="mt-4">
+                <textarea
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  rows="4"
+                  placeholder="กรุณาระบุเหตุผล"
+                ></textarea>
               </div>
-              <h3 className="text-lg font-bold">ไม่อนุมัติการยกเลิกการทำงานล่วงเวลา</h3>
-            </div>
-            <div className="form-control mb-4">
-              <label className="label">
-                <span className="label-text text-base">กรุณาระบุเหตุผลการยกเลิก</span>
-              </label>
-              <textarea
-                value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-                className="textarea textarea-bordered w-full resize-none"
-                rows="4"
-                placeholder="กรุณาระบุเหตุผลการยกเลิก"
-              ></textarea>
-            </div>
-            <div className="flex justify-end gap-3 mt-5">
-              <button
-                onClick={() => setShowRejectCancelModal(false)}
-                className="btn btn-outline"
-                disabled={actionLoading}
-              >
-                ยกเลิก
-              </button>
-              <button
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={actionLoading}>ยกเลิก</AlertDialogCancel>
+              <AlertDialogAction 
                 onClick={handleRejectCancel}
-                className="btn btn-error text-white"
                 disabled={actionLoading || !cancelReason.trim()}
+                className="bg-red-600 text-white hover:bg-red-700"
               >
                 ยืนยันการไม่อนุมัติการยกเลิก
-              </button>
-            </div>
-          </div>
-        </div>
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirmModal && (
+        <AlertDialog open={showDeleteConfirmModal} onOpenChange={setShowDeleteConfirmModal}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>ยืนยันการลบข้อมูล</AlertDialogTitle>
+              <AlertDialogDescription>
+                คุณต้องการลบข้อมูลการทำงานล่วงเวลานี้ใช่หรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={actionLoading}>ยกเลิก</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={confirmDelete}
+                disabled={actionLoading}
+                className="bg-red-600 text-white hover:bg-red-700"
+              >
+                {actionLoading ? 'กำลังดำเนินการ...' : 'ลบข้อมูล'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {/* Approve Cancel Confirmation Modal */}
+      {showApproveCancelConfirmModal && (
+        <AlertDialog open={showApproveCancelConfirmModal} onOpenChange={setShowApproveCancelConfirmModal}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>อนุมัติการยกเลิกการทำงานล่วงเวลา</AlertDialogTitle>
+              <AlertDialogDescription>
+                คุณต้องการอนุมัติการยกเลิกการทำงานล่วงเวลานี้ใช่หรือไม่?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={actionLoading}>ยกเลิก</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={confirmApproveCancel}
+                disabled={actionLoading}
+                className="bg-green-600 text-white hover:bg-green-700"
+              >
+                {actionLoading ? 'กำลังดำเนินการ...' : 'อนุมัติการยกเลิก'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
     </div>
   );
