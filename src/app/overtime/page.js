@@ -9,6 +9,7 @@ import Image from 'next/image';
 // เปลี่ยนจาก Heroicons เป็น react-icons
 import { FiCheckCircle, FiXCircle, FiTrash2, FiPlus, FiFilter, FiClock, FiUser, 
          FiFileText, FiDownload, FiInfo, FiEdit, FiCalendar, FiSearch, FiChevronUp, FiChevronDown } from 'react-icons/fi';
+import { FiSave } from 'react-icons/fi';
 import { LoadingPage } from '../../components/ui/LoadingSpinner';
 import ErrorMessage from '../../components/ui/ErrorMessage';
 import {
@@ -22,6 +23,17 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+
+// เพิ่ม import Sheet component
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetFooter,
+  SheetClose,
+} from "@/components/ui/sheet";
 
 // เพิ่มฟังก์ชันตรวจสอบว่าเป็นรูปภาพจาก mock-images หรือไม่
 const isMockImage = (src) => {
@@ -70,6 +82,17 @@ export default function OvertimePage() {
   const [pageSize, setPageSize] = useState(10);
   const [sortField, setSortField] = useState('createdAt');
   const [sortDirection, setSortDirection] = useState('desc');
+  const [selectedOvertimeForEdit, setSelectedOvertimeForEdit] = useState(null);
+  const [editFormData, setEditFormData] = useState({
+    employee: '',
+    date: '',
+    startTime: '',
+    endTime: '',
+    reason: '',
+  });
+  const [editTotalHours, setEditTotalHours] = useState(0);
+  const [showEditSheet, setShowEditSheet] = useState(false);
+  const [editSubmitting, setEditSubmitting] = useState(false);
 
   // ฟังก์ชันดึงข้อมูลการทำงานล่วงเวลา - ย้ายออกจาก useEffect
   const fetchOvertimes = async () => {
@@ -754,6 +777,195 @@ export default function OvertimePage() {
     setCancelReason('');
   };
 
+  // เพิ่มฟังก์ชันสำหรับการเปิด Sheet แก้ไข
+  const openEditSheet = async (overtimeId) => {
+    try {
+      setLoading(true);
+      const res = await fetch(`/api/overtime/${overtimeId}`);
+      const data = await res.json();
+
+      if (data.success) {
+        const overtimeData = data.data;
+        setSelectedOvertimeForEdit(overtimeData);
+        
+        // กำหนดค่าเริ่มต้นให้ฟอร์ม
+        setEditFormData({
+          employee: overtimeData.employeeId,
+          date: new Date(overtimeData.date).toISOString().split('T')[0],
+          startTime: overtimeData.startTime,
+          endTime: overtimeData.endTime,
+          reason: overtimeData.reason,
+        });
+        
+        // คำนวณจำนวนชั่วโมงทำงานล่วงเวลา
+        setEditTotalHours(overtimeData.totalHours);
+        setShowEditSheet(true);
+      } else {
+        setError(data.message || 'เกิดข้อผิดพลาดในการดึงข้อมูลการทำงานล่วงเวลา');
+      }
+    } catch (error) {
+      setError('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์');
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // เพิ่มฟังก์ชันสำหรับคำนวณจำนวนชั่วโมงทำงานล่วงเวลา
+  const calculateTotalHours = (startTimeValue, endTimeValue) => {
+    // ใช้ค่าที่ส่งเข้ามาถ้ามี มิฉะนั้นใช้ค่าจาก state
+    const startTime = startTimeValue || editFormData.startTime;
+    const endTime = endTimeValue || editFormData.endTime;
+    
+    if (!startTime || !endTime) return 0;
+    
+    // ตรวจสอบว่าทั้งเวลาเริ่มต้นและเวลาสิ้นสุดไม่เป็นค่าว่าง
+    if (startTime.trim() === '' || endTime.trim() === '') {
+      return 0;
+    }
+    
+    try {
+      // แยกชั่วโมงและนาที
+      const [startHour, startMinute] = startTime.split(':').map(Number);
+      const [endHour, endMinute] = endTime.split(':').map(Number);
+      
+      if (isNaN(startHour) || isNaN(startMinute) || isNaN(endHour) || isNaN(endMinute)) {
+        return 0;
+      }
+      
+      // คำนวณเวลาเป็นนาที
+      const startMinutes = startHour * 60 + startMinute;
+      const endMinutes = endHour * 60 + endMinute;
+      
+      // เพิ่ม log แสดงข้อมูลการคำนวณ
+      console.log('=== ข้อมูลการคำนวณเวลาทำงานล่วงเวลา ===');
+      console.log('ค่าที่ใช้คำนวณ - เวลาเริ่มต้น:', startTime);
+      console.log('ค่าที่ใช้คำนวณ - เวลาสิ้นสุด:', endTime);
+      console.log('ค่าใน state - เวลาเริ่มต้น:', editFormData.startTime);
+      console.log('ค่าใน state - เวลาสิ้นสุด:', editFormData.endTime);
+      console.log('ชั่วโมงเริ่มต้น:', startHour);
+      console.log('นาทีเริ่มต้น:', startMinute);
+      console.log('ชั่วโมงสิ้นสุด:', endHour);
+      console.log('นาทีสิ้นสุด:', endMinute);
+      console.log('เวลาเริ่มต้น (นาที):', startMinutes);
+      console.log('เวลาสิ้นสุด (นาที):', endMinutes);
+      
+      // คำนวณความแตกต่างเป็นชั่วโมง
+      const diffMinutes = Math.abs(endMinutes - startMinutes);
+      const totalHours = diffMinutes / 60;
+      
+      console.log('ความแตกต่าง (นาที):', diffMinutes);
+      console.log('จำนวนชั่วโมงทำงาน:', totalHours);
+      console.log('จำนวนชั่วโมงทำงาน (หลังปัดทศนิยม):', Number(totalHours.toFixed(2)));
+      console.log('=========================================');
+      
+      // แปลงให้เป็นทศนิยม 2 ตำแหน่ง
+      return Number(totalHours.toFixed(2));
+    } catch (error) {
+      console.error("เกิดข้อผิดพลาดในการคำนวณชั่วโมงทำงาน:", error);
+      return 0;
+    }
+  };
+
+  // เพิ่มฟังก์ชันเมื่อข้อมูลใน form เปลี่ยนแปลง
+  const handleEditInputChange = (e) => {
+    const { name, value } = e.target;
+    
+    // ถ้าเปลี่ยนเวลาเริ่มหรือเวลาสิ้นสุด ให้คำนวณจำนวนชั่วโมงใหม่
+    if (name === 'startTime' || name === 'endTime') {
+      // สร้าง object ชั่วคราวเพื่อเก็บค่าที่อัปเดต
+      const updatedFormData = { ...editFormData, [name]: value };
+      
+      // คำนวณชั่วโมงทำงานทันทีด้วยค่าจริงจาก input fields
+      const hours = calculateTotalHours(
+        name === 'startTime' ? value : editFormData.startTime,
+        name === 'endTime' ? value : editFormData.endTime
+      );
+      
+      setEditTotalHours(hours);
+      
+      // ตรวจสอบความถูกต้องของข้อมูล
+      if (updatedFormData.startTime && updatedFormData.endTime) {
+        const [startHour, startMinute] = updatedFormData.startTime.split(':').map(Number);
+        const [endHour, endMinute] = updatedFormData.endTime.split(':').map(Number);
+        
+        if (!isNaN(startHour) && !isNaN(startMinute) && !isNaN(endHour) && !isNaN(endMinute)) {
+          const startMinutes = startHour * 60 + startMinute;
+          const endMinutes = endHour * 60 + endMinute;
+          
+          // ตรวจสอบกรณีที่เวลาเริ่มต้นมากกว่าเวลาสิ้นสุด
+          if (startMinutes > endMinutes) {
+            setError('หมายเหตุ: เวลาเริ่มต้นมากกว่าเวลาสิ้นสุด กรุณาตรวจสอบความถูกต้อง');
+          } else {
+            setError('');
+          }
+        }
+      }
+    }
+    
+    // อัปเดต state หลังจากตรวจสอบและคำนวณเสร็จ
+    setEditFormData({ ...editFormData, [name]: value });
+  };
+
+  // ฟังก์ชันสำหรับบันทึกข้อมูลที่แก้ไข
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!selectedOvertimeForEdit) return;
+    
+    try {
+      setEditSubmitting(true);
+      setError('');
+      
+      // ตรวจสอบข้อมูลที่จำเป็น
+      if (!editFormData.date || !editFormData.startTime || !editFormData.endTime || !editFormData.reason) {
+        setError('กรุณากรอกข้อมูลให้ครบถ้วน');
+        return;
+      }
+      
+      // ตรวจสอบเวลา - ใช้ค่าปัจจุบันจาก state เพื่อคำนวณเวลาสุดท้าย
+      const totalHours = calculateTotalHours();
+      
+      if (totalHours <= 0) {
+        setError('เวลาสิ้นสุดต้องมากกว่าเวลาเริ่มต้น');
+        return;
+      }
+      
+      // ส่งข้อมูลไปบันทึก
+      const response = await fetch(`/api/overtime/${selectedOvertimeForEdit.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          employeeId: editFormData.employee,
+          date: editFormData.date,
+          startTime: editFormData.startTime,
+          endTime: editFormData.endTime,
+          reason: editFormData.reason,
+          totalHours: totalHours,
+        }),
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        setSuccess('บันทึกข้อมูลการทำงานล่วงเวลาเรียบร้อยแล้ว');
+        // รีเฟรชข้อมูลการทำงานล่วงเวลา
+        fetchOvertimes();
+        // ปิด Sheet
+        setShowEditSheet(false);
+      } else {
+        setError(result.message || 'บันทึกข้อมูลไม่สำเร็จ');
+      }
+    } catch (error) {
+      setError('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์');
+      console.error(error);
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
   if (status === 'loading' || loading) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -1003,7 +1215,7 @@ export default function OvertimePage() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900 dark:text-gray-200 font-medium">
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-                            {overtime.totalHours} ชั่วโมง
+                            {overtime.totalHours === 1 ? "1 ชั่วโมง" : `${overtime.totalHours} ชั่วโมง`}
                           </span>
                         </div>
                       </td>
@@ -1062,7 +1274,7 @@ export default function OvertimePage() {
                             <button 
                               onClick={(e) => {
                                 e.stopPropagation();
-                                router.push(`/overtime/${overtime.id}/edit`);
+                                openEditSheet(overtime.id);
                               }}
                               className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-blue-600 dark:text-blue-400"
                               title="แก้ไข"
@@ -1537,6 +1749,159 @@ export default function OvertimePage() {
           </AlertDialogContent>
         </AlertDialog>
       )}
+
+      {/* Sheet สำหรับแก้ไขข้อมูลการทำงานล่วงเวลา */}
+      <Sheet open={showEditSheet} onOpenChange={setShowEditSheet}>
+        <SheetContent className="sm:max-w-lg">
+          <SheetHeader>
+            <SheetTitle>แก้ไขการทำงานล่วงเวลา</SheetTitle>
+            <SheetDescription>
+              แก้ไขข้อมูลการทำงานล่วงเวลา กรุณากรอกข้อมูลให้ครบถ้วน
+            </SheetDescription>
+          </SheetHeader>
+          
+          {error && <div className="bg-red-50 dark:bg-red-900/30 p-3 rounded-md mt-4 text-red-800 dark:text-red-200 text-sm">
+            <div className="flex items-start">
+              <FiXCircle className="mt-0.5 mr-2 h-4 w-4 text-red-500" />
+              <span>{error}</span>
+              <button 
+                className="ml-auto text-red-700 dark:text-red-400 hover:text-red-900 dark:hover:text-red-200"
+                onClick={() => setError('')}
+              >
+                <FiXCircle className="h-4 w-4" />
+              </button>
+            </div>
+          </div>}
+          
+          <form onSubmit={handleEditSubmit} className="space-y-4 mt-4">
+            <div className="grid grid-cols-1 gap-4">
+              <div className="space-y-2">
+                <label htmlFor="date" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  วันที่ทำงานล่วงเวลา <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                    <FiCalendar className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="date"
+                    id="date"
+                    name="date"
+                    className="pl-10 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                    value={editFormData.date}
+                    onChange={handleEditInputChange}
+                    required
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label htmlFor="startTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    เวลาเริ่มต้น <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                      <FiClock className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                      type="time"
+                      id="startTime"
+                      name="startTime"
+                      className="pl-10 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                      value={editFormData.startTime}
+                      onChange={handleEditInputChange}
+                      required
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <label htmlFor="endTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    เวลาสิ้นสุด <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                      <FiClock className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                      type="time"
+                      id="endTime"
+                      name="endTime"
+                      className="pl-10 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                      value={editFormData.endTime}
+                      onChange={handleEditInputChange}
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  จำนวนชั่วโมงทำงานล่วงเวลา
+                </label>
+                <div className="px-4 py-2 bg-gray-100 dark:bg-gray-700 rounded-md">
+                  <span className="font-medium">
+                    {editTotalHours === 1 ? '1' : editTotalHours}
+                  </span> 
+                  {editTotalHours === 1 ? 'ชั่วโมง' : 'ชั่วโมง'}
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <label htmlFor="reason" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  เหตุผลในการทำงานล่วงเวลา <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <div className="absolute top-3 left-0 pl-3 pointer-events-none">
+                    <FiFileText className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <textarea
+                    id="reason"
+                    name="reason"
+                    rows="3"
+                    className="pl-10 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                    placeholder="ระบุเหตุผลในการทำงานล่วงเวลา"
+                    value={editFormData.reason}
+                    onChange={handleEditInputChange}
+                    required
+                  ></textarea>
+                </div>
+              </div>
+            </div>
+            
+            <SheetFooter className="sm:justify-between">
+              <SheetClose asChild>
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2"
+                  disabled={editSubmitting}
+                >
+                  ยกเลิก
+                </button>
+              </SheetClose>
+              <button
+                type="submit"
+                className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
+                disabled={editSubmitting}
+              >
+                {editSubmitting ? (
+                  <div className="flex items-center">
+                    <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-opacity-20 border-t-white rounded-full"></div>
+                    <span>กำลังบันทึก...</span>
+                  </div>
+                ) : (
+                  <>
+                    <FiSave className="mr-2 h-4 w-4" />
+                    <span>บันทึก</span>
+                  </>
+                )}
+              </button>
+            </SheetFooter>
+          </form>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 } 
