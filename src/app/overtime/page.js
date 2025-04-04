@@ -69,11 +69,11 @@ export default function OvertimePage() {
   const [success, setSuccess] = useState('');
   const [statusCounts, setStatusCounts] = useState({
     all: 0,
-    pending: 0,
+    waiting_for_approve: 0,
     approved: 0,
     rejected: 0,
-    cancelled: 0,
-    pendingCancel: 0
+    canceled: 0,
+    pending_cancel: 0
   });
   // เพิ่ม state สำหรับการจัดเรียงและแบ่งหน้า
   const [currentPage, setCurrentPage] = useState(1);
@@ -91,6 +91,17 @@ export default function OvertimePage() {
   const [editTotalHours, setEditTotalHours] = useState(0);
   const [showEditSheet, setShowEditSheet] = useState(false);
   const [editSubmitting, setEditSubmitting] = useState(false);
+  // เพิ่ม state สำหรับ Sheet การสร้างรายการใหม่
+  const [showCreateSheet, setShowCreateSheet] = useState(false);
+  const [createFormData, setCreateFormData] = useState({
+    employee: '',
+    date: '',
+    startTime: '',
+    endTime: '',
+    reason: '',
+  });
+  const [createTotalHours, setCreateTotalHours] = useState(0);
+  const [createSubmitting, setCreateSubmitting] = useState(false);
 
   // ฟังก์ชันดึงข้อมูลการทำงานล่วงเวลา - ย้ายออกจาก useEffect
   const fetchOvertimes = async () => {
@@ -1146,6 +1157,161 @@ export default function OvertimePage() {
     }
   };
 
+  // เพิ่มฟังก์ชันสำหรับเปิด Sheet การสร้างรายการใหม่
+  const openCreateSheet = () => {
+    // ตั้งค่าเริ่มต้นให้เป็นของตัวเองเสมอ
+    setCreateFormData({
+      employee: session.user.id, // ใช้ ID ของผู้ใช้ปัจจุบันเสมอ
+      date: new Date().toISOString().split('T')[0],
+      startTime: '',
+      endTime: '',
+      reason: '',
+    });
+    setCreateTotalHours(0);
+    setShowCreateSheet(true);
+  };
+
+  // เพิ่มฟังก์ชันสำหรับการจัดการเมื่อข้อมูลใน form สร้างใหม่เปลี่ยนแปลง
+  const handleCreateInputChange = (e) => {
+    const { name, value } = e.target;
+    
+    // ถ้าเปลี่ยนเวลาเริ่มหรือเวลาสิ้นสุด ให้คำนวณจำนวนชั่วโมงใหม่
+    if (name === 'startTime' || name === 'endTime') {
+      // สร้าง object ชั่วคราวเพื่อเก็บค่าที่อัปเดต
+      const updatedFormData = { ...createFormData, [name]: value };
+      
+      // คำนวณชั่วโมงทำงานทันทีด้วยค่าจริงจาก input fields
+      const hours = calculateCreateTotalHours(
+        name === 'startTime' ? value : createFormData.startTime,
+        name === 'endTime' ? value : createFormData.endTime
+      );
+      
+      setCreateTotalHours(hours);
+    }
+    
+    // อัปเดต state
+    setCreateFormData({ ...createFormData, [name]: value });
+  };
+
+  // เพิ่มฟังก์ชันสำหรับคำนวณจำนวนชั่วโมงทำงานล่วงเวลาสำหรับการสร้างใหม่
+  const calculateCreateTotalHours = (startTimeValue, endTimeValue) => {
+    // ใช้ค่าที่ส่งเข้ามาถ้ามี มิฉะนั้นใช้ค่าจาก state
+    const startTime = startTimeValue || createFormData.startTime;
+    const endTime = endTimeValue || createFormData.endTime;
+    
+    if (!startTime || !endTime) return 0;
+    
+    // ตรวจสอบว่าทั้งเวลาเริ่มต้นและเวลาสิ้นสุดไม่เป็นค่าว่าง
+    if (startTime.trim() === '' || endTime.trim() === '') {
+      return 0;
+    }
+    
+    try {
+      // แยกชั่วโมงและนาที
+      const [startHour, startMinute] = startTime.split(':').map(Number);
+      const [endHour, endMinute] = endTime.split(':').map(Number);
+      
+      if (isNaN(startHour) || isNaN(startMinute) || isNaN(endHour) || isNaN(endMinute)) {
+        return 0;
+      }
+      
+      // คำนวณเวลาเป็นนาที
+      const startMinutes = startHour * 60 + startMinute;
+      const endMinutes = endHour * 60 + endMinute;
+      
+      // คำนวณความแตกต่างเป็นชั่วโมง
+      const diffMinutes = Math.abs(endMinutes - startMinutes);
+      const totalHours = diffMinutes / 60;
+      
+      // แปลงให้เป็นทศนิยม 2 ตำแหน่ง
+      return Number(totalHours.toFixed(2));
+    } catch (error) {
+      console.error("เกิดข้อผิดพลาดในการคำนวณชั่วโมงทำงาน:", error);
+      return 0;
+    }
+  };
+
+  // เพิ่มฟังก์ชันสำหรับบันทึกข้อมูลการสร้างรายการใหม่
+  const handleCreateSubmit = async (e) => {
+    e.preventDefault();
+    
+    try {
+      setCreateSubmitting(true);
+      setError('');
+      
+      // ตรวจสอบข้อมูลที่จำเป็น
+      if (!createFormData.employee || !createFormData.date || !createFormData.startTime || !createFormData.endTime || !createFormData.reason) {
+        toast({
+          variant: "destructive",
+          title: "เกิดข้อผิดพลาด",
+          description: 'กรุณากรอกข้อมูลให้ครบถ้วน',
+          duration: 10000,
+        });
+        return;
+      }
+      
+      // ตรวจสอบเวลา
+      const totalHours = calculateCreateTotalHours();
+      
+      if (totalHours <= 0) {
+        toast({
+          variant: "destructive",
+          title: "เกิดข้อผิดพลาด",
+          description: 'เวลาสิ้นสุดต้องมากกว่าเวลาเริ่มต้น',
+          duration: 10000,
+        });
+        return;
+      }
+      
+      // ส่งข้อมูลไปบันทึก
+      const response = await fetch('/api/overtime', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          employeeId: createFormData.employee,
+          date: createFormData.date,
+          startTime: createFormData.startTime,
+          endTime: createFormData.endTime,
+          reason: createFormData.reason,
+          totalHours: totalHours,
+        }),
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        toast({
+          title: "บันทึกสำเร็จ",
+          description: 'บันทึกข้อมูลการทำงานล่วงเวลาเรียบร้อยแล้ว',
+          duration: 10000,
+        });
+        // รีเฟรชข้อมูลการทำงานล่วงเวลา
+        fetchOvertimes();
+        // ปิด Sheet
+        setShowCreateSheet(false);
+      } else {
+        toast({
+          variant: "destructive",
+          title: "เกิดข้อผิดพลาด",
+          description: result.message || 'บันทึกข้อมูลไม่สำเร็จ',
+          duration: 10000,
+        });
+      }
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "เกิดข้อผิดพลาด",
+        description: 'เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์',
+        duration: 10000,
+      });
+      console.error(error);
+    } finally {
+      setCreateSubmitting(false);
+    }
+  };
+
   if (status === 'loading' || loading) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -1167,12 +1333,13 @@ export default function OvertimePage() {
         
         <div className="flex space-x-2">
           {(session?.user?.role === 'employee' || session?.user?.role === 'supervisor') && (
-            <Link href="/overtime/create">
-              <button className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 px-4 py-2 bg-primary text-primary-foreground shadow hover:bg-primary/90">
-                <FiPlus className="mr-1" />
-                ขอทำงานล่วงเวลา
-              </button>
-            </Link>
+            <button 
+              onClick={openCreateSheet}
+              className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 px-4 py-2 bg-primary text-primary-foreground shadow hover:bg-primary/90"
+            >
+              <FiPlus className="mr-1" />
+              ขอทำงานล่วงเวลา
+            </button>
           )}
         </div>
       </div>
@@ -2057,6 +2224,148 @@ export default function OvertimePage() {
                 disabled={editSubmitting}
               >
                 {editSubmitting ? (
+                  <div className="flex items-center">
+                    <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-opacity-20 border-t-white rounded-full"></div>
+                    <span>กำลังบันทึก...</span>
+                  </div>
+                ) : (
+                  <>
+                    <FiSave className="mr-2 h-4 w-4" />
+                    <span>บันทึก</span>
+                  </>
+                )}
+              </button>
+            </SheetFooter>
+          </form>
+        </SheetContent>
+      </Sheet>
+      
+      {/* Create Sheet */}
+      <Sheet open={showCreateSheet} onOpenChange={setShowCreateSheet}>
+        <SheetContent className="sm:max-w-lg overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>ขอทำงานล่วงเวลา</SheetTitle>
+            <SheetDescription>
+              กรอกข้อมูลการทำงานล่วงเวลาเพื่อขออนุมัติ
+            </SheetDescription>
+          </SheetHeader>
+          
+          <form onSubmit={handleCreateSubmit} className="space-y-6 py-6">
+            <div className="space-y-4">
+              {/* ไม่แสดงส่วนของการเลือกพนักงาน เนื่องจากกำหนดให้เป็นตัวเองเสมอ */}
+              
+              <div className="space-y-2">
+                <label htmlFor="date" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  วันที่ทำงานล่วงเวลา <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                    <FiCalendar className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="date"
+                    id="date"
+                    name="date"
+                    className="pl-10 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                    value={createFormData.date}
+                    onChange={handleCreateInputChange}
+                    required
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label htmlFor="startTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    เวลาเริ่มต้น <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                      <FiClock className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                      type="time"
+                      id="startTime"
+                      name="startTime"
+                      className="pl-10 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                      value={createFormData.startTime}
+                      onChange={handleCreateInputChange}
+                      required
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <label htmlFor="endTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    เวลาสิ้นสุด <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                      <FiClock className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                      type="time"
+                      id="endTime"
+                      name="endTime"
+                      className="pl-10 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                      value={createFormData.endTime}
+                      onChange={handleCreateInputChange}
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  จำนวนชั่วโมงทำงานล่วงเวลา
+                </label>
+                <div className="px-4 py-2 bg-gray-100 dark:bg-gray-700 rounded-md">
+                  <span className="font-medium">
+                    {createTotalHours === 1 ? '1' : createTotalHours}
+                  </span> 
+                  {createTotalHours === 1 ? 'ชั่วโมง' : 'ชั่วโมง'}
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <label htmlFor="create-reason" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  เหตุผลในการทำงานล่วงเวลา <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <div className="absolute top-3 left-0 pl-3 pointer-events-none">
+                    <FiFileText className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <textarea
+                    id="create-reason"
+                    name="reason"
+                    rows="3"
+                    className="pl-10 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                    placeholder="ระบุเหตุผลในการทำงานล่วงเวลา"
+                    value={createFormData.reason}
+                    onChange={handleCreateInputChange}
+                    required
+                  ></textarea>
+                </div>
+              </div>
+            </div>
+            
+            <SheetFooter className="sm:justify-between">
+              <SheetClose asChild>
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2"
+                  disabled={createSubmitting}
+                >
+                  ยกเลิก
+                </button>
+              </SheetClose>
+              <button
+                type="submit"
+                className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
+                disabled={createSubmitting}
+              >
+                {createSubmitting ? (
                   <div className="flex items-center">
                     <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-opacity-20 border-t-white rounded-full"></div>
                     <span>กำลังบันทึก...</span>
