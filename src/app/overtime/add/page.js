@@ -7,10 +7,12 @@ import Link from 'next/link';
 import { FiSave, FiArrowLeft, FiFileText, FiUser, FiInfo, FiCalendar, FiClock } from 'react-icons/fi';
 import { LoadingSpinner, LoadingPage } from '../../../components/ui/LoadingSpinner';
 import ErrorMessage from '../../../components/ui/ErrorMessage';
+import { useToast } from '@/components/ui/use-toast';
 
 export default function AddOvertimePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const { toast } = useToast();
   const [employees, setEmployees] = useState([]);
   const [formData, setFormData] = useState({
     employeeId: '',
@@ -149,6 +151,12 @@ export default function AddOvertimePage() {
     
     if (totalHours <= 0) {
       setError('เวลาสิ้นสุดต้องมากกว่าเวลาเริ่มต้น');
+      toast({
+        variant: "destructive",
+        title: "เกิดข้อผิดพลาด",
+        description: "เวลาสิ้นสุดต้องมากกว่าเวลาเริ่มต้น",
+        duration: 10000,
+      });
       setLoading(false);
       return;
     }
@@ -171,15 +179,32 @@ export default function AddOvertimePage() {
       
       if (data.success) {
         setSuccess('บันทึกข้อมูลการทำงานล่วงเวลาเรียบร้อยแล้ว');
+        toast({
+          title: "บันทึกสำเร็จ",
+          description: "บันทึกข้อมูลการทำงานล่วงเวลาเรียบร้อยแล้ว",
+          duration: 10000,
+        });
         // กลับไปที่หน้ารายการการทำงานล่วงเวลาหลังจาก 2 วินาที
         setTimeout(() => {
           router.push('/overtime');
         }, 2000);
       } else {
         setError(data.message || 'เกิดข้อผิดพลาดในการเพิ่มข้อมูลการทำงานล่วงเวลา');
+        toast({
+          variant: "destructive",
+          title: "เกิดข้อผิดพลาด",
+          description: data.message || 'เกิดข้อผิดพลาดในการเพิ่มข้อมูลการทำงานล่วงเวลา',
+          duration: 10000,
+        });
       }
     } catch (error) {
       setError('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์');
+      toast({
+        variant: "destructive",
+        title: "เกิดข้อผิดพลาด",
+        description: 'เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์',
+        duration: 10000,
+      });
       console.error(error);
     } finally {
       setLoading(false);

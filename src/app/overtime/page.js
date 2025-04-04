@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useSession } from 'next-auth/react';
+import { useSession, signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -35,6 +35,8 @@ import {
   SheetClose,
 } from "@/components/ui/sheet";
 
+import { useToast } from '@/components/ui/use-toast';
+
 // เพิ่มฟังก์ชันตรวจสอบว่าเป็นรูปภาพจาก mock-images หรือไม่
 const isMockImage = (src) => {
   return src && typeof src === 'string' && (src.startsWith('/mock-images/') || src.startsWith('./mock-images/'));
@@ -42,12 +44,8 @@ const isMockImage = (src) => {
 
 export default function OvertimePage() {
   const router = useRouter();
-  const { data: session, status } = useSession({
-    required: true,
-    onUnauthenticated() {
-      redirect('/login');
-    },
-  });
+  const { data: session, status } = useSession();
+  const { toast } = useToast();
 
   const [overtimes, setOvertimes] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -175,40 +173,49 @@ export default function OvertimePage() {
   }, [session]);
 
   const handleDelete = async (id) => {
-    // เปิด dialog ยืนยันการลบข้อมูล
-    setSelectedOvertimeId(id);
-    setShowDeleteConfirmModal(true);
-  };
-  
-  // ฟังก์ชันใหม่สำหรับการลบข้อมูลหลังจากยืนยัน
-  const confirmDelete = async () => {
-    if (!selectedOvertimeId) return;
+    if (!window.confirm('คุณต้องการลบข้อมูลการทำงานล่วงเวลานี้ใช่หรือไม่?')) return;
     
     try {
-      setActionLoading(true);
-      const res = await fetch(`/api/overtime/${selectedOvertimeId}`, {
+      setLoading(true);
+      
+      const response = await fetch(`/api/overtime/${id}`, {
         method: 'DELETE',
       });
       
-      const data = await res.json();
+      const result = await response.json();
       
-      if (data.success) {
+      if (result.success) {
         setSuccess('ลบข้อมูลการทำงานล่วงเวลาเรียบร้อยแล้ว');
+        toast({
+          title: "ลบข้อมูลสำเร็จ",
+          description: 'ลบข้อมูลการทำงานล่วงเวลาเรียบร้อยแล้ว',
+          duration: 10000,
+        });
         // รีเฟรชข้อมูลการทำงานล่วงเวลา
         fetchOvertimes();
-        // ปิด dialog
-        setShowDeleteConfirmModal(false);
       } else {
-        setError(data.message || 'เกิดข้อผิดพลาดในการลบข้อมูลการทำงานล่วงเวลา');
+        setError(result.message || 'ลบข้อมูลไม่สำเร็จ');
+        toast({
+          variant: "destructive",
+          title: "เกิดข้อผิดพลาด",
+          description: result.message || 'ลบข้อมูลไม่สำเร็จ',
+          duration: 10000,
+        });
       }
     } catch (error) {
       setError('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์');
+      toast({
+        variant: "destructive",
+        title: "เกิดข้อผิดพลาด",
+        description: 'เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์',
+        duration: 10000,
+      });
       console.error(error);
     } finally {
-      setActionLoading(false);
+      setLoading(false);
     }
   };
-
+  
   const handleApprove = async (overtimeId, comment = '') => {
     try {
       if (!showApproveModal) {
@@ -221,7 +228,7 @@ export default function OvertimePage() {
       setError('');
       setSuccess('');
 
-      const response = await fetch(`/api/overtime/${overtimeId}`, {
+      const response = await fetch(`/api/overtime/${overtimeId || selectedOvertimeId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -234,15 +241,32 @@ export default function OvertimePage() {
 
       if (result.success) {
         setSuccess('อนุมัติการทำงานล่วงเวลาเรียบร้อยแล้ว');
+        toast({
+          title: "อนุมัติสำเร็จ",
+          description: 'อนุมัติการทำงานล่วงเวลาเรียบร้อยแล้ว',
+          duration: 10000,
+        });
         // รีเฟรชข้อมูลการทำงานล่วงเวลา
         fetchOvertimes();
         setShowApproveModal(false);
         setApproveComment('');
       } else {
         setError(result.message || 'เกิดข้อผิดพลาดในการอนุมัติการทำงานล่วงเวลา');
+        toast({
+          variant: "destructive",
+          title: "เกิดข้อผิดพลาด",
+          description: result.message || 'เกิดข้อผิดพลาดในการอนุมัติการทำงานล่วงเวลา',
+          duration: 10000,
+        });
       }
     } catch (error) {
       setError('เกิดข้อผิดพลาดในการอนุมัติการทำงานล่วงเวลา');
+      toast({
+        variant: "destructive",
+        title: "เกิดข้อผิดพลาด",
+        description: 'เกิดข้อผิดพลาดในการอนุมัติการทำงานล่วงเวลา',
+        duration: 10000,
+      });
       console.error('Error approving overtime:', error);
     } finally {
       setIsSubmitting(false);
@@ -270,15 +294,32 @@ export default function OvertimePage() {
       
       if (result.success) {
         setSuccess('ไม่อนุมัติการทำงานล่วงเวลาเรียบร้อยแล้ว');
+        toast({
+          title: "ไม่อนุมัติสำเร็จ",
+          description: 'ไม่อนุมัติการทำงานล่วงเวลาเรียบร้อยแล้ว',
+          duration: 10000,
+        });
         // รีเฟรชข้อมูลการทำงานล่วงเวลา
         fetchOvertimes();
         setShowRejectModal(false);
         setRejectReason('');
       } else {
         setError(result.message || 'เกิดข้อผิดพลาดในการไม่อนุมัติการทำงานล่วงเวลา');
+        toast({
+          variant: "destructive",
+          title: "เกิดข้อผิดพลาด",
+          description: result.message || 'เกิดข้อผิดพลาดในการไม่อนุมัติการทำงานล่วงเวลา',
+          duration: 10000,
+        });
       }
     } catch (error) {
       setError('เกิดข้อผิดพลาดในการไม่อนุมัติการทำงานล่วงเวลา');
+      toast({
+        variant: "destructive",
+        title: "เกิดข้อผิดพลาด",
+        description: 'เกิดข้อผิดพลาดในการไม่อนุมัติการทำงานล่วงเวลา',
+        duration: 10000,
+      });
       console.error('Error rejecting overtime:', error);
     } finally {
       setIsSubmitting(false);
@@ -323,6 +364,11 @@ export default function OvertimePage() {
       
       if (data.success) {
         setSuccess('ปฏิเสธการยกเลิกการทำงานล่วงเวลาเรียบร้อยแล้ว');
+        toast({
+          title: "ปฏิเสธการยกเลิกสำเร็จ",
+          description: 'ปฏิเสธการยกเลิกการทำงานล่วงเวลาเรียบร้อยแล้ว',
+          duration: 10000,
+        });
         // รีเฟรชข้อมูลการทำงานล่วงเวลา
         // ปิด modal
         setShowRejectCancelModal(false);
@@ -335,9 +381,21 @@ export default function OvertimePage() {
         }, 1500);
       } else {
         setError(data.message || 'เกิดข้อผิดพลาดในการปฏิเสธการยกเลิกการทำงานล่วงเวลา');
+        toast({
+          variant: "destructive",
+          title: "เกิดข้อผิดพลาด",
+          description: data.message || 'เกิดข้อผิดพลาดในการปฏิเสธการยกเลิกการทำงานล่วงเวลา',
+          duration: 10000,
+        });
       }
     } catch (error) {
       setError('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์');
+      toast({
+        variant: "destructive",
+        title: "เกิดข้อผิดพลาด",
+        description: 'เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์',
+        duration: 10000,
+      });
       console.error(error);
     } finally {
       setActionLoading(false);
@@ -711,6 +769,11 @@ export default function OvertimePage() {
       
       if (data.success) {
         setSuccess('ส่งคำขอยกเลิกการทำงานล่วงเวลาเรียบร้อยแล้ว');
+        toast({
+          title: "ส่งคำขอสำเร็จ",
+          description: 'ส่งคำขอยกเลิกการทำงานล่วงเวลาเรียบร้อยแล้ว',
+          duration: 10000,
+        });
         // รีเฟรชข้อมูลการทำงานล่วงเวลา
         fetchOvertimes();
         // ปิด modal
@@ -719,9 +782,21 @@ export default function OvertimePage() {
         setCancelReason('');
       } else {
         setError(data.message || 'เกิดข้อผิดพลาดในการส่งคำขอยกเลิกการทำงานล่วงเวลา');
+        toast({
+          variant: "destructive",
+          title: "เกิดข้อผิดพลาด",
+          description: data.message || 'เกิดข้อผิดพลาดในการส่งคำขอยกเลิกการทำงานล่วงเวลา',
+          duration: 10000,
+        });
       }
     } catch (error) {
       setError('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์');
+      toast({
+        variant: "destructive",
+        title: "เกิดข้อผิดพลาด",
+        description: 'เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์',
+        duration: 10000,
+      });
       console.error(error);
     } finally {
       setActionLoading(false);
@@ -755,15 +830,32 @@ export default function OvertimePage() {
       
       if (data.success) {
         setSuccess('อนุมัติการยกเลิกการทำงานล่วงเวลาเรียบร้อยแล้ว');
+        toast({
+          title: "อนุมัติการยกเลิกสำเร็จ",
+          description: 'อนุมัติการยกเลิกการทำงานล่วงเวลาเรียบร้อยแล้ว',
+          duration: 10000,
+        });
         // รีเฟรชข้อมูลการทำงานล่วงเวลา
         fetchOvertimes();
         // ปิด dialog
         setShowApproveCancelConfirmModal(false);
       } else {
         setError(data.message || 'เกิดข้อผิดพลาดในการอนุมัติการยกเลิกการทำงานล่วงเวลา');
+        toast({
+          variant: "destructive",
+          title: "เกิดข้อผิดพลาด",
+          description: data.message || 'เกิดข้อผิดพลาดในการอนุมัติการยกเลิกการทำงานล่วงเวลา',
+          duration: 10000,
+        });
       }
     } catch (error) {
       setError('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์');
+      toast({
+        variant: "destructive",
+        title: "เกิดข้อผิดพลาด",
+        description: 'เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์',
+        duration: 10000,
+      });
       console.error(error);
     } finally {
       setActionLoading(false);
@@ -802,9 +894,21 @@ export default function OvertimePage() {
         setShowEditSheet(true);
       } else {
         setError(data.message || 'เกิดข้อผิดพลาดในการดึงข้อมูลการทำงานล่วงเวลา');
+        toast({
+          variant: "destructive",
+          title: "เกิดข้อผิดพลาด",
+          description: data.message || 'เกิดข้อผิดพลาดในการดึงข้อมูลการทำงานล่วงเวลา',
+          duration: 10000,
+        });
       }
     } catch (error) {
       setError('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์');
+      toast({
+        variant: "destructive",
+        title: "เกิดข้อผิดพลาด",
+        description: 'เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์',
+        duration: 10000,
+      });
       console.error(error);
     } finally {
       setLoading(false);
@@ -920,6 +1024,12 @@ export default function OvertimePage() {
       // ตรวจสอบข้อมูลที่จำเป็น
       if (!editFormData.date || !editFormData.startTime || !editFormData.endTime || !editFormData.reason) {
         setError('กรุณากรอกข้อมูลให้ครบถ้วน');
+        toast({
+          variant: "destructive",
+          title: "เกิดข้อผิดพลาด",
+          description: 'กรุณากรอกข้อมูลให้ครบถ้วน',
+          duration: 10000,
+        });
         return;
       }
       
@@ -928,6 +1038,12 @@ export default function OvertimePage() {
       
       if (totalHours <= 0) {
         setError('เวลาสิ้นสุดต้องมากกว่าเวลาเริ่มต้น');
+        toast({
+          variant: "destructive",
+          title: "เกิดข้อผิดพลาด",
+          description: 'เวลาสิ้นสุดต้องมากกว่าเวลาเริ่มต้น',
+          duration: 10000,
+        });
         return;
       }
       
@@ -951,18 +1067,82 @@ export default function OvertimePage() {
       
       if (result.success) {
         setSuccess('บันทึกข้อมูลการทำงานล่วงเวลาเรียบร้อยแล้ว');
+        toast({
+          title: "บันทึกสำเร็จ",
+          description: 'บันทึกข้อมูลการทำงานล่วงเวลาเรียบร้อยแล้ว',
+          duration: 10000,
+        });
         // รีเฟรชข้อมูลการทำงานล่วงเวลา
         fetchOvertimes();
         // ปิด Sheet
         setShowEditSheet(false);
       } else {
         setError(result.message || 'บันทึกข้อมูลไม่สำเร็จ');
+        toast({
+          variant: "destructive",
+          title: "เกิดข้อผิดพลาด",
+          description: result.message || 'บันทึกข้อมูลไม่สำเร็จ',
+          duration: 10000,
+        });
       }
     } catch (error) {
       setError('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์');
+      toast({
+        variant: "destructive",
+        title: "เกิดข้อผิดพลาด",
+        description: 'เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์',
+        duration: 10000,
+      });
       console.error(error);
     } finally {
       setEditSubmitting(false);
+    }
+  };
+
+  // ฟังก์ชันสำหรับอนุมัติ/ปฏิเสธการทำงานล่วงเวลา
+  const handleUpdateStatus = async (id, newStatus) => {
+    try {
+      setLoading(true);
+      
+      const response = await fetch(`/api/overtime/${id}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        setSuccess(`อัปเดตสถานะเป็น "${newStatus}" เรียบร้อยแล้ว`);
+        toast({
+          title: "อัปเดตสถานะสำเร็จ",
+          description: `อัปเดตสถานะเป็น "${newStatus}" เรียบร้อยแล้ว`,
+          duration: 10000,
+        });
+        // รีเฟรชข้อมูลการทำงานล่วงเวลา
+        fetchOvertimes();
+      } else {
+        setError(result.message || 'อัปเดตสถานะไม่สำเร็จ');
+        toast({
+          variant: "destructive",
+          title: "เกิดข้อผิดพลาด",
+          description: result.message || 'อัปเดตสถานะไม่สำเร็จ',
+          duration: 10000,
+        });
+      }
+    } catch (error) {
+      setError('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์');
+      toast({
+        variant: "destructive",
+        title: "เกิดข้อผิดพลาด",
+        description: 'เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์',
+        duration: 10000,
+      });
+      console.error(error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -996,16 +1176,6 @@ export default function OvertimePage() {
           )}
         </div>
       </div>
-      
-      {error && <ErrorMessage message={error} onClose={() => setError('')} />}
-      {success && (
-        <div className="alert alert-success mb-4 flex justify-between items-center">
-          <span>{success}</span>
-          <button onClick={() => setSuccess('')} className="btn btn-sm btn-ghost">
-            <FiXCircle />
-          </button>
-        </div>
-      )}
       
       <div className="mb-6">
         <div className="bg-white dark:bg-gray-800 p-5 rounded-lg border shadow-sm">

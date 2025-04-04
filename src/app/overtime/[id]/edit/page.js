@@ -7,11 +7,13 @@ import Link from 'next/link';
 import { FiSave, FiArrowLeft, FiClock, FiFileText, FiUser, FiInfo, FiCalendar } from 'react-icons/fi';
 import { LoadingPage, LoadingSpinner } from '../../../../components/ui/LoadingSpinner';
 import ErrorMessage from '../../../../components/ui/ErrorMessage';
+import { useToast } from '@/components/ui/use-toast';
 
 export default function EditOvertimePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const params = useParams();
+  const { toast } = useToast();
   const [overtime, setOvertime] = useState(null);
   const [employees, setEmployees] = useState([]);
   const [formData, setFormData] = useState({
@@ -69,6 +71,12 @@ export default function EditOvertimePage() {
           
           // ถ้าผู้ใช้ไม่ใช่เจ้าของหรือไม่ใช่แอดมิน หรือการทำงานล่วงเวลาไม่ได้อยู่ในสถานะรออนุมัติ ให้ redirect ไปหน้ารายการ
           if ((session.user.id !== overtimeData.employeeId && session.user.role !== 'admin') || overtimeData.status !== 'รออนุมัติ') {
+            toast({
+              variant: "destructive",
+              title: "ไม่มีสิทธิ์แก้ไข",
+              description: "คุณไม่มีสิทธิ์แก้ไขข้อมูลการทำงานล่วงเวลานี้",
+              duration: 10000,
+            });
             router.push(`/overtime/${params.id}`);
             return;
           }
@@ -86,9 +94,21 @@ export default function EditOvertimePage() {
           setTotalHours(overtimeData.totalHours);
         } else {
           setError(data.message || 'เกิดข้อผิดพลาดในการดึงข้อมูลการทำงานล่วงเวลา');
+          toast({
+            variant: "destructive",
+            title: "เกิดข้อผิดพลาด",
+            description: data.message || 'เกิดข้อผิดพลาดในการดึงข้อมูลการทำงานล่วงเวลา',
+            duration: 10000,
+          });
         }
       } catch (error) {
         setError('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์');
+        toast({
+          variant: "destructive",
+          title: "เกิดข้อผิดพลาด",
+          description: 'เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์',
+          duration: 10000,
+        });
         console.error(error);
       } finally {
         setLoading(false);
@@ -96,7 +116,7 @@ export default function EditOvertimePage() {
     };
 
     fetchOvertimeDetails();
-  }, [params?.id, session, router]);
+  }, [params?.id, session, router, toast]);
 
   // คำนวณจำนวนชั่วโมงทำงานล่วงเวลา
   const calculateTotalHours = useCallback((startTimeValue, endTimeValue) => {
@@ -171,12 +191,18 @@ export default function EditOvertimePage() {
         // ตรวจสอบกรณีที่เวลาเริ่มต้นมากกว่าเวลาสิ้นสุด
         if (startMinutes > endMinutes) {
           setError('หมายเหตุ: เวลาเริ่มต้นมากกว่าเวลาสิ้นสุด กรุณาตรวจสอบความถูกต้อง');
+          toast({
+            variant: "destructive", 
+            title: "เกิดข้อผิดพลาด",
+            description: 'เวลาเริ่มต้นมากกว่าเวลาสิ้นสุด กรุณาตรวจสอบความถูกต้อง',
+            duration: 10000,
+          });
         } else {
           setError('');
         }
       }
     }
-  }, [formData.startTime, formData.endTime, calculateTotalHours]);
+  }, [formData.startTime, formData.endTime, calculateTotalHours, toast]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -207,6 +233,12 @@ export default function EditOvertimePage() {
           // ตรวจสอบกรณีที่เวลาเริ่มต้นมากกว่าเวลาสิ้นสุด
           if (startMinutes > endMinutes) {
             setError('หมายเหตุ: เวลาเริ่มต้นมากกว่าเวลาสิ้นสุด กรุณาตรวจสอบความถูกต้อง');
+            toast({
+              variant: "destructive", 
+              title: "เกิดข้อผิดพลาด",
+              description: 'เวลาเริ่มต้นมากกว่าเวลาสิ้นสุด กรุณาตรวจสอบความถูกต้อง',
+              duration: 10000,
+            });
           } else {
             setError('');
           }
@@ -234,6 +266,12 @@ export default function EditOvertimePage() {
       // ตรวจสอบข้อมูลที่จำเป็น
       if (!formData.date || !formData.startTime || !formData.endTime || !formData.reason) {
         setError('กรุณากรอกข้อมูลให้ครบถ้วน');
+        toast({
+          variant: "destructive",
+          title: "เกิดข้อผิดพลาด",
+          description: 'กรุณากรอกข้อมูลให้ครบถ้วน',
+          duration: 10000,
+        });
         return;
       }
       
@@ -242,6 +280,12 @@ export default function EditOvertimePage() {
       
       if (totalHours <= 0) {
         setError('เวลาสิ้นสุดต้องมากกว่าเวลาเริ่มต้น');
+        toast({
+          variant: "destructive",
+          title: "เกิดข้อผิดพลาด",
+          description: 'เวลาสิ้นสุดต้องมากกว่าเวลาเริ่มต้น',
+          duration: 10000,
+        });
         return;
       }
       
@@ -265,6 +309,11 @@ export default function EditOvertimePage() {
       
       if (result.success) {
         setSuccess('บันทึกข้อมูลการทำงานล่วงเวลาเรียบร้อยแล้ว');
+        toast({
+          title: "บันทึกสำเร็จ",
+          description: 'บันทึกข้อมูลการทำงานล่วงเวลาเรียบร้อยแล้ว',
+          duration: 10000,
+        });
         
         // รอสักครู่แล้วนำทางไปหน้ารายการการทำงานล่วงเวลา
         setTimeout(() => {
@@ -272,9 +321,21 @@ export default function EditOvertimePage() {
         }, 1500);
       } else {
         setError(result.message || 'บันทึกข้อมูลไม่สำเร็จ');
+        toast({
+          variant: "destructive",
+          title: "เกิดข้อผิดพลาด",
+          description: result.message || 'บันทึกข้อมูลไม่สำเร็จ',
+          duration: 10000,
+        });
       }
     } catch (error) {
       setError('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์');
+      toast({
+        variant: "destructive",
+        title: "เกิดข้อผิดพลาด",
+        description: 'เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์',
+        duration: 10000,
+      });
       console.error(error);
     } finally {
       setSubmitting(false);
@@ -305,12 +366,6 @@ export default function EditOvertimePage() {
       </div>
       
       {error && <ErrorMessage message={error} />}
-      {success && (
-        <div className="alert alert-success mb-4">
-          <FiInfo size={20} />
-          <span>{success}</span>
-        </div>
-      )}
       
       <div className="card bg-base-100 shadow-xl overflow-hidden">
         <div className="card-body p-6">
