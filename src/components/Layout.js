@@ -264,7 +264,9 @@ export default function Layout({ children }) {
       
       {/* Main content */}
       <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 bg-base-200">
-        {children}
+        <div className="container mx-auto">
+          {children}
+        </div>
       </main>
       
       {/* Footer */}

@@ -10,17 +10,21 @@ const Toaster = ({
   return (
     <Sonner
       theme={theme}
-      className="toaster group"
+      className="toaster"
+      richColors
+      closeButton
+      expanded={false}
       toastOptions={{
-        classNames: {
-          toast:
-            "group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg",
-          description: "group-[.toast]:text-muted-foreground",
-          actionButton:
-            "group-[.toast]:bg-primary group-[.toast]:text-primary-foreground",
-          cancelButton:
-            "group-[.toast]:bg-muted group-[.toast]:text-muted-foreground",
-        },
+        unstyled: true,
+        duration: 5000,
+        style: {
+          backgroundColor: "#ffffff",
+          background: "#ffffff",
+          opacity: 1,
+          color: "#000000",
+          border: "1px solid #e2e8f0",
+          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)"
+        }
       }}
       {...props} />
   );
