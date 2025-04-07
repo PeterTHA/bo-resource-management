@@ -183,7 +183,7 @@ export async function GET(request) {
     });
 
     // ดึงข้อมูลสถานะการทำงาน
-    const workStatuses = await prisma.workStatus.findMany({
+    const workStatuses = await prisma.work_statuses.findMany({
       where: {
         date: {
           gte: startDateTime,
@@ -192,14 +192,41 @@ export async function GET(request) {
       },
       select: {
         id: true,
-        employeeId: true,
+        employee_id: true,
         date: true,
         status: true,
         note: true,
-        createdAt: true,
-        updatedAt: true
+        created_at: true,
+        updated_at: true,
+        employees_work_statuses_employee_idToemployees: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            position: true,
+            image: true
+          }
+        }
       }
     });
+
+    // แปลงชื่อฟิลด์ให้อยู่ในรูปแบบ camelCase
+    const formattedWorkStatuses = workStatuses.map(item => ({
+      id: item.id,
+      employeeId: item.employee_id,
+      date: item.date,
+      status: item.status,
+      note: item.note,
+      createdAt: item.created_at,
+      updatedAt: item.updated_at,
+      employee: item.employees_work_statuses_employee_idToemployees ? {
+        id: item.employees_work_statuses_employee_idToemployees.id,
+        firstName: item.employees_work_statuses_employee_idToemployees.firstName,
+        lastName: item.employees_work_statuses_employee_idToemployees.lastName,
+        position: item.employees_work_statuses_employee_idToemployees.position,
+        image: item.employees_work_statuses_employee_idToemployees.image
+      } : null
+    }));
 
     // ดึงข้อมูลการลาที่อนุมัติแล้ว
     const leaves = await prisma.leave.findMany({
@@ -256,7 +283,7 @@ export async function GET(request) {
       success: true,
       data: {
         employees: employeesWithTeam,
-        workStatuses,
+        workStatuses: formattedWorkStatuses,
         leaves,
         overtimes
       }

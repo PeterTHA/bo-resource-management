@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { parseISO } from 'date-fns';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import crypto from 'crypto';
 
 // GET - ดึงข้อมูลสถานะการทำงาน
 export async function GET(request) {
@@ -275,6 +276,7 @@ export async function POST(req) {
             status,
             note,
             created_by_id: session.user.id, // อัปเดต created_by_id เป็นคนล่าสุดที่แก้ไขข้อมูล
+            updated_at: new Date(), // เพิ่ม updated_at เป็นเวลาปัจจุบัน
           },
           include: {
             employees_work_statuses_employee_idToemployees: {
@@ -331,11 +333,13 @@ export async function POST(req) {
         // ถ้าไม่มีข้อมูลอยู่ ให้สร้างข้อมูลใหม่
         result = await model.create({
           data: {
+            id: crypto.randomUUID(),
             employee_id: employeeId,
             date: formattedDate,
             status,
             note,
-            created_by_id: session.user.id
+            created_by_id: session.user.id,
+            updated_at: new Date(), // เพิ่ม updated_at เป็นเวลาปัจจุบัน
           },
           include: {
             employees_work_statuses_employee_idToemployees: {
@@ -407,6 +411,7 @@ export async function POST(req) {
             status,
             note,
             createdById: session.user.id, // อัปเดต createdById เป็นคนล่าสุดที่แก้ไขข้อมูล
+            updated_at: new Date(), // เพิ่ม updated_at เป็นเวลาปัจจุบัน
           },
           include: {
             employee: {
@@ -432,11 +437,13 @@ export async function POST(req) {
         // ถ้าไม่มีข้อมูลอยู่ ให้สร้างข้อมูลใหม่
         result = await model.create({
           data: {
+            id: crypto.randomUUID(),
             employeeId,
             date: formattedDate,
             status,
             note,
-            createdById: session.user.id
+            createdById: session.user.id,
+            updated_at: new Date(), // เพิ่ม updated_at เป็นเวลาปัจจุบัน
           },
           include: {
             employee: {

@@ -1444,6 +1444,14 @@ export default function LeavesPage() {
         endDate: prev.startDate,
       }));
     }
+    
+    // เมื่อเลือกวันที่เริ่มต้น ให้กำหนดวันที่สิ้นสุดเป็นวันเดียวกัน
+    if (name === 'startDate' && value) {
+      setAddFormData((prev) => ({
+        ...prev,
+        endDate: value,
+      }));
+    }
   };
 
   // จัดการการเพิ่มไฟล์
@@ -1620,6 +1628,19 @@ export default function LeavesPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // ฟังก์ชันบังคับปิด Popover
+  const forceClosePopover = () => {
+    // สร้าง event เพื่อจำลองการคลิกนอก popover
+    const event = new MouseEvent('mousedown', {
+      bubbles: true,
+      cancelable: true,
+      view: window
+    });
+    
+    // กระจาย event ไปที่ document เพื่อบังคับให้ popover ปิด
+    document.dispatchEvent(event);
   };
 
   if (loading) {
@@ -2863,6 +2884,9 @@ export default function LeavesPage() {
                           }
                         };
                         handleAddFormChange(e);
+                        
+                        // บังคับปิด Popover หลังจากเลือกวันที่
+                        setTimeout(forceClosePopover, 100);
                       }
                     }}
                     initialFocus
@@ -2902,9 +2926,24 @@ export default function LeavesPage() {
                           }
                         };
                         handleAddFormChange(e);
+                        
+                        // บังคับปิด Popover หลังจากเลือกวันที่
+                        setTimeout(forceClosePopover, 100);
                       }
                     }}
-                    disabled={(date) => addFormData.startDate ? date < new Date(addFormData.startDate) : false}
+                    disabled={(date) => {
+                      // อนุญาตให้เลือกวันที่ตั้งแต่วันที่เริ่มต้นเป็นต้นไป
+                      if (!addFormData.startDate) return false;
+                      
+                      const startDate = new Date(addFormData.startDate);
+                      startDate.setHours(0, 0, 0, 0);
+                      
+                      const dateToCheck = new Date(date);
+                      dateToCheck.setHours(0, 0, 0, 0);
+                      
+                      // อนุญาตให้เลือกได้ตั้งแต่วันที่เริ่มต้นเป็นต้นไป (>= วันที่เริ่มต้น)
+                      return dateToCheck < startDate;
+                    }}
                     initialFocus
                   />
                 </PopoverContent>

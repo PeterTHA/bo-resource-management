@@ -30,7 +30,7 @@ export async function GET() {
         lastName: true,
         positionTitle: true,
         image: true,
-        workStatuses: {
+        work_statuses_work_statuses_employee_idToemployees: {
           where: {
             date: {
               equals: today
@@ -82,7 +82,7 @@ export async function GET() {
 
     // แปลงข้อมูลให้อยู่ในรูปแบบที่ต้องการและรวมกับข้อมูลการลา
     const formattedEmployees = employees.map(employee => {
-      const todayStatus = employee.workStatuses[0]?.status || 'OFFICE';
+      const todayStatus = employee.work_statuses_work_statuses_employee_idToemployees[0]?.status || 'OFFICE';
       const todayLeave = employeeLeaveMap[employee.id];
       
       const status = todayLeave ? 'LEAVE' : todayStatus;
