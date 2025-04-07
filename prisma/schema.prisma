@@ -7,175 +7,209 @@ datasource db {
   url      = env("POSTGRES_PRISMA_URL")
 }
 
-model Employee {
-  id                String      @id @default(uuid())
-  employeeId        String      @unique @map("employee_id")
-  firstName         String      @map("first_name")
-  lastName          String      @map("last_name")
-  email             String      @unique
-  password          String
-  position          String
-  departmentId      String?     @map("department_id")
-  teamId            String?     @map("team_id")
-  hireDate          DateTime    @map("hire_date")
-  role              String      @default("staff")
-  isActive          Boolean     @default(true) @map("is_active")
-  image             String?
-  createdAt         DateTime    @default(now()) @map("created_at")
-  updatedAt         DateTime    @updatedAt @map("updated_at")
-  birthDate         DateTime?   @map("birth_date")
-  gender            String?
-  phoneNumber       String?     @map("phone_number")
-  positionLevel     String?     @map("position_level")
-  positionTitle     String?     @map("position_title")
-  department        Department? @relation(fields: [departmentId], references: [id])
-  teamData          Team?       @relation(fields: [teamId], references: [id])
-  leaves            Leave[]     @relation("EmployeeLeaves")
-  leaveApprovals    LeaveApproval[] @relation("EmployeeLeaveApprovals")
-  overtimeApprovals OvertimeApproval[] @relation("EmployeeOvertimeApprovals")
-  overtimes         Overtime[]  @relation("EmployeeOvertimes")
-  workStatuses      WorkStatus[] @relation("EmployeeWorkStatuses")
-  createdWorkStatuses WorkStatus[] @relation("WorkStatusCreator")
-
-  @@map("employees")
+model departments {
+  id          String      @id
+  code        String      @unique
+  name        String      @unique
+  description String?
+  created_at  DateTime    @default(now())
+  updated_at  DateTime
+  employees   employees[]
 }
 
-model Leave {
-  id                 String    @id @default(uuid())
-  employeeId         String    @map("employee_id")
-  leaveType          String    @map("leave_type")
-  startDate          DateTime  @map("start_date")
-  endDate            DateTime  @map("end_date")
+model employees {
+  id                                                   String                  @id
+  employee_id                                          String                  @unique
+  first_name                                           String
+  last_name                                            String
+  email                                                String                  @unique
+  password                                             String
+  position                                             String
+  department_id                                        String?
+  team_id                                              String?
+  hire_date                                            DateTime
+  role                                                 String                  @default("staff")
+  is_active                                            Boolean                 @default(true)
+  image                                                String?
+  created_at                                           DateTime                @default(now())
+  updated_at                                           DateTime
+  birth_date                                           DateTime?
+  gender                                               String?
+  phone_number                                         String?
+  position_level                                       String?
+  position_title                                       String?
+  departments                                          departments?            @relation(fields: [department_id], references: [id])
+  teams                                                teams?                  @relation(fields: [team_id], references: [id])
+  leave_approvals                                      leave_approvals[]
+  leaves                                               leaves[]
+  overtime_approvals                                   overtime_approvals[]
+  overtimes                                            overtimes[]
+  project_activity_logs                                project_activity_logs[]
+  project_members                                      project_members[]
+  projects                                             projects[]
+  work_statuses_work_statuses_created_by_idToemployees work_statuses[]         @relation("work_statuses_created_by_idToemployees")
+  work_statuses_work_statuses_employee_idToemployees   work_statuses[]         @relation("work_statuses_employee_idToemployees")
+}
+
+model leave_approvals {
+  id          String    @id
+  leave_id    String
+  employee_id String
+  type        String
+  status      String
+  reason      String?
+  comment     String?
+  created_at  DateTime  @default(now())
+  updated_at  DateTime
+  employees   employees @relation(fields: [employee_id], references: [id])
+  leaves      leaves    @relation(fields: [leave_id], references: [id])
+}
+
+model leaves {
+  id              String            @id
+  employee_id     String
+  leave_type      String
+  start_date      DateTime
+  end_date        DateTime
+  reason          String
+  status          String            @default("waiting_for_approve")
+  created_at      DateTime          @default(now())
+  updated_at      DateTime
+  leave_format    String            @default("เต็มวัน")
+  total_days      Float             @default(0)
+  attachments     String[]          @default([])
+  leave_approvals leave_approvals[]
+  employees       employees         @relation(fields: [employee_id], references: [id])
+}
+
+model overtime_approvals {
+  id          String    @id
+  overtime_id String
+  employee_id String
+  type        String
+  status      String
+  reason      String?
+  comment     String?
+  created_at  DateTime  @default(now())
+  updated_at  DateTime
+  employees   employees @relation(fields: [employee_id], references: [id])
+  overtimes   overtimes @relation(fields: [overtime_id], references: [id])
+}
+
+model overtimes {
+  id                 String               @id
+  employee_id        String
+  date               DateTime
+  start_time         String
+  end_time           String
+  total_hours        Float
   reason             String
-  status             String    @default("waiting_for_approve")
-  createdAt          DateTime  @default(now()) @map("created_at")
-  updatedAt          DateTime  @updatedAt @map("updated_at")
-  attachments        String[]  @default([]) @map("attachments")
-  leaveFormat        String    @default("เต็มวัน") @map("leave_format")
-  totalDays          Float     @default(0) @map("total_days")
-  employee           Employee  @relation("EmployeeLeaves", fields: [employeeId], references: [id])
-  approvals          LeaveApproval[] @relation("LeaveApprovals")
-
-  @@map("leaves")
+  status             String               @default("waiting_for_approve")
+  created_at         DateTime             @default(now())
+  updated_at         DateTime
+  overtime_approvals overtime_approvals[]
+  employees          employees            @relation(fields: [employee_id], references: [id])
 }
 
-model LeaveApproval {
-  id                 String    @id @default(uuid())
-  leaveId            String    @map("leave_id")
-  employeeId         String    @map("employee_id")
-  type               String    // approve, reject, request_cancel, approve_cancel, reject_cancel
-  status             String    // completed, pending
-  reason             String?
-  comment            String?
-  createdAt          DateTime  @default(now()) @map("created_at")
-  updatedAt          DateTime  @updatedAt @map("updated_at")
-  leave              Leave     @relation("LeaveApprovals", fields: [leaveId], references: [id])
-  employee           Employee  @relation("EmployeeLeaveApprovals", fields: [employeeId], references: [id])
-
-  @@map("leave_approvals")
-}
-
-model Overtime {
-  id                String    @id @default(uuid())
-  employeeId        String    @map("employee_id")
-  date              DateTime
-  startTime         String    @map("start_time")
-  endTime           String    @map("end_time")
-  totalHours        Float     @map("total_hours")
-  reason            String
-  status            String    @default("waiting_for_approve")
-  createdAt         DateTime  @default(now()) @map("created_at")
-  updatedAt         DateTime  @updatedAt @map("updated_at")
-  employee          Employee  @relation("EmployeeOvertimes", fields: [employeeId], references: [id])
-  approvals         OvertimeApproval[] @relation("OvertimeApprovals")
-
-  @@map("overtimes")
-}
-
-model OvertimeApproval {
-  id                 String    @id @default(uuid())
-  overtimeId         String    @map("overtime_id")
-  employeeId         String    @map("employee_id")
-  type               String    // approve, reject, request_cancel, approve_cancel, reject_cancel
-  status             String    // completed, pending
-  reason             String?
-  comment            String?
-  createdAt          DateTime  @default(now()) @map("created_at")
-  updatedAt          DateTime  @updatedAt @map("updated_at")
-  overtime           Overtime  @relation("OvertimeApprovals", fields: [overtimeId], references: [id])
-  employee           Employee  @relation("EmployeeOvertimeApprovals", fields: [employeeId], references: [id])
-
-  @@map("overtime_approvals")
-}
-
-model Team {
-  id          String     @id @default(uuid())
-  code        String     @unique
-  name        String     @unique
-  description String?
-  createdAt   DateTime   @default(now()) @map("created_at")
-  updatedAt   DateTime   @updatedAt @map("updated_at")
-  employees   Employee[]
-
-  @@map("teams")
-}
-
-model Department {
-  id          String     @id @default(uuid())
-  code        String     @unique
-  name        String     @unique
-  description String?
-  createdAt   DateTime   @default(now()) @map("created_at")
-  updatedAt   DateTime   @updatedAt @map("updated_at")
-  employees   Employee[]
-
-  @@map("departments")
-}
-
-model Position {
-  id          String   @id @default(uuid())
-  code        String   @unique
-  name        String   @unique
-  category    String
-  description String?
-  isActive    Boolean  @default(true) @map("is_active")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  @@map("positions")
-}
-
-model PositionLevel {
-  id          String   @id @default(uuid())
+model position_levels {
+  id          String   @id
   code        String   @unique
   name        String   @unique
   level       Int
   description String?
-  isActive    Boolean  @default(true) @map("is_active")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  @@map("position_levels")
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+  updated_at  DateTime
 }
 
-enum WorkStatus {
-  OFFICE
-  WFH
-  MIXED
-  OUTSIDE
-}
-
-model WorkStatusRecord {
-  id          String      @id @default(cuid())
-  employeeId  String
-  date        DateTime
-  status      WorkStatus
-  location    String?
+model positions {
+  id          String   @id
+  code        String   @unique
+  name        String   @unique
+  category    String
   description String?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  employee    Employee    @relation(fields: [employeeId], references: [id])
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+  updated_at  DateTime
+}
 
-  @@index([employeeId])
-  @@index([date])
+model project_activity_logs {
+  id          String    @id
+  project_id  String
+  employee_id String
+  action      String
+  details     Json
+  created_at  DateTime  @default(now())
+  employees   employees @relation(fields: [employee_id], references: [id])
+  projects    projects  @relation(fields: [project_id], references: [id], onDelete: Cascade)
+}
+
+model project_members {
+  id            String        @id
+  project_id    String
+  employee_id   String
+  role_id       String
+  joined_at     DateTime      @default(now())
+  left_at       DateTime?
+  is_active     Boolean       @default(true)
+  created_at    DateTime      @default(now())
+  updated_at    DateTime
+  employees     employees     @relation(fields: [employee_id], references: [id])
+  projects      projects      @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  project_roles project_roles @relation(fields: [role_id], references: [id])
+
+  @@unique([project_id, employee_id])
+}
+
+model project_roles {
+  id              String            @id
+  name            String            @unique
+  description     String?
+  permissions     String[]
+  created_at      DateTime          @default(now())
+  updated_at      DateTime
+  project_members project_members[]
+}
+
+model projects {
+  id                    String                  @id
+  name                  String
+  code                  String                  @unique
+  description           String?
+  start_date            DateTime
+  end_date              DateTime?
+  status                String                  @default("active")
+  priority              String                  @default("medium")
+  created_by_id         String
+  attachments           String[]                @default([])
+  created_at            DateTime                @default(now())
+  updated_at            DateTime
+  project_activity_logs project_activity_logs[]
+  project_members       project_members[]
+  employees             employees               @relation(fields: [created_by_id], references: [id])
+}
+
+model teams {
+  id          String      @id
+  code        String      @unique
+  name        String      @unique
+  description String?
+  created_at  DateTime    @default(now())
+  updated_at  DateTime
+  employees   employees[]
+}
+
+model work_statuses {
+  id                                               String    @id
+  employee_id                                      String
+  date                                             DateTime
+  status                                           String    @default("OFFICE")
+  note                                             String?
+  created_by_id                                    String
+  created_at                                       DateTime  @default(now())
+  updated_at                                       DateTime
+  employees_work_statuses_created_by_idToemployees employees @relation("work_statuses_created_by_idToemployees", fields: [created_by_id], references: [id])
+  employees_work_statuses_employee_idToemployees   employees @relation("work_statuses_employee_idToemployees", fields: [employee_id], references: [id])
+
+  @@unique([employee_id, date])
 }

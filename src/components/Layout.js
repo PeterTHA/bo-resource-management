@@ -139,6 +139,14 @@ export default function Layout({ children }) {
                 </Link>
               </li>
               <li className="relative">
+                <Link href="/projects" className={`rounded-md px-4 py-3 flex items-center ${isActive('/projects')}`}>
+                  <div className="flex items-center">
+                    <FiFileText className={`h-5 w-5 mr-2 ${pathname === '/projects' ? 'text-primary' : ''}`} />
+                    <span>โปรเจค</span>
+                  </div>
+                </Link>
+              </li>
+              <li className="relative">
                 <Link href="/reports" className={`rounded-md px-4 py-3 flex items-center ${isActive('/reports')}`}>
                   <div className="flex items-center">
                     <FiFileText className={`h-5 w-5 mr-2 ${pathname === '/reports' ? 'text-primary' : ''}`} />
@@ -247,6 +255,12 @@ export default function Layout({ children }) {
               </Link>
             </li>
             <li>
+              <Link href="/projects" className={`${isActive('/projects')} my-1`}>
+                <FiFileText className={`h-5 w-5 ${pathname === '/projects' ? 'text-primary' : ''}`} />
+                โปรเจค
+              </Link>
+            </li>
+            <li>
               <Link href="/reports" className={`${isActive('/reports')} my-1`}>
                 <FiFileText className={`h-5 w-5 ${pathname === '/reports' ? 'text-primary' : ''}`} />
                 รายงาน
@@ -264,7 +278,9 @@ export default function Layout({ children }) {
       
       {/* Main content */}
       <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 bg-base-200">
-        {children}
+        <div className="container mx-auto">
+          {children}
+        </div>
       </main>
       
       {/* Footer */}

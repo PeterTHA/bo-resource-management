@@ -7,10 +7,12 @@ import Link from 'next/link';
 import { FiSave, FiArrowLeft, FiFileText, FiUser, FiInfo, FiCalendar, FiClock } from 'react-icons/fi';
 import { LoadingSpinner, LoadingPage } from '../../../components/ui/LoadingSpinner';
 import ErrorMessage from '../../../components/ui/ErrorMessage';
+import { useToast } from '@/components/ui/use-toast';
 
 export default function AddOvertimePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const { toast } = useToast();
   const [employees, setEmployees] = useState([]);
   const [formData, setFormData] = useState({
     employeeId: '',
@@ -57,33 +59,85 @@ export default function AddOvertimePage() {
     }
   }, [session]);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  const calculateTotalHours = () => {
-    if (!formData.startTime || !formData.endTime) return 0;
+  const calculateTotalHours = (startTimeValue, endTimeValue) => {
+    // ใช้ค่าที่ส่งเข้ามาถ้ามี มิฉะนั้นใช้ค่าจาก state
+    const startTime = startTimeValue || formData.startTime;
+    const endTime = endTimeValue || formData.endTime;
     
-    const [startHour, startMinute] = formData.startTime.split(':').map(Number);
-    const [endHour, endMinute] = formData.endTime.split(':').map(Number);
+    if (!startTime || !endTime) return 0;
     
-    // คำนวณเวลาเป็นนาที
-    let startMinutes = startHour * 60 + startMinute;
-    let endMinutes = endHour * 60 + endMinute;
-    
-    // ตรวจสอบกรณีข้ามวัน เช่น 21:00 ถึง 01:00
-    if (endMinutes < startMinutes) {
-      endMinutes += 24 * 60; // เพิ่ม 24 ชั่วโมงในกรณีข้ามวัน
+    // ตรวจสอบว่าทั้งเวลาเริ่มต้นและเวลาสิ้นสุดไม่เป็นค่าว่าง
+    if (startTime.trim() === '' || endTime.trim() === '') {
+      return 0;
     }
     
-    // คำนวณความแตกต่างเป็นชั่วโมง
-    let totalHours = (endMinutes - startMinutes) / 60;
+    try {
+      // แยกชั่วโมงและนาที
+      const [startHour, startMinute] = startTime.split(':').map(Number);
+      const [endHour, endMinute] = endTime.split(':').map(Number);
+      
+      if (isNaN(startHour) || isNaN(startMinute) || isNaN(endHour) || isNaN(endMinute)) {
+        return 0;
+      }
+      
+      // คำนวณเวลาเป็นนาที
+      const startMinutes = startHour * 60 + startMinute;
+      const endMinutes = endHour * 60 + endMinute;
+      
+      // เพิ่ม log แสดงข้อมูลการคำนวณ
+      console.log('=== ข้อมูลการคำนวณเวลาทำงานล่วงเวลา (หน้าเพิ่ม) ===');
+      console.log('ค่าที่ใช้คำนวณ - เวลาเริ่มต้น:', startTime);
+      console.log('ค่าที่ใช้คำนวณ - เวลาสิ้นสุด:', endTime);
+      console.log('ค่าใน state - เวลาเริ่มต้น:', formData.startTime);
+      console.log('ค่าใน state - เวลาสิ้นสุด:', formData.endTime);
+      console.log('ชั่วโมงเริ่มต้น:', startHour);
+      console.log('นาทีเริ่มต้น:', startMinute);
+      console.log('ชั่วโมงสิ้นสุด:', endHour);
+      console.log('นาทีสิ้นสุด:', endMinute);
+      console.log('เวลาเริ่มต้น (นาที):', startMinutes);
+      console.log('เวลาสิ้นสุด (นาที):', endMinutes);
+      
+      // คำนวณความแตกต่างเป็นชั่วโมง
+      const diffMinutes = Math.abs(endMinutes - startMinutes);
+      const totalHours = diffMinutes / 60;
+      
+      console.log('ความแตกต่าง (นาที):', diffMinutes);
+      console.log('จำนวนชั่วโมงทำงาน:', totalHours);
+      console.log('จำนวนชั่วโมงทำงาน (หลังปัดทศนิยม):', Number(totalHours.toFixed(2)));
+      console.log('=========================================');
+      
+      // แปลงให้เป็นทศนิยม 2 ตำแหน่ง
+      return Number(totalHours.toFixed(2));
+    } catch (error) {
+      console.error("เกิดข้อผิดพลาดในการคำนวณชั่วโมงทำงาน:", error);
+      return 0;
+    }
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
     
-    return parseFloat(totalHours.toFixed(2));
+    // ถ้าเปลี่ยนเวลาเริ่มหรือเวลาสิ้นสุด ให้คำนวณเวลาใหม่
+    if (name === 'startTime' || name === 'endTime') {
+      // คำนวณชั่วโมงทำงานทันทีโดยใช้ค่าจริงจาก input
+      const updatedTotalHours = calculateTotalHours(
+        name === 'startTime' ? value : formData.startTime,
+        name === 'endTime' ? value : formData.endTime
+      );
+      
+      // รีเซ็ตค่า totalHours ด้วยค่าที่คำนวณใหม่
+      setFormData(prev => ({
+        ...prev,
+        [name]: value,
+        totalHours: updatedTotalHours
+      }));
+    } else {
+      // อัปเดต state ปกติสำหรับฟิลด์อื่น
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -92,11 +146,17 @@ export default function AddOvertimePage() {
     setError('');
     setSuccess('');
 
-    // ตรวจสอบเวลา
+    // ตรวจสอบเวลา - ใช้ฟังก์ชัน calculateTotalHours กับค่าปัจจุบัน
     const totalHours = calculateTotalHours();
     
     if (totalHours <= 0) {
       setError('เวลาสิ้นสุดต้องมากกว่าเวลาเริ่มต้น');
+      toast({
+        variant: "destructive",
+        title: "เกิดข้อผิดพลาด",
+        description: "เวลาสิ้นสุดต้องมากกว่าเวลาเริ่มต้น",
+        duration: 10000,
+      });
       setLoading(false);
       return;
     }
@@ -119,15 +179,32 @@ export default function AddOvertimePage() {
       
       if (data.success) {
         setSuccess('บันทึกข้อมูลการทำงานล่วงเวลาเรียบร้อยแล้ว');
+        toast({
+          title: "บันทึกสำเร็จ",
+          description: "บันทึกข้อมูลการทำงานล่วงเวลาเรียบร้อยแล้ว",
+          duration: 10000,
+        });
         // กลับไปที่หน้ารายการการทำงานล่วงเวลาหลังจาก 2 วินาที
         setTimeout(() => {
           router.push('/overtime');
         }, 2000);
       } else {
         setError(data.message || 'เกิดข้อผิดพลาดในการเพิ่มข้อมูลการทำงานล่วงเวลา');
+        toast({
+          variant: "destructive",
+          title: "เกิดข้อผิดพลาด",
+          description: data.message || 'เกิดข้อผิดพลาดในการเพิ่มข้อมูลการทำงานล่วงเวลา',
+          duration: 10000,
+        });
       }
     } catch (error) {
       setError('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์');
+      toast({
+        variant: "destructive",
+        title: "เกิดข้อผิดพลาด",
+        description: 'เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์',
+        duration: 10000,
+      });
       console.error(error);
     } finally {
       setLoading(false);
@@ -270,7 +347,26 @@ export default function AddOvertimePage() {
               {formData.startTime && formData.endTime && (
                 <div className="md:col-span-2">
                   <div className="mt-6 bg-base-200 rounded-lg p-4">
-                    <div className="font-semibold mb-1">จำนวนชั่วโมงทำงานล่วงเวลา: {calculateTotalHours()} ชั่วโมง</div>
+                    <div className="font-semibold mb-1">
+                      จำนวนชั่วโมงทำงานล่วงเวลา: {calculateTotalHours() === 1 ? '1' : calculateTotalHours()} ชั่วโมง
+                      {formData.startTime && formData.endTime && 
+                        (() => {
+                          const [startHour, startMinute] = formData.startTime.split(':').map(Number);
+                          const [endHour, endMinute] = formData.endTime.split(':').map(Number);
+                          const startMinutes = startHour * 60 + startMinute;
+                          const endMinutes = endHour * 60 + endMinute;
+                          
+                          if (startMinutes > endMinutes) {
+                            return (
+                              <div className="text-sm text-yellow-600 mt-1">
+                                หมายเหตุ: เวลาเริ่มต้นมากกว่าเวลาสิ้นสุด กรุณาตรวจสอบความถูกต้อง
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()
+                      }
+                    </div>
                   </div>
                 </div>
               )}

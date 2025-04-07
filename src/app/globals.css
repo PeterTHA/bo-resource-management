@@ -32,6 +32,16 @@
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
     --radius: 0.5rem;
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+    --toast-bg: 0 0% 100%;
+    --toast-fg: 0 0% 3.9%;
   }
   .dark {
     --background: 0 0% 3.9%;
@@ -58,6 +68,16 @@
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+    --toast-bg: 240 10% 3.9%;
+    --toast-fg: 0 0% 98%;
   }
 }
 
@@ -178,8 +198,6 @@ input:focus, select:focus, textarea:focus {
   }
 }
 
-
-
 @layer base {
   * {
     @apply border-border;
@@ -187,4 +205,68 @@ input:focus, select:focus, textarea:focus {
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* แก้ไข Sonner Toast */
+[data-sonner-toaster],
+div[data-sonner-toaster],
+div[id^="sonner"] {
+  position: fixed !important;
+  z-index: 9999 !important;
+  bottom: 1rem !important;
+  right: 1rem !important;
+}
+
+[data-sonner-toast],
+div[data-sonner-toast],
+[role="status"],
+.sonner-toast {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  color: #000000 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  opacity: 1 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+[data-sonner-toast][data-styled="true"][data-type="success"],
+div[data-sonner-toast][data-styled="true"][data-type="success"] {
+  background: #22c55e !important;
+  background-color: #22c55e !important;
+  color: white !important;
+}
+
+[data-sonner-toast][data-styled="true"][data-type="error"],
+div[data-sonner-toast][data-styled="true"][data-type="error"] {
+  background: #ef4444 !important;
+  background-color: #ef4444 !important;
+  color: white !important;
+}
+
+[data-sonner-toast][data-styled="true"][data-type="warning"],
+div[data-sonner-toast][data-styled="true"][data-type="warning"] {
+  background: #f59e0b !important;
+  background-color: #f59e0b !important;
+  color: white !important;
+}
+
+[data-sonner-toast][data-styled="true"][data-type="info"],
+div[data-sonner-toast][data-styled="true"][data-type="info"] {
+  background: #3b82f6 !important;
+  background-color: #3b82f6 !important;
+  color: white !important;
+}
+
+/* ทำให้ข้อความใน toast สถานะต่างๆ เป็นสีขาว */
+[data-sonner-toast][data-styled="true"][data-type="success"] [data-title],
+[data-sonner-toast][data-styled="true"][data-type="success"] [data-description],
+[data-sonner-toast][data-styled="true"][data-type="error"] [data-title],
+[data-sonner-toast][data-styled="true"][data-type="error"] [data-description],
+[data-sonner-toast][data-styled="true"][data-type="warning"] [data-title],
+[data-sonner-toast][data-styled="true"][data-type="warning"] [data-description],
+[data-sonner-toast][data-styled="true"][data-type="info"] [data-title],
+[data-sonner-toast][data-styled="true"][data-type="info"] [data-description] {
+  color: white !important;
 }

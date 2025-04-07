@@ -152,43 +152,23 @@ export default function OvertimePage() {
       const data = await res.json();
       
       if (data.success) {
-        // ตรวจสอบสถานะการขอยกเลิกของแต่ละรายการ
-        const overtimesWithStatus = data.data.map(overtime => {
-          // ตรวจสอบว่ามีคำขอยกเลิกที่ยังรออนุมัติหรือไม่
-          const hasPendingCancelRequest = overtime.approvals?.some(a => 
-            a.type === 'request_cancel' && 
-            a.status === 'completed' && 
-            !overtime.approvals.some(b => 
-              (b.type === 'approve_cancel' || b.type === 'reject_cancel') && 
-              b.status === 'completed' && 
-              b.createdAt > a.createdAt
-            )
-          );
-          
-          // เพิ่ม flag เพื่อใช้ในการแสดงผล
-          return {
-            ...overtime,
-            isDuringCancel: hasPendingCancelRequest
-          };
-        });
-        
-        setOvertimes(overtimesWithStatus);
+        setOvertimes(data.data);
         
         // คำนวณจำนวนข้อมูลแต่ละสถานะ
         const counts = {
-          all: overtimesWithStatus.length,
-          pending: overtimesWithStatus.filter(overtime => overtime.status === 'waiting_for_approve').length,
-          approved: overtimesWithStatus.filter(overtime => 
-            overtime.status === 'approved' && 
-            !overtime.isDuringCancel
+          all: data.data.length,
+          pending: data.data.filter(overtime => overtime.status === 'waiting_for_approve').length,
+          approved: data.data.filter(overtime => 
+            overtime.status === 'approved'
           ).length,
-          rejected: overtimesWithStatus.filter(overtime => overtime.status === 'rejected').length,
-          cancelled: overtimesWithStatus.filter(overtime => 
+          rejected: data.data.filter(overtime => overtime.status === 'rejected').length,
+          cancelled: data.data.filter(overtime => 
             overtime.status === 'canceled' || 
-            overtime.isCancelled === true ||
-            overtime.approvals?.some(a => a.type === 'approve_cancel' && a.status === 'completed')
+            overtime.isCancelled === true
           ).length,
-          pendingCancel: overtimesWithStatus.filter(overtime => overtime.isDuringCancel).length
+          pendingCancel: data.data.filter(overtime => 
+            overtime.status === 'approved' && overtime.cancelStatus === 'waiting_for_approve'
+          ).length
         };
         setStatusCounts(counts);
       } else {
@@ -445,16 +425,6 @@ export default function OvertimePage() {
   };
 
   // กรองข้อมูลตามเงื่อนไข
-  // ฟังก์ชันสำหรับแปลงรูปแบบวันที่
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("th-TH", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-  };
-
   const filteredOvertimes = useMemo(() => {
     let result = [...overtimes];
     
@@ -464,18 +434,21 @@ export default function OvertimePage() {
     } else if (filter === 'approved') {
       result = result.filter(overtime => 
         overtime.status === 'approved' && 
-        !overtime.isDuringCancel
+        !overtime.isCancelled && 
+        overtime.cancelStatus !== 'waiting_for_approve'
       );
     } else if (filter === 'rejected') {
       result = result.filter(overtime => overtime.status === 'rejected');
     } else if (filter === 'cancelled') {
       result = result.filter(overtime => 
         overtime.status === 'canceled' || 
-        overtime.isCancelled === true ||
-        overtime.approvals?.some(a => a.type === 'approve_cancel' && a.status === 'completed')
+        overtime.isCancelled === true
       );
     } else if (filter === 'pendingCancel') {
-      result = result.filter(overtime => overtime.isDuringCancel);
+      result = result.filter(overtime => 
+        overtime.status === 'approved' && 
+        overtime.cancelStatus === 'waiting_for_approve'
+      );
     }
     
     // ค้นหาตามข้อความ (เฉพาะชื่อพนักงาน)
@@ -516,6 +489,15 @@ export default function OvertimePage() {
     return filteredOvertimes.slice(startIndex, startIndex + pageSize);
   }, [filteredOvertimes, currentPage, pageSize]);
 
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('th-TH', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric'
+    });
+  };
 
   // เพิ่มฟังก์ชันสำหรับจัดรูปแบบเวลา
   const formatTime = (timeString) => {
@@ -578,14 +560,14 @@ export default function OvertimePage() {
     // พนักงานลบของตัวเองได้เฉพาะเมื่อสถานะเป็น 'รออนุมัติ' เท่านั้น
     if ((session.user.id === overtime.employeeId) && 
         overtime.status === 'waiting_for_approve' && 
-        !overtime.isDuringCancel) {
+        overtime.cancelStatus !== 'waiting_for_approve') {
       return true;
     }
     
     // แอดมินก็ลบได้เฉพาะเมื่อสถานะเป็น 'รออนุมัติ' เท่านั้น
     if (session.user.role === 'admin' && 
         overtime.status === 'waiting_for_approve' && 
-        !overtime.isDuringCancel) {
+        overtime.cancelStatus !== 'waiting_for_approve') {
       return true;
     }
     
@@ -740,11 +722,11 @@ export default function OvertimePage() {
     }
   };
 
-  // ฟังก์ชันสำหรับการอนุมัติการยกเลิกเมื่อกดปุ่มยืนยันใน dialog
-  const handleApproveCancel = async () => {
+  // ฟังก์ชันสำหรับการอนุมัติการยกเลิก
+  const handleApproveCancel = async (id) => {
     try {
       setActionLoading(true);
-      const res = await fetch(`/api/overtime/${selectedOvertimeId}`, {
+      const res = await fetch(`/api/overtime/${id || selectedOvertimeId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -1195,7 +1177,7 @@ export default function OvertimePage() {
   }
 
   return (
-    <div className="py-4 space-y-4">
+    <div className="container py-4 space-y-4">
       <Toaster />
       <h1 className="text-2xl font-bold flex items-center">
         <FiClock className="mr-2" /> รายการทำงานล่วงเวลา
@@ -1461,7 +1443,7 @@ export default function OvertimePage() {
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400">
                             ยกเลิก
                           </span>
-                        ) : overtime.isDuringCancel ? (
+                        ) : overtime.status === 'approved' && overtime.cancelStatus === 'waiting_for_approve' ? (
                           <div className="flex flex-col gap-1">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400`}>
                               ขอยกเลิก
@@ -1543,7 +1525,7 @@ export default function OvertimePage() {
                         {canManageCancelRequest(overtime) && (
                           <button 
                             className="p-1 rounded-md text-green-600 hover:text-green-700 dark:text-green-500 dark:hover:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30 focus:outline-none"
-                            onClick={() => handleShowApproveCancelModal(overtime.id)}
+                            onClick={() => handleApproveCancel(overtime.id)}
                             title="อนุมัติการยกเลิก"
                           >
                             <FiCheckCircle className="h-4 w-4" />
@@ -1872,23 +1854,13 @@ export default function OvertimePage() {
                       <div>
                         <div className="font-medium text-sm">สถานะการยกเลิก</div>
                         <div>
-                          {selectedOvertimeDetail.isDuringCancel ? (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                              รออนุมัติการยกเลิก
-                            </span>
-                          ) : selectedOvertimeDetail.approvals?.some(a => a.type === 'approve_cancel' && a.status === 'completed') ? (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              อนุมัติการยกเลิก
-                            </span>
-                          ) : selectedOvertimeDetail.approvals?.some(a => a.type === 'reject_cancel' && a.status === 'completed') ? (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                              ไม่อนุมัติการยกเลิก
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                              ไม่มีข้อมูล
-                            </span>
-                          )}
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            selectedOvertimeDetail.cancelStatus === 'approved' ? 'bg-green-100 text-green-800' : 
+                            selectedOvertimeDetail.cancelStatus === 'rejected' ? 'bg-red-100 text-red-800' : 
+                            'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {getCancelStatusText(selectedOvertimeDetail.cancelStatus)}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -2184,7 +2156,7 @@ export default function OvertimePage() {
           <AlertDialogFooter className="mt-4">
             <AlertDialogCancel disabled={isSubmitting}>ยกเลิก</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleApproveCancel}
+              onClick={() => handleApproveCancel(cancelRequestId)}
               className="bg-primary hover:bg-primary/90"
               disabled={isSubmitting}
             >
