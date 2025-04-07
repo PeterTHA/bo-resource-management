@@ -139,6 +139,14 @@ export default function Layout({ children }) {
                 </Link>
               </li>
               <li className="relative">
+                <Link href="/projects" className={`rounded-md px-4 py-3 flex items-center ${isActive('/projects')}`}>
+                  <div className="flex items-center">
+                    <FiFileText className={`h-5 w-5 mr-2 ${pathname === '/projects' ? 'text-primary' : ''}`} />
+                    <span>โปรเจค</span>
+                  </div>
+                </Link>
+              </li>
+              <li className="relative">
                 <Link href="/reports" className={`rounded-md px-4 py-3 flex items-center ${isActive('/reports')}`}>
                   <div className="flex items-center">
                     <FiFileText className={`h-5 w-5 mr-2 ${pathname === '/reports' ? 'text-primary' : ''}`} />
@@ -244,6 +252,12 @@ export default function Layout({ children }) {
               <Link href="/employee-calendar" className={`${isActive('/employee-calendar')} my-1`}>
                 <FiCalendar className={`h-5 w-5 ${pathname === '/employee-calendar' ? 'text-primary' : ''}`} />
                 ปฏิทินพนักงาน
+              </Link>
+            </li>
+            <li>
+              <Link href="/projects" className={`${isActive('/projects')} my-1`}>
+                <FiFileText className={`h-5 w-5 ${pathname === '/projects' ? 'text-primary' : ''}`} />
+                โปรเจค
               </Link>
             </li>
             <li>

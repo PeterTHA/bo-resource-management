@@ -92,15 +92,17 @@ export default function WorkStatusModal({ isOpen, onClose, employee, date, onSav
     try {
       if (endDate) {
         // สร้าง Date object ที่เป็น UTC เวลา 12:00 น. เพื่อป้องกันปัญหา timezone
-        const inputDate = new Date(startDateObj);
+        const inputDate = new Date(endDate);
         const year = inputDate.getFullYear();
         const month = inputDate.getMonth();
         const day = inputDate.getDate();
         const utcDate = new Date(Date.UTC(year, month, day, 12, 0, 0));
         
         console.log('Submitting work status:');
-        console.log('- Original date:', startDateObj.toISOString());
+        console.log('- Original date:', endDate);
+        console.log('- Original date ISO:', inputDate.toISOString());
         console.log('- UTC date to submit:', utcDate.toISOString());
+        console.log('- Local date (th-TH):', utcDate.toLocaleDateString('th-TH'));
         console.log('- Status:', status);
         
         // สำหรับการบันทึกวันเดียว
@@ -121,11 +123,14 @@ export default function WorkStatusModal({ isOpen, onClose, employee, date, onSav
         const data = await response.json();
         
         if (data.success) {
-          toast.success(data.message || 'บันทึกข้อมูลสำเร็จ');
-          onSave({
-            ...data.data,
-            forceRefresh: true // เพิ่ม flag ให้รีเฟรชข้อมูลใหม่
-          });
+          toast.success(data.message || 'บันทึกสถานะการทำงานเรียบร้อยแล้ว');
+          if (onSave) {
+            const savedData = {
+              ...data.data,
+              forceRefresh: true
+            };
+            onSave(savedData);
+          }
           onClose();
         } else {
           toast.error(data.message || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล');
@@ -133,7 +138,7 @@ export default function WorkStatusModal({ isOpen, onClose, employee, date, onSav
       }
     } catch (error) {
       console.error('Error saving work status:', error);
-      toast.error('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+      toast.error('เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาลองใหม่อีกครั้ง');
     } finally {
       setLoading(false);
     }

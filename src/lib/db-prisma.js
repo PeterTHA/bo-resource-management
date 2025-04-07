@@ -1508,140 +1508,251 @@ export async function getEmployeeCalendarData(startDate, endDate) {
     
     console.log('Calendar range - start:', start.toISOString(), 'end:', end.toISOString());
     
+    // ตรวจสอบว่ามี prisma.workStatus หรือไม่
+    const hasWorkStatus = typeof prisma.workStatus !== 'undefined';
+    
     // สร้าง Promise ทั้งหมดเพื่อดึงข้อมูลพร้อมกัน
-    const [employees, leaves, overtimes, workStatuses] = await Promise.all([
-      // ดึงข้อมูลพนักงานเฉพาะที่ active และเฉพาะฟิลด์ที่จำเป็น
-      prisma.employee.findMany({
-        where: {
-          isActive: true,
-        },
-        select: {
-          id: true,
-          employeeId: true,
-          firstName: true,
-          lastName: true,
-          email: true,
-          position: true,
-          department: true,
-          role: true,
-          image: true,
-          teamId: true,
-          teamData: {
-            select: {
-              id: true,
-              name: true,
-              code: true
+    let employees = [], leaves = [], overtimes = [], workStatuses = [];
+    
+    if (hasWorkStatus) {
+      // ถ้ามี workStatus model ให้ดึงข้อมูลทั้งหมดพร้อมกัน
+      [employees, leaves, overtimes, workStatuses] = await Promise.all([
+        // ดึงข้อมูลพนักงานเฉพาะที่ active และเฉพาะฟิลด์ที่จำเป็น
+        prisma.employee.findMany({
+          where: {
+            isActive: true,
+          },
+          select: {
+            id: true,
+            employeeId: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            position: true,
+            department: true,
+            role: true,
+            image: true,
+            teamId: true,
+            teamData: {
+              select: {
+                id: true,
+                name: true,
+                code: true
+              }
             }
-          }
-        },
-        orderBy: {
-          firstName: 'asc',
-        },
-      }),
-      
-      // ดึงข้อมูลการลาในช่วงเวลาที่กำหนด (เฉพาะที่ได้รับอนุมัติหรือรออนุมัติ)
-      prisma.leave.findMany({
-        where: {
-          startDate: {
-            lte: end,
           },
-          endDate: {
-            gte: start,
+          orderBy: {
+            firstName: 'asc',
           },
-          // เฉพาะที่ได้รับอนุมัติหรือรออนุมัติ
-          status: {
-            in: ['approved', 'waiting_for_approve']
-          }
-        },
-        select: {
-          id: true,
-          employeeId: true,
-          startDate: true,
-          endDate: true,
-          leaveType: true,
-          totalDays: true,
-          status: true,
-          reason: true,
-          employee: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              position: true,
-              teamId: true,
+        }),
+        
+        // ดึงข้อมูลการลาในช่วงเวลาที่กำหนด (เฉพาะที่ได้รับอนุมัติหรือรออนุมัติ)
+        prisma.leave.findMany({
+          where: {
+            startDate: {
+              lte: end,
             },
-          },
-        },
-      }),
-      
-      // ดึงข้อมูลการทำงานล่วงเวลาในช่วงเวลาที่กำหนด
-      prisma.overtime.findMany({
-        where: {
-          date: {
-            gte: start,
-            lte: end,
-          },
-          // เฉพาะที่ได้รับอนุมัติหรือรออนุมัติ
-          status: {
-            in: ['approved', 'waiting_for_approve']
-          }
-        },
-        select: {
-          id: true,
-          employeeId: true,
-          date: true,
-          startTime: true,
-          endTime: true,
-          totalHours: true,
-          status: true,
-          reason: true,
-          employee: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              position: true,
-              teamId: true,
+            endDate: {
+              gte: start,
             },
+            // เฉพาะที่ได้รับอนุมัติหรือรออนุมัติ
+            status: {
+              in: ['approved', 'waiting_for_approve']
+            }
           },
-        },
-      }),
-      
-      // ดึงข้อมูลสถานะการทำงาน
-      prisma.workStatus.findMany({
-        where: {
-          date: {
-            gte: start,
-            lte: end,
-          },
-        },
-        select: {
-          id: true,
-          employeeId: true,
-          date: true,
-          status: true,
-          note: true,
-          employee: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              position: true,
-              teamId: true,
-              teamData: {
-                select: {
-                  id: true,
-                  name: true
-                }
+          select: {
+            id: true,
+            employeeId: true,
+            startDate: true,
+            endDate: true,
+            leaveType: true,
+            totalDays: true,
+            status: true,
+            reason: true,
+            employee: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                position: true,
+                teamId: true,
               },
             },
           },
-        },
-        orderBy: {
-          date: 'desc',
-        },
-      })
-    ]);
+        }),
+        
+        // ดึงข้อมูลการทำงานล่วงเวลาในช่วงเวลาที่กำหนด
+        prisma.overtime.findMany({
+          where: {
+            date: {
+              gte: start,
+              lte: end,
+            },
+            // เฉพาะที่ได้รับอนุมัติหรือรออนุมัติ
+            status: {
+              in: ['approved', 'waiting_for_approve']
+            }
+          },
+          select: {
+            id: true,
+            employeeId: true,
+            date: true,
+            startTime: true,
+            endTime: true,
+            totalHours: true,
+            status: true,
+            reason: true,
+            employee: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                position: true,
+                teamId: true,
+              },
+            },
+          },
+        }),
+        
+        // ดึงข้อมูลสถานะการทำงาน
+        prisma.workStatus.findMany({
+          where: {
+            date: {
+              gte: start,
+              lte: end,
+            },
+          },
+          select: {
+            id: true,
+            employeeId: true,
+            date: true,
+            status: true,
+            note: true,
+            employee: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                position: true,
+                teamId: true,
+                teamData: {
+                  select: {
+                    id: true,
+                    name: true
+                  }
+                },
+              },
+            },
+          },
+          orderBy: {
+            date: 'desc',
+          },
+        })
+      ]);
+    } else {
+      // ถ้าไม่มี workStatus model ให้ดึงข้อมูลเฉพาะ employee, leave, และ overtime
+      [employees, leaves, overtimes] = await Promise.all([
+        // ดึงข้อมูลพนักงานเฉพาะที่ active และเฉพาะฟิลด์ที่จำเป็น
+        prisma.employee.findMany({
+          where: {
+            isActive: true,
+          },
+          select: {
+            id: true,
+            employeeId: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            position: true,
+            department: true,
+            role: true,
+            image: true,
+            teamId: true,
+            teamData: {
+              select: {
+                id: true,
+                name: true,
+                code: true
+              }
+            }
+          },
+          orderBy: {
+            firstName: 'asc',
+          },
+        }),
+        
+        // ดึงข้อมูลการลาในช่วงเวลาที่กำหนด (เฉพาะที่ได้รับอนุมัติหรือรออนุมัติ)
+        prisma.leave.findMany({
+          where: {
+            startDate: {
+              lte: end,
+            },
+            endDate: {
+              gte: start,
+            },
+            // เฉพาะที่ได้รับอนุมัติหรือรออนุมัติ
+            status: {
+              in: ['approved', 'waiting_for_approve']
+            }
+          },
+          select: {
+            id: true,
+            employeeId: true,
+            startDate: true,
+            endDate: true,
+            leaveType: true,
+            totalDays: true,
+            status: true,
+            reason: true,
+            employee: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                position: true,
+                teamId: true,
+              },
+            },
+          },
+        }),
+        
+        // ดึงข้อมูลการทำงานล่วงเวลาในช่วงเวลาที่กำหนด
+        prisma.overtime.findMany({
+          where: {
+            date: {
+              gte: start,
+              lte: end,
+            },
+            // เฉพาะที่ได้รับอนุมัติหรือรออนุมัติ
+            status: {
+              in: ['approved', 'waiting_for_approve']
+            }
+          },
+          select: {
+            id: true,
+            employeeId: true,
+            date: true,
+            startTime: true,
+            endTime: true,
+            totalHours: true,
+            status: true,
+            reason: true,
+            employee: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                position: true,
+                teamId: true,
+              },
+            },
+          },
+        })
+      ]);
+      
+      // ให้ workStatuses เป็น array ว่าง
+      workStatuses = [];
+    }
     
     return {
       success: true,
@@ -1661,17 +1772,68 @@ export async function getEmployeeCalendarData(startDate, endDate) {
 /**
  * ฟังก์ชันสำหรับดึงข้อมูลสถานะการทำงาน (WFH)
  */
-export async function getWorkStatuses(employeeId = null, date = null) {
+export async function getWorkStatuses(employeeId = null, date = null, startDate = null, endDate = null) {
   try {
+    // ตรวจสอบว่ามี workStatus model หรือไม่
+    if (typeof prisma.workStatus === 'undefined') {
+      return {
+        success: false,
+        message: 'โมเดล workStatus ยังไม่พร้อมใช้งาน กรุณาตรวจสอบการติดตั้งฐานข้อมูล',
+        data: []
+      };
+    }
+    
+    console.log('================ WORK STATUS FETCH DEBUG ================');
+    
     const whereClause = {};
     
     if (employeeId) {
       whereClause.employeeId = employeeId;
+      console.log('Filtering by employeeId:', employeeId);
     }
     
     if (date) {
-      whereClause.date = new Date(date);
+      // แปลงวันที่เป็น UTC เวลา 12:00 น. เพื่อป้องกันปัญหา timezone
+      const dateObj = new Date(date);
+      const year = dateObj.getFullYear();
+      const month = dateObj.getMonth();
+      const day = dateObj.getDate();
+      const utcDate = new Date(Date.UTC(year, month, day, 12, 0, 0));
+      
+      whereClause.date = utcDate;
+      console.log('Filtering by specific date (UTC):', utcDate.toISOString());
     }
+    else if (startDate && endDate) {
+      // ถ้ามีทั้งวันที่เริ่มต้นและวันที่สิ้นสุด
+      const startObj = new Date(startDate);
+      const endObj = new Date(endDate);
+      
+      // แปลงเป็น UTC โดยวันเริ่มต้นเวลา 00:00:00 และวันสิ้นสุดเวลา 23:59:59
+      const startUTC = new Date(Date.UTC(
+        startObj.getFullYear(),
+        startObj.getMonth(),
+        startObj.getDate(),
+        0, 0, 0
+      ));
+      
+      const endUTC = new Date(Date.UTC(
+        endObj.getFullYear(),
+        endObj.getMonth(),
+        endObj.getDate(),
+        23, 59, 59
+      ));
+      
+      whereClause.date = {
+        gte: startUTC,
+        lte: endUTC
+      };
+      
+      console.log('Filtering by date range:');
+      console.log('- Start (UTC):', startUTC.toISOString());
+      console.log('- End (UTC):', endUTC.toISOString());
+    }
+    
+    console.log('Final where clause:', JSON.stringify(whereClause, null, 2));
     
     const workStatuses = await prisma.workStatus.findMany({
       where: whereClause,
@@ -1701,9 +1863,34 @@ export async function getWorkStatuses(employeeId = null, date = null) {
       },
     });
     
+    console.log(`Found ${workStatuses.length} work status records`);
+    
+    // แปลงวันที่ในผลลัพธ์ให้เป็น UTC เพื่อให้มีรูปแบบที่แน่นอน
+    const processedResults = workStatuses.map(item => {
+      if (item.date) {
+        const dateObj = new Date(item.date);
+        const year = dateObj.getFullYear();
+        const month = dateObj.getMonth();
+        const day = dateObj.getDate();
+        // ตั้งเวลาให้เป็น 12:00 น. UTC เพื่อป้องกันปัญหา timezone
+        item.date = new Date(Date.UTC(year, month, day, 12, 0, 0));
+      }
+      return item;
+    });
+    
+    if (processedResults.length > 0) {
+      console.log('Sample processed results:');
+      console.log('- First date:', processedResults[0].date?.toISOString());
+      if (processedResults.length > 1) {
+        console.log('- Last date:', processedResults[processedResults.length-1].date?.toISOString());
+      }
+    }
+    
+    console.log('===================================================');
+    
     return {
       success: true,
-      data: workStatuses,
+      data: processedResults,
     };
   } catch (error) {
     console.error('Error fetching work statuses:', error);

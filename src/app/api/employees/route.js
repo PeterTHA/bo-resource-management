@@ -29,6 +29,7 @@ export async function GET(req) {
     // ตรวจสอบ query parameters
     const url = new URL(req.url);
     const includeInactive = url.searchParams.get('includeInactive') === 'true';
+    const includeAll = url.searchParams.get('includeAll') === 'true';
     
     // สร้างเงื่อนไขการค้นหา
     const where = {};
@@ -37,7 +38,8 @@ export async function GET(req) {
     }
     
     // ถ้าไม่ใช่ admin จะเห็นเฉพาะพนักงานในทีมเดียวกัน หรือตัวเอง
-    if (session.user.role !== 'admin') {
+    // เว้นแต่จะมีการระบุ includeAll=true
+    if (session.user.role !== 'admin' && !includeAll) {
       // ทุกคนที่ไม่ใช่ admin จะไม่เห็นข้อมูลของ admin
       where.role = { not: 'admin' };
       

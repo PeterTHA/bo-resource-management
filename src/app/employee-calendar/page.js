@@ -239,11 +239,29 @@ export default function EmployeeCalendarPage() {
       const startDate = getStartDate();
       const endDate = getEndDate();
       
+      // แปลงวันที่เป็น UTC โดยกำหนดเวลาเพื่อป้องกันปัญหา timezone
+      const startUTC = new Date(Date.UTC(
+        startDate.getFullYear(),
+        startDate.getMonth(),
+        startDate.getDate(),
+        0, 0, 0
+      ));
+      
+      const endUTC = new Date(Date.UTC(
+        endDate.getFullYear(),
+        endDate.getMonth(),
+        endDate.getDate(),
+        23, 59, 59
+      ));
+      
+      console.log('======== CALENDAR DATA FETCH ========');
+      console.log(`Fetching calendar data from ${startUTC.toISOString()} to ${endUTC.toISOString()}`);
+      
       // ตรวจสอบว่ามีข้อมูลใน cache หรือไม่ และถ้ามี ข้อมูลเป็นช่วงเวลาเดียวกันหรือไม่
       const isSameRange = calendarDataCache.startDate && 
                           calendarDataCache.endDate && 
-                          calendarDataCache.startDate.toISOString() === startDate.toISOString() && 
-                          calendarDataCache.endDate.toISOString() === endDate.toISOString();
+                          calendarDataCache.startDate.toISOString() === startUTC.toISOString() && 
+                          calendarDataCache.endDate.toISOString() === endUTC.toISOString();
                           
       const cacheIsValid = calendarDataCache.lastFetched && 
                           (new Date().getTime() - calendarDataCache.lastFetched.getTime()) < 60000 && // cache หมดอายุใน 1 นาที
@@ -269,7 +287,7 @@ export default function EmployeeCalendarPage() {
       
       // ดึงข้อมูลใหม่จาก API
       console.log('Fetching new calendar data');
-      const response = await fetch(`/api/employee-calendar?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`, {
+      const response = await fetch(`/api/employee-calendar?startDate=${startUTC.toISOString()}&endDate=${endUTC.toISOString()}`, {
         signal: abortControllerRef.current.signal
       });
       
@@ -278,19 +296,70 @@ export default function EmployeeCalendarPage() {
       if (data.success) {
         // อัปเดตข้อมูลใน state
         setEmployees(data.data.employees || []);
-        setWorkStatuses(data.data.workStatuses || []);
-        setLeaves(data.data.leaves || []);
-        setOvertimes(data.data.overtimes || []);
+        
+        // แปลงวันที่ใน workStatuses ให้เป็น UTC format
+        const processedWorkStatuses = (data.data.workStatuses || []).map(item => {
+          if (item.date) {
+            const dateObj = new Date(item.date);
+            item.date = new Date(Date.UTC(
+              dateObj.getFullYear(),
+              dateObj.getMonth(),
+              dateObj.getDate(),
+              12, 0, 0
+            ));
+          }
+          return item;
+        });
+        setWorkStatuses(processedWorkStatuses);
+        
+        // แปลงวันที่ใน leaves ให้เป็น UTC format
+        const processedLeaves = (data.data.leaves || []).map(item => {
+          if (item.startDate) {
+            const startDateObj = new Date(item.startDate);
+            item.startDate = new Date(Date.UTC(
+              startDateObj.getFullYear(),
+              startDateObj.getMonth(),
+              startDateObj.getDate(),
+              0, 0, 0
+            ));
+          }
+          if (item.endDate) {
+            const endDateObj = new Date(item.endDate);
+            item.endDate = new Date(Date.UTC(
+              endDateObj.getFullYear(),
+              endDateObj.getMonth(),
+              endDateObj.getDate(),
+              23, 59, 59
+            ));
+          }
+          return item;
+        });
+        setLeaves(processedLeaves);
+        
+        // แปลงวันที่ใน overtimes ให้เป็น UTC format
+        const processedOvertimes = (data.data.overtimes || []).map(item => {
+          if (item.date) {
+            const dateObj = new Date(item.date);
+            item.date = new Date(Date.UTC(
+              dateObj.getFullYear(),
+              dateObj.getMonth(),
+              dateObj.getDate(),
+              12, 0, 0
+            ));
+          }
+          return item;
+        });
+        setOvertimes(processedOvertimes);
         
         // บันทึกข้อมูลลง cache
         calendarDataCache = {
           employees: data.data.employees || [],
-          workStatuses: data.data.workStatuses || [],
-          leaves: data.data.leaves || [],
-          overtimes: data.data.overtimes || [],
+          workStatuses: processedWorkStatuses,
+          leaves: processedLeaves,
+          overtimes: processedOvertimes,
           lastFetched: new Date(),
-          startDate: startDate,
-          endDate: endDate
+          startDate: startUTC,
+          endDate: endUTC
         };
         
         // จัดกลุ่มพนักงานตามทีม
@@ -305,9 +374,12 @@ export default function EmployeeCalendarPage() {
         }
         
         setError('');
+        console.log('Calendar data fetched successfully');
       } else {
         setError(data.message || 'ไม่สามารถดึงข้อมูลได้');
+        console.error('Error from API:', data.message);
       }
+      console.log('===================================');
     } catch (err) {
       // ไม่แสดงข้อความ error ถ้าเป็นการยกเลิกโดยตั้งใจ
       if (err.name !== 'AbortError') {
@@ -989,7 +1061,7 @@ export default function EmployeeCalendarPage() {
           <div className="flex flex-wrap gap-2">
             <button
               onClick={goToPrevious}
-              className="p-2 rounded-md bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+              className="p-2 rounded-md border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors"
               aria-label="ก่อนหน้า"
             >
               <FiChevronLeft className="w-5 h-5" />
@@ -997,30 +1069,30 @@ export default function EmployeeCalendarPage() {
             
             <button
               onClick={goToToday}
-              className="px-3 py-2 rounded-md bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 hover:bg-primary-100 dark:hover:bg-primary-900/50 transition-colors font-medium"
+              className="px-3 py-2 rounded-md bg-primary text-primary-foreground shadow hover:bg-primary/90 transition-colors font-medium"
             >
               วันนี้
             </button>
             
             <button
               onClick={goToNext}
-              className="p-2 rounded-md bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+              className="p-2 rounded-md border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors"
               aria-label="ถัดไป"
             >
               <FiChevronRight className="w-5 h-5" />
             </button>
             
-            <div className="px-3 py-2 rounded-md bg-gray-100 dark:bg-gray-700 font-medium">
+            <div className="px-3 py-2 rounded-md border border-input bg-background font-medium">
               {formatMonthYear(currentDate)}
             </div>
             
-            <div className="flex rounded-md overflow-hidden border border-gray-200 dark:border-gray-700">
+            <div className="flex rounded-md overflow-hidden border border-input">
               <button
                 onClick={() => setViewMode('week')}
                 className={`px-3 py-2 ${
                   viewMode === 'week'
-                    ? 'bg-primary-600 text-white'
-                    : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-background hover:bg-accent hover:text-accent-foreground'
                 }`}
               >
                 สัปดาห์
@@ -1029,8 +1101,8 @@ export default function EmployeeCalendarPage() {
                 onClick={() => setViewMode('month')}
                 className={`px-3 py-2 ${
                   viewMode === 'month'
-                    ? 'bg-primary-600 text-white'
-                    : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-background hover:bg-accent hover:text-accent-foreground'
                 }`}
               >
                 เดือน
@@ -1050,10 +1122,10 @@ export default function EmployeeCalendarPage() {
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => setSelectedDepartment('all')}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
                     selectedDepartment === 'all'
-                      ? 'bg-primary-600 text-white shadow-md'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600'
+                      ? 'bg-primary text-primary-foreground shadow'
+                      : 'border border-input bg-background hover:bg-accent hover:text-accent-foreground'
                   }`}
                 >
                   ทั้งหมด
@@ -1063,10 +1135,10 @@ export default function EmployeeCalendarPage() {
                   <button
                     key={dept}
                     onClick={() => setSelectedDepartment(dept)}
-                    className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
                       selectedDepartment === dept
-                        ? 'bg-primary-600 text-white shadow-md'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600'
+                        ? 'bg-primary text-primary-foreground shadow'
+                        : 'border border-input bg-background hover:bg-accent hover:text-accent-foreground'
                     }`}
                   >
                     {dept}
@@ -1081,10 +1153,10 @@ export default function EmployeeCalendarPage() {
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => setSelectedTeam('all')}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
                     selectedTeam === 'all'
-                      ? 'bg-primary-600 text-white shadow-md'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600'
+                      ? 'bg-primary text-primary-foreground shadow'
+                      : 'border border-input bg-background hover:bg-accent hover:text-accent-foreground'
                   }`}
                 >
                   ทั้งหมด
@@ -1094,10 +1166,10 @@ export default function EmployeeCalendarPage() {
                   <button
                     key={team}
                     onClick={() => setSelectedTeam(team)}
-                    className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
                       selectedTeam === team
-                        ? 'bg-primary-600 text-white shadow-md'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600'
+                        ? 'bg-primary text-primary-foreground shadow'
+                        : 'border border-input bg-background hover:bg-accent hover:text-accent-foreground'
                     }`}
                   >
                     {team}
@@ -1724,3 +1796,86 @@ const renderStatus = (status) => {
     </div>
   );
 };
+
+// เพิ่มฟังก์ชันสำหรับดึงข้อมูลสถานะการทำงานโดยเฉพาะ
+const fetchWorkStatuses = async () => {
+  try {
+    // คำนวณเดือนและปีที่ต้องการดึงข้อมูล
+    const dateToFetch = new Date(currentDate);
+    const month = dateToFetch.getMonth() + 1; // เดือนใน JS เริ่มจาก 0
+    const year = dateToFetch.getFullYear();
+    
+    console.log(`======== FETCH WORK STATUSES ========`);
+    console.log(`กำลังดึงข้อมูลสถานะการทำงานสำหรับ: ${month}/${year}`);
+    
+    // ดึงข้อมูลสถานะการทำงานจาก API โดยระบุเดือนและปีที่ต้องการ
+    const response = await fetch(`/api/work-status?month=${month}&year=${year}`);
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Error fetching work statuses:', errorData);
+      throw new Error(errorData.message || 'ไม่สามารถดึงข้อมูลสถานะการทำงานได้');
+    }
+    
+    const data = await response.json();
+    
+    if (data.success && Array.isArray(data.data)) {
+      console.log(`ดึงข้อมูลสถานะการทำงานสำเร็จ: ${data.data.length} รายการ`);
+      
+      // แปลงวันที่ในข้อมูลเป็น UTC เพื่อแก้ปัญหา timezone
+      const processedData = data.data.map(item => {
+        if (item.date) {
+          const dateObj = new Date(item.date);
+          const year = dateObj.getFullYear();
+          const month = dateObj.getMonth();
+          const day = dateObj.getDate();
+          
+          // กำหนดเวลาเป็น 12:00 น. UTC เพื่อป้องกันปัญหา timezone
+          item.date = new Date(Date.UTC(year, month, day, 12, 0, 0));
+        }
+        return item;
+      });
+      
+      setWorkStatuses(processedData);
+      
+      // แสดงตัวอย่างข้อมูลเพื่อการ debug
+      if (processedData.length > 0) {
+        console.log('ตัวอย่างข้อมูลสถานะการทำงาน:');
+        processedData.slice(0, 3).forEach((record, idx) => {
+          console.log(`รายการที่ ${idx + 1}:`, {
+            id: record.id,
+            employeeId: record.employeeId,
+            date: record.date,
+            status: record.status
+          });
+        });
+      }
+    } else {
+      console.error('รูปแบบข้อมูลไม่ถูกต้อง:', data);
+      setWorkStatuses([]);
+    }
+    console.log(`===================================`);
+  } catch (error) {
+    console.error('เกิดข้อผิดพลาดในการดึงข้อมูลสถานะการทำงาน:', error);
+    toast.error('ไม่สามารถดึงข้อมูลสถานะการทำงานได้');
+  }
+};
+
+// useEffect สำหรับเรียกดึงข้อมูลสถานะการทำงานเมื่อเดือนหรือปีเปลี่ยน
+useEffect(() => {
+  if (session) {
+    // ดึงข้อมูลปฏิทินปกติ
+    fetchCalendarData();
+    
+    // เพิ่มการดึงข้อมูล workStatus เฉพาะเดือนปัจจุบัน
+    fetchWorkStatuses();
+  }
+}, [currentDate, session]);
+
+// ใช้ useEffect ตัวเดิมเพื่อดึงข้อมูลเมื่อโหลดหน้าครั้งแรก
+useEffect(() => {
+  if (session && status !== 'loading') {
+    fetchCalendarData();
+    fetchWorkStatuses();
+  }
+}, [session?.user?.id, status]);

@@ -21,14 +21,29 @@ export async function GET(request) {
       );
     }
 
+    // ตรวจสอบว่ามี workStatus model ในฐานข้อมูลหรือไม่
+    if (typeof prisma.workStatus === 'undefined') {
+      return NextResponse.json({
+        success: false,
+        message: 'โมเดล workStatus ยังไม่พร้อมใช้งาน กรุณาตรวจสอบการติดตั้งฐานข้อมูล',
+        data: []
+      });
+    }
+
     // รับเดือนและปีจาก query parameters
     const { searchParams } = new URL(request.url);
     const month = parseInt(searchParams.get('month')) || new Date().getMonth() + 1;
     const year = parseInt(searchParams.get('year')) || new Date().getFullYear();
 
-    // สร้างวันที่เริ่มต้นและสิ้นสุดของเดือน
-    const startDate = new Date(year, month - 1, 1);
-    const endDate = new Date(year, month, 0);
+    // สร้างวันที่เริ่มต้นและสิ้นสุดของเดือนโดยใช้ UTC เพื่อแก้ปัญหา timezone
+    const startDate = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0));
+    const endDate = new Date(Date.UTC(year, month, 0, 23, 59, 59));
+    
+    console.log(`======== WORK STATUS FETCH ========`);
+    console.log(`Fetching work status for: ${month}/${year}`);
+    console.log(`Start date (UTC): ${startDate.toISOString()}`);
+    console.log(`End date (UTC): ${endDate.toISOString()}`);
+    console.log(`===================================`);
 
     // ดึงข้อมูลสถานะการทำงานของทุกคนในเดือนที่กำหนด
     const workStatuses = await prisma.workStatus.findMany({
