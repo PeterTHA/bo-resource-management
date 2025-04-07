@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { FiChevronLeft, FiChevronRight, FiCalendar, FiClock, FiUser, FiFilter, FiHome, FiBriefcase, FiRefreshCw, FiCheck, FiX } from 'react-icons/fi';
+import { FiChevronLeft, FiChevronRight, FiCalendar, FiClock, FiUser, FiFilter, FiHome, FiBriefcase, FiRefreshCw, FiCheck, FiX, FiUsers } from 'react-icons/fi';
 import { LoadingPage } from '../../components/ui/LoadingSpinner';
 import Image from 'next/image';
 import ProfileImage from '../../components/ui/ProfileImage';
@@ -174,100 +174,229 @@ const renderLegend = () => (
   </div>
 );
 
-// เพิ่มฟังก์ชันสำหรับดึงข้อมูลสถานะการทำงานโดยเฉพาะ
-const fetchWorkStatuses = async () => {
+// ฟังก์ชันสำหรับดึงข้อมูลสถานะการทำงานของพนักงาน
+const fetchWorkStatuses = async (currentDate, setWorkStatuses, setIsDataFetching) => {
+  // ตรวจสอบว่ามีฟังก์ชัน setIsDataFetching ส่งมาหรือไม่
+  if (setIsDataFetching) setIsDataFetching(true);
+  
+  // ตั้งค่าเดือนและปีที่ต้องการดึงข้อมูล
+  const month = currentDate.getMonth() + 1; // เดือนเริ่มจาก 0
+  const year = currentDate.getFullYear();
+  
+  console.log(`Fetching work statuses with where clause: {}`);
+  
   try {
-    // คำนวณเดือนและปีที่ต้องการดึงข้อมูล
-    const dateToFetch = new Date(currentDate);
-    const month = dateToFetch.getMonth() + 1; // เดือนใน JS เริ่มจาก 0
-    const year = dateToFetch.getFullYear();
+    // สร้าง URL สำหรับดึงข้อมูลสถานะการทำงาน
+    const url = `/api/work-status?month=${month}&year=${year}`;
+    console.log(`Calendar range - start: ${new Date(year, month-1, 1).toISOString()} end: ${new Date(year, month, 0).toISOString()}`);
     
-    console.log(`======== FETCH WORK STATUSES ========`);
-    console.log(`กำลังดึงข้อมูลสถานะการทำงานสำหรับ: ${month}/${year}`);
-    
-    // ดึงข้อมูลสถานะการทำงานจาก API โดยระบุเดือนและปีที่ต้องการ
-    const response = await fetch(`/api/work-status?month=${month}&year=${year}`);
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('Error fetching work statuses:', errorData);
-      throw new Error(errorData.message || 'ไม่สามารถดึงข้อมูลสถานะการทำงานได้');
-    }
-    
-    const data = await response.json();
-    console.log('ข้อมูลที่ได้รับจาก API work-status:', data);
-    
-    // ตรวจสอบรูปแบบข้อมูลให้รองรับทั้งกรณี data.success และ data เป็น array โดยตรง
-    if (data && typeof data === 'object') {
-      // กรณีที่ข้อมูลมีรูปแบบ { success: true, data: [...] }
-      if (data.success && Array.isArray(data.data)) {
-        console.log(`ดึงข้อมูลสถานะการทำงานสำเร็จ: ${data.data.length} รายการ`);
+    try {
+      console.log('Using model: work_statuses');
+      
+      // ดึงข้อมูลจาก API
+      const response = await fetch(url);
+      
+      // ถ้าการตอบกลับไม่สำเร็จ (ไม่ใช่ 200 OK)
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.log(`API responded with status: ${response.status} - ${errorText || response.statusText}`);
         
-        // แปลงวันที่ในข้อมูลเป็น UTC เพื่อแก้ปัญหา timezone
-        const processedData = data.data.map(item => {
-          if (item.date) {
-            const dateObj = new Date(item.date);
-            const year = dateObj.getFullYear();
-            const month = dateObj.getMonth();
-            const day = dateObj.getDate();
-            
-            // กำหนดเวลาเป็น 12:00 น. UTC เพื่อป้องกันปัญหา timezone
-            item.date = new Date(Date.UTC(year, month, day, 12, 0, 0));
-          }
-          return item;
-        });
-        
-        setWorkStatuses(processedData);
-        
-        // แสดงตัวอย่างข้อมูลเพื่อการ debug
-        if (processedData.length > 0) {
-          console.log('ตัวอย่างข้อมูลสถานะการทำงาน:');
-          processedData.slice(0, 3).forEach((record, idx) => {
-            console.log(`รายการที่ ${idx + 1}:`, {
-              id: record.id,
-              employeeId: record.employeeId,
-              date: record.date,
-              status: record.status
-            });
-          });
+        // ตรวจสอบว่าเป็นข้อผิดพลาดเกี่ยวกับโมเดลฐานข้อมูลหรือไม่
+        if (errorText && (
+          errorText.includes('โมเดล workStatus ยังไม่พร้อมใช้งาน') || 
+          errorText.includes('work_statuses') ||
+          errorText.includes('โมเดลข้อมูลสถานะการทำงานยังไม่พร้อมใช้งาน')
+        )) {
+          console.log('ข้อความจากระบบ: ไม่พบโมเดลข้อมูลสถานะการทำงานในฐานข้อมูล - ข้ามการแสดงข้อมูลสถานะการทำงาน');
+          console.log('คำแนะนำ: ตรวจสอบการติดตั้งฐานข้อมูลหรือติดต่อผู้ดูแลระบบเพื่ออัปเดต schema');
+        } else {
+          console.log('พบข้อผิดพลาดจาก API:', errorText || response.statusText);
         }
-      } 
-      // กรณีที่ข้อมูลเป็น array โดยตรง
-      else if (Array.isArray(data)) {
-        console.log(`ดึงข้อมูลสถานะการทำงานสำเร็จ: ${data.length} รายการ`);
         
-        // แปลงวันที่ในข้อมูลเป็น UTC เพื่อแก้ปัญหา timezone
+        setWorkStatuses([]);
+        return;
+      }
+      
+      // อ่าน response ในรูปแบบข้อความก่อน เพื่อตรวจสอบความถูกต้อง
+      const responseText = await response.text();
+      
+      // ตรวจสอบว่า response ว่างหรือไม่
+      if (!responseText || responseText.trim() === '') {
+        console.log('API ส่งค่าว่างกลับมา');
+        setWorkStatuses([]);
+        return;
+      }
+      
+      // แปลง response เป็น JSON
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (jsonError) {
+        console.log('เกิดข้อผิดพลาดในการแปลง response เป็น JSON:', jsonError.message);
+        console.log('Response text:', responseText);
+        setWorkStatuses([]);
+        return;
+      }
+      
+      // ตรวจสอบว่าข้อมูลที่ได้รับเป็น null หรือไม่มีค่าหรือไม่
+      if (!data) {
+        console.log('ข้อมูลที่ได้รับเป็น null หรือ undefined');
+        setWorkStatuses([]);
+        return;
+      }
+      
+      // เพิ่ม log เพื่อตรวจสอบโครงสร้างข้อมูล
+      console.log('ประเภทข้อมูลที่ได้รับ:', typeof data);
+      if (typeof data === 'object') {
+        console.log('ข้อมูลมี property:', Object.keys(data));
+      }
+      
+      // ตรวจสอบรูปแบบข้อมูล - กรณีที่เป็น array
+      if (Array.isArray(data)) {
+        console.log('ได้รับข้อมูลเป็น array มีจำนวน:', data.length);
+        
+        // แปลงวันที่ให้เป็นอยู่ในรูปแบบที่ถูกต้อง
         const processedData = data.map(item => {
-          if (item.date) {
+          if (item && item.date) {
             const dateObj = new Date(item.date);
-            const year = dateObj.getFullYear();
-            const month = dateObj.getMonth();
-            const day = dateObj.getDate();
-            
-            // กำหนดเวลาเป็น 12:00 น. UTC เพื่อป้องกันปัญหา timezone
-            item.date = new Date(Date.UTC(year, month, day, 12, 0, 0));
+            item.date = new Date(Date.UTC(
+              dateObj.getFullYear(),
+              dateObj.getMonth(),
+              dateObj.getDate(),
+              12, 0, 0
+            ));
+          }
+          return item;
+        });
+        
+        setWorkStatuses(prevWorkStatuses => {
+          // ตรวจสอบว่า processedData ไม่เหมือนกับ prevWorkStatuses
+          const isEqual = JSON.stringify(prevWorkStatuses) === JSON.stringify(processedData);
+          if (isEqual) {
+            console.log('ข้อมูลสถานะการทำงานไม่มีการเปลี่ยนแปลง');
+            return prevWorkStatuses;
+          }
+          console.log('อัพเดทข้อมูลสถานะการทำงาน จำนวน:', processedData.length);
+          return processedData;
+        });
+        return true;
+      }
+      // ตรวจสอบรูปแบบข้อมูล - กรณีที่เป็น object และมี success=true
+      else if (data.success === true && Array.isArray(data.data)) {
+        console.log('ได้รับข้อมูลในรูปแบบ {success: true, data: [...]} มีจำนวน:', data.data.length);
+        
+        // แปลงวันที่ให้เป็นอยู่ในรูปแบบที่ถูกต้อง
+        const processedData = data.data.map(item => {
+          if (item && item.date) {
+            const dateObj = new Date(item.date);
+            item.date = new Date(Date.UTC(
+              dateObj.getFullYear(),
+              dateObj.getMonth(),
+              dateObj.getDate(),
+              12, 0, 0
+            ));
           }
           return item;
         });
         
         setWorkStatuses(processedData);
+        return true;
       }
-      // กรณีที่ API ส่งข้อมูลกลับมาแต่ไม่อยู่ในรูปแบบที่คาดหวัง
-      else {
-        console.log('API ส่งข้อมูลกลับมาในรูปแบบที่ไม่คาดหวัง:', data);
-        // ตั้งค่าเป็น array ว่างเพื่อให้แสดงผลได้ปกติ
+      // กรณีที่ข้อมูลมี success=false
+      else if (data.success === false) {
+        // ตรวจสอบว่าเป็นข้อผิดพลาดเกี่ยวกับโมเดลฐานข้อมูลหรือไม่
+        if (data.message && (
+          data.message.includes('โมเดล workStatus ยังไม่พร้อมใช้งาน') || 
+          data.message.includes('work_statuses') ||
+          data.message.includes('โมเดลข้อมูลสถานะการทำงานยังไม่พร้อมใช้งาน')
+        )) {
+          console.log('ข้อความจากระบบ: ไม่พบโมเดลข้อมูลสถานะการทำงานในฐานข้อมูล - ข้ามการแสดงข้อมูลสถานะการทำงาน');
+          console.log('คำแนะนำ: ตรวจสอบการติดตั้งฐานข้อมูลหรือติดต่อผู้ดูแลระบบเพื่ออัปเดต schema');
+        } else {
+          console.log('API ส่งค่า success=false:', data.message || 'ไม่ทราบสาเหตุ');
+        }
         setWorkStatuses([]);
+        return false;
       }
-    } else {
-      console.error('รูปแบบข้อมูลไม่ถูกต้อง:', data);
+      // กรณีที่ข้อมูลเป็น object ที่มี workStatuses หรือ data
+      else if (typeof data === 'object' && (data.workStatuses || data.data)) {
+        const workStatusArray = data.workStatuses || data.data || [];
+        console.log('ได้รับข้อมูลใน field workStatuses หรือ data มีจำนวน:', workStatusArray.length);
+        
+        // แปลงวันที่ให้เป็นอยู่ในรูปแบบที่ถูกต้อง
+        const processedData = workStatusArray.map(item => {
+          if (item && item.date) {
+            const dateObj = new Date(item.date);
+            item.date = new Date(Date.UTC(
+              dateObj.getFullYear(),
+              dateObj.getMonth(),
+              dateObj.getDate(),
+              12, 0, 0
+            ));
+          }
+          return item;
+        });
+        
+        setWorkStatuses(processedData);
+        return true;
+      }
+      
+      // กรณีที่ข้อมูลไม่อยู่ในรูปแบบที่คาดหวัง
+      console.log('ข้อมูลมีรูปแบบไม่ตรงตามที่คาดหวัง - ข้ามการแสดงข้อมูลสถานะการทำงาน');
+      // ลองแปลงข้อมูลเป็น array ถ้าเป็นไปได้
+      if (typeof data === 'object' && !Array.isArray(data)) {
+        const possibleArrayValues = Object.values(data).find(val => Array.isArray(val));
+        if (possibleArrayValues) {
+          console.log('พบข้อมูลเป็น array ในพร็อพเพอร์ตี้ของ response', possibleArrayValues.length);
+          
+          // แปลงวันที่ให้เป็นอยู่ในรูปแบบที่ถูกต้อง
+          const processedData = possibleArrayValues.map(item => {
+            if (item && item.date) {
+              const dateObj = new Date(item.date);
+              item.date = new Date(Date.UTC(
+                dateObj.getFullYear(),
+                dateObj.getMonth(),
+                dateObj.getDate(),
+                12, 0, 0
+              ));
+            }
+            return item;
+          });
+          
+          setWorkStatuses(processedData);
+          return true;
+        }
+      }
+      
       setWorkStatuses([]);
+      return false;
+    } catch (fetchError) {
+      if (fetchError.name === 'AbortError') {
+        console.log('การดึงข้อมูลสถานะการทำงานถูกยกเลิกเนื่องจากเกินเวลาที่กำหนด (timeout)');
+        setWorkStatuses([]);
+        return false;
+      }
+      throw fetchError; // ส่งต่อข้อผิดพลาดไปยัง catch ข้างนอก
     }
-    console.log(`===================================`);
   } catch (error) {
-    console.error('เกิดข้อผิดพลาดในการดึงข้อมูลสถานะการทำงาน:', error);
-    toast.error('ไม่สามารถดึงข้อมูลสถานะการทำงานได้');
-    // ตั้งค่าเป็น array ว่างเพื่อให้แสดงผลได้ปกติแม้มีข้อผิดพลาด
+    // ตรวจสอบว่าเป็นข้อผิดพลาดเกี่ยวกับโมเดลฐานข้อมูลหรือไม่
+    if (error.message && (
+      error.message.includes('โมเดล workStatus ยังไม่พร้อมใช้งาน') ||
+      error.message.includes('work_statuses') ||
+      error.message.includes('โมเดลข้อมูลสถานะการทำงานยังไม่พร้อมใช้งาน')
+    )) {
+      console.log('ข้อความจากระบบ: ไม่พบโมเดลข้อมูลสถานะการทำงานในฐานข้อมูล - ข้ามการแสดงข้อมูลสถานะการทำงาน');
+      console.log('คำแนะนำ: ตรวจสอบการติดตั้งฐานข้อมูลหรือติดต่อผู้ดูแลระบบเพื่ออัปเดต schema');
+    } else {
+      console.log('เกิดข้อผิดพลาดในการดึงข้อมูลสถานะการทำงาน:', error.message);
+    }
     setWorkStatuses([]);
+    return false;
+  } finally {
+    console.log('========================================');
+    // เซ็ต isDataFetching เป็น false เสมอเมื่อจบการทำงาน
+    if (setIsDataFetching) setIsDataFetching(false);
+    return true; // เพื่อให้ Promise นี้สามารถใช้ .finally() ได้
   }
 };
 
@@ -321,8 +450,9 @@ export default function EmployeeCalendarPage() {
 
   // ฟังก์ชันดึงข้อมูลปฏิทิน
   const fetchCalendarData = async () => {
-    setIsDataFetching(true);
-    setLoading(true); // เพิ่มการเซ็ต loading เป็น true เมื่อเริ่มโหลดข้อมูล
+    console.log('เริ่มดึงข้อมูลปฏิทิน...');
+    // ไม่ต้องเซ็ต setIsDataFetching(true) และ setLoading(true) ที่นี่
+    // เพราะจะถูกเซ็ตจากฟังก์ชันที่เรียกใช้ fetchCalendarData
     
     try {
       // ยกเลิกคำขอ API ก่อนหน้า (ถ้ามี)
@@ -376,117 +506,155 @@ export default function EmployeeCalendarPage() {
         // จัดกลุ่มพนักงานตามทีม
         groupEmployeesByTeam(calendarDataCache.employees);
         
-        // ถ้าใช้ข้อมูลจาก cache ให้ตั้งค่าโหลดเสร็จและ return
-        setIsDataFetching(false);
-        setLoading(false);
-        return;
+        console.log('จำนวนพนักงานจาก cache:', calendarDataCache.employees.length);
+        console.log('Cache โหลดสำเร็จ');
+        return true; // ส่งคืนค่า true เพื่อบอกว่าการโหลดสำเร็จ
       }
       
-      // ดึงข้อมูลใหม่จาก API
-      console.log('Fetching new calendar data');
-      const response = await fetch(`/api/employee-calendar?startDate=${startUTC.toISOString()}&endDate=${endUTC.toISOString()}`, {
-        signal: abortControllerRef.current.signal
-      });
+      // ตั้งค่า timeout เพื่อป้องกันการค้างนานเกินไป
+      const timeoutId = setTimeout(() => {
+        if (abortControllerRef.current) {
+          console.log('API request timed out, aborting...');
+          abortControllerRef.current.abort();
+        }
+      }, 10000); // timeout 10 วินาที
       
-      const data = await response.json();
-      
-      if (data.success) {
-        // อัปเดตข้อมูลใน state
-        setEmployees(data.data.employees || []);
-        
-        // แปลงวันที่ใน workStatuses ให้เป็น UTC format
-        const processedWorkStatuses = (data.data.workStatuses || []).map(item => {
-          if (item.date) {
-            const dateObj = new Date(item.date);
-            item.date = new Date(Date.UTC(
-              dateObj.getFullYear(),
-              dateObj.getMonth(),
-              dateObj.getDate(),
-              12, 0, 0
-            ));
-          }
-          return item;
+      try {
+        // ดึงข้อมูลใหม่จาก API
+        console.log('Fetching new calendar data');
+        const response = await fetch(`/api/employee-calendar?startDate=${startUTC.toISOString()}&endDate=${endUTC.toISOString()}`, {
+          signal: abortControllerRef.current.signal
         });
-        setWorkStatuses(processedWorkStatuses);
         
-        // แปลงวันที่ใน leaves ให้เป็น UTC format
-        const processedLeaves = (data.data.leaves || []).map(item => {
-          if (item.startDate) {
-            const startDateObj = new Date(item.startDate);
-            item.startDate = new Date(Date.UTC(
-              startDateObj.getFullYear(),
-              startDateObj.getMonth(),
-              startDateObj.getDate(),
-              0, 0, 0
-            ));
-          }
-          if (item.endDate) {
-            const endDateObj = new Date(item.endDate);
-            item.endDate = new Date(Date.UTC(
-              endDateObj.getFullYear(),
-              endDateObj.getMonth(),
-              endDateObj.getDate(),
-              23, 59, 59
-            ));
-          }
-          return item;
-        });
-        setLeaves(processedLeaves);
+        clearTimeout(timeoutId); // ยกเลิก timeout เมื่อได้รับการตอบสนอง
         
-        // แปลงวันที่ใน overtimes ให้เป็น UTC format
-        const processedOvertimes = (data.data.overtimes || []).map(item => {
-          if (item.date) {
-            const dateObj = new Date(item.date);
-            item.date = new Date(Date.UTC(
-              dateObj.getFullYear(),
-              dateObj.getMonth(),
-              dateObj.getDate(),
-              12, 0, 0
-            ));
-          }
-          return item;
-        });
-        setOvertimes(processedOvertimes);
-        
-        // บันทึกข้อมูลลง cache
-        calendarDataCache = {
-          employees: data.data.employees || [],
-          workStatuses: processedWorkStatuses,
-          leaves: processedLeaves,
-          overtimes: processedOvertimes,
-          lastFetched: new Date(),
-          startDate: startUTC,
-          endDate: endUTC
-        };
-        
-        // จัดกลุ่มพนักงานตามทีม
-        groupEmployeesByTeam(data.data.employees);
-        
-        // ดึงข้อมูลผู้ใช้ปัจจุบัน (เพื่อใช้ในการตรวจสอบสิทธิ์)
-        if (session?.user) {
-          const currentUserData = data.data.employees.find(e => e.id === session.user.id);
-          if (currentUserData) {
-            setCurrentUserData(currentUserData);
-          }
+        // ตรวจสอบว่า response ถูกต้องหรือไม่
+        if (!response.ok) {
+          console.log(`API responded with status: ${response.status}`);
+          const errorText = await response.text();
+          throw new Error(`API error: ${errorText || response.statusText}`);
         }
         
-        setError('');
-        console.log('Calendar data fetched successfully');
-      } else {
-        setError(data.message || 'ไม่สามารถดึงข้อมูลได้');
-        console.error('Error from API:', data.message);
+        // แปลง response เป็น JSON
+        const data = await response.json();
+        
+        if (data.success) {
+          console.log('ได้รับข้อมูลจาก API แล้ว - จำนวนพนักงาน:', (data.data.employees || []).length);
+          
+          // อัปเดตข้อมูลใน state
+          setEmployees(data.data.employees || []);
+          
+          // แปลงวันที่ใน workStatuses ให้เป็น UTC format
+          const processedWorkStatuses = (data.data.workStatuses || []).map(item => {
+            if (item && item.date) {
+              const dateObj = new Date(item.date);
+              item.date = new Date(Date.UTC(
+                dateObj.getFullYear(),
+                dateObj.getMonth(),
+                dateObj.getDate(),
+                12, 0, 0
+              ));
+            }
+            return item;
+          });
+          setWorkStatuses(processedWorkStatuses);
+          
+          // แปลงวันที่ใน leaves ให้เป็น UTC format
+          const processedLeaves = (data.data.leaves || []).map(item => {
+            if (item && item.startDate) {
+              const startDateObj = new Date(item.startDate);
+              item.startDate = new Date(Date.UTC(
+                startDateObj.getFullYear(),
+                startDateObj.getMonth(),
+                startDateObj.getDate(),
+                0, 0, 0
+              ));
+            }
+            if (item && item.endDate) {
+              const endDateObj = new Date(item.endDate);
+              item.endDate = new Date(Date.UTC(
+                endDateObj.getFullYear(),
+                endDateObj.getMonth(),
+                endDateObj.getDate(),
+                23, 59, 59
+              ));
+            }
+            return item;
+          });
+          setLeaves(processedLeaves);
+          
+          // แปลงวันที่ใน overtimes ให้เป็น UTC format
+          const processedOvertimes = (data.data.overtimes || []).map(item => {
+            if (item && item.date) {
+              const dateObj = new Date(item.date);
+              item.date = new Date(Date.UTC(
+                dateObj.getFullYear(),
+                dateObj.getMonth(),
+                dateObj.getDate(),
+                12, 0, 0
+              ));
+            }
+            return item;
+          });
+          setOvertimes(processedOvertimes);
+          
+          // บันทึกข้อมูลลง cache
+          calendarDataCache = {
+            employees: data.data.employees || [],
+            workStatuses: processedWorkStatuses,
+            leaves: processedLeaves,
+            overtimes: processedOvertimes,
+            lastFetched: new Date(),
+            startDate: startUTC,
+            endDate: endUTC
+          };
+          
+          // จัดกลุ่มพนักงานตามทีม
+          groupEmployeesByTeam(data.data.employees);
+          
+          // ดึงข้อมูลผู้ใช้ปัจจุบัน (เพื่อใช้ในการตรวจสอบสิทธิ์)
+          if (session?.user) {
+            const currentUserData = data.data.employees.find(e => e.id === session.user.id);
+            if (currentUserData) {
+              setCurrentUserData(currentUserData);
+            }
+          }
+          
+          setError('');
+          console.log('Calendar data fetched successfully');
+          return true; // ส่งคืนค่า true เพื่อบอกว่าการโหลดสำเร็จ
+        } else {
+          setError(data.message || 'ไม่สามารถดึงข้อมูลได้');
+          console.log('Error from API:', data.message);
+          return false; // ส่งคืนค่า false เพื่อบอกว่าการโหลดล้มเหลว
+        }
+      } catch (fetchError) {
+        clearTimeout(timeoutId); // ยกเลิก timeout ในกรณีเกิดข้อผิดพลาด
+        
+        if (fetchError.name === 'AbortError') {
+          console.log('API request was aborted');
+          setError('การดึงข้อมูลถูกยกเลิกเนื่องจากใช้เวลานานเกินไป โปรดลองใหม่อีกครั้ง');
+        } else {
+          throw fetchError; // ส่งต่อข้อผิดพลาดไปยัง catch หลัก
+        }
+        return false; // ส่งคืนค่า false เพื่อบอกว่าการโหลดล้มเหลว
       }
+      
       console.log('===================================');
     } catch (err) {
       // ไม่แสดงข้อความ error ถ้าเป็นการยกเลิกโดยตั้งใจ
       if (err.name !== 'AbortError') {
-        console.error('Error fetching calendar data:', err);
+        console.log('Error fetching calendar data:', err.message);
         setError('เกิดข้อผิดพลาดในการดึงข้อมูล');
       }
+      return false; // ส่งคืนค่า false เพื่อบอกว่าการโหลดล้มเหลว
     } finally {
-      setIsDataFetching(false);
-      setLoading(false); // เพิ่มการเซ็ต loading เป็น false เมื่อโหลดข้อมูลเสร็จสิ้น
+      // ไม่ต้องเซ็ต loading และ isDataFetching เป็น false ที่นี่
+      // เพราะจะถูกเซ็ตจากฟังก์ชันที่เรียกใช้ fetchCalendarData
+      console.log('จบการทำงานของฟังก์ชัน fetchCalendarData');
     }
+    
+    return false; // สำหรับกรณีที่มีข้อผิดพลาดที่ไม่ได้จัดการ
   };
   
   // ฟังก์ชันสำหรับจัดกลุ่มพนักงานตามทีม
@@ -706,6 +874,21 @@ export default function EmployeeCalendarPage() {
       router.push('/login');
     }
   }, [status, router]);
+
+  // ดึงข้อมูลปฏิทินเมื่อมีการเปลี่ยนวันที่หรือโหมดการแสดงผล
+  useEffect(() => {
+    if (session) {
+      setLoading(true);
+      setError('');
+      
+      fetchCalendarData().then(() => {
+        setLoading(false);
+      }).catch((err) => {
+        console.error('Error in calendar data fetching:', err);
+        setLoading(false);
+      });
+    }
+  }, [session, currentDate, viewMode]);
 
   // ฟังก์ชันสำหรับการนำทางปฏิทิน
   const goToPrevious = () => {
@@ -1041,80 +1224,229 @@ export default function EmployeeCalendarPage() {
   // จัดการการบันทึกสถานะการทำงาน
   const handleWorkStatusSave = async (newWorkStatus) => {
     try {
-      // ถ้า newWorkStatus เป็น null หมายถึงมีการลบข้อมูล
-      if (newWorkStatus === null) {
-        // รีเฟรชข้อมูลหลังจากลบ
-        await refreshAfterSave();
+      console.log('Saving work status:', newWorkStatus);
+      
+      // ตั้งค่า loading เป็น true เพื่อแสดงว่ากำลังบันทึกข้อมูล
+      // setLoading(true);
+      
+      // ตรวจสอบว่ามีข้อมูลครบถ้วนหรือไม่
+      if (!newWorkStatus.employeeId || !newWorkStatus.date) {
+        toast.error('ข้อมูลไม่ครบถ้วน กรุณาระบุพนักงานและวันที่');
+        // setLoading(false);
         return;
       }
       
-      // รับข้อมูลที่บันทึกและอัปเดต UI
-      if (newWorkStatus.forceRefresh) {
-        await refreshAfterSave(newWorkStatus);
-      } else {
-        // อัปเดตเฉพาะข้อมูลในหน่วยความจำ (ไม่ต้องเรียก API ใหม่)
-        setWorkStatuses(prevStatuses => {
-          // หาและอัปเดตสถานะที่มีอยู่แล้ว หรือเพิ่มใหม่
-          const index = prevStatuses.findIndex(s => s.id === newWorkStatus.id);
-          
-          if (index >= 0) {
-            // อัปเดตข้อมูลที่มีอยู่แล้ว
-            const updatedStatuses = [...prevStatuses];
-            updatedStatuses[index] = newWorkStatus;
-            return updatedStatuses;
-          } else {
-            // เพิ่มข้อมูลใหม่
-            return [...prevStatuses, newWorkStatus];
-          }
-        });
+      // เตรียมข้อมูลสำหรับส่งไปยัง API
+      const requestBody = { ...newWorkStatus };
+      
+      // แปลงวันที่เป็น ISO string
+      if (requestBody.date) {
+        requestBody.date = new Date(requestBody.date).toISOString();
+      }
+      
+      // ส่งข้อมูลไปยัง API
+      const response = await fetch('/api/work-status', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API error: ${errorText || response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        // เมื่อบันทึกสำเร็จ ให้รีเฟรชข้อมูล
+        toast.success('บันทึกสถานะการทำงานเรียบร้อยแล้ว');
         
-        // ปิด modal หลังจากบันทึกสำเร็จ
-        setIsWorkStatusModalOpen({ isOpen: false, viewOnly: false });
+        // ดึงข้อมูลแค่เดือนที่มีการอัปเดต
+        const updatedMonth = new Date(newWorkStatus.date);
+        fetchWorkStatuses(updatedMonth, setWorkStatuses, setIsDataFetching);
+        
+        // รีเฟรชข้อมูลทั้งหมด
+        refreshAfterSave(data.data);
+      } else {
+        toast.error(`บันทึกไม่สำเร็จ: ${data.message || 'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ'}`);
+        // setLoading(false);
       }
     } catch (error) {
-      console.error('Error handling work status save:', error);
+      console.error('Error saving work status:', error);
+      toast.error(`เกิดข้อผิดพลาด: ${error.message}`);
+      // setLoading(false);
     }
   };
 
   // รีเฟรชข้อมูลหลังจากบันทึก
   const refreshAfterSave = async (savedData) => {
     try {
-      setLoading(true); // เพิ่มการเซ็ต loading เป็น true เมื่อเริ่มโหลดข้อมูล
+      // setLoading(true); // เพิ่มการเซ็ต loading เป็น true เมื่อเริ่มโหลดข้อมูล
       // ดึงข้อมูลใหม่ตามช่วงวันที่ปัจจุบัน
       const startDate = getStartDate();
       const endDate = getEndDate();
       
-      const response = await fetch(`/api/employee-calendar?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`);
-      const data = await response.json();
+      // ตั้งค่า timeout เพื่อป้องกันการค้างนานเกินไป
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        console.log('Refresh data request timed out, aborting...');
+        controller.abort();
+        // เมื่อ timeout ให้เซ็ต loading เป็น false โดยทันที
+        // setLoading(false);
+        // แสดงข้อความแจ้งเตือนว่า timeout
+        toast.error('การรีเฟรชข้อมูลใช้เวลานานเกินไป โปรดลองใหม่อีกครั้ง');
+        // ปิด modal ถึงแม้ว่าการโหลดจะไม่สำเร็จ
+        setIsWorkStatusModalOpen({ isOpen: false, viewOnly: false });
+      }, 8000); // timeout 8 วินาที
       
-      if (data.success) {
-        // อัปเดตข้อมูลทั้งหมด
-        setEmployees(data.data.employees || []);
-        setWorkStatuses(data.data.workStatuses || []);
-        setLeaves(data.data.leaves || []);
-        setOvertimes(data.data.overtimes || []);
+      try {
+        const response = await fetch(`/api/employee-calendar?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`, {
+          signal: controller.signal
+        });
         
-        toast.success('อัปเดตข้อมูลสำเร็จ');
-      } else {
-        toast.error('เกิดข้อผิดพลาดในการรีเฟรชข้อมูล');
+        clearTimeout(timeoutId); // ยกเลิก timeout เมื่อได้รับการตอบสนอง
+        
+        // ตรวจสอบว่า response ถูกต้องหรือไม่
+        if (!response.ok) {
+          console.log(`API responded with status: ${response.status}`);
+          const errorText = await response.text();
+          throw new Error(`API error: ${errorText || response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          // อัปเดตข้อมูลทั้งหมด
+          setEmployees(data.data.employees || []);
+          
+          // แปลงวันที่ใน workStatuses ให้เป็น UTC format
+          const processedWorkStatuses = (data.data.workStatuses || []).map(item => {
+            if (item && item.date) {
+              const dateObj = new Date(item.date);
+              item.date = new Date(Date.UTC(
+                dateObj.getFullYear(),
+                dateObj.getMonth(),
+                dateObj.getDate(),
+                12, 0, 0
+              ));
+            }
+            return item;
+          });
+          setWorkStatuses(processedWorkStatuses);
+          
+          // แปลงวันที่ใน leaves ให้เป็น UTC format
+          const processedLeaves = (data.data.leaves || []).map(item => {
+            if (item && item.startDate) {
+              const startDateObj = new Date(item.startDate);
+              item.startDate = new Date(Date.UTC(
+                startDateObj.getFullYear(),
+                startDateObj.getMonth(),
+                startDateObj.getDate(),
+                0, 0, 0
+              ));
+            }
+            if (item && item.endDate) {
+              const endDateObj = new Date(item.endDate);
+              item.endDate = new Date(Date.UTC(
+                endDateObj.getFullYear(),
+                endDateObj.getMonth(),
+                endDateObj.getDate(),
+                23, 59, 59
+              ));
+            }
+            return item;
+          });
+          setLeaves(processedLeaves);
+          
+          // แปลงวันที่ใน overtimes ให้เป็น UTC format
+          const processedOvertimes = (data.data.overtimes || []).map(item => {
+            if (item && item.date) {
+              const dateObj = new Date(item.date);
+              item.date = new Date(Date.UTC(
+                dateObj.getFullYear(),
+                dateObj.getMonth(),
+                dateObj.getDate(),
+                12, 0, 0
+              ));
+            }
+            return item;
+          });
+          setOvertimes(processedOvertimes);
+          
+          toast.success('อัปเดตข้อมูลสำเร็จ');
+        } else {
+          console.log('Error refreshing data:', data.message);
+          toast.error(`เกิดข้อผิดพลาดในการรีเฟรชข้อมูล: ${data.message || 'ไม่ทราบสาเหตุ'}`);
+        }
+      } catch (fetchError) {
+        clearTimeout(timeoutId); // ยกเลิก timeout ในกรณีเกิดข้อผิดพลาด
+        
+        if (fetchError.name === 'AbortError') {
+          console.log('Refresh data request was aborted');
+          toast.error('การดึงข้อมูลใช้เวลานานเกินไป โปรดลองใหม่อีกครั้ง');
+        } else {
+          throw fetchError; // ส่งต่อข้อผิดพลาดไปยัง catch หลัก
+        }
       }
     } catch (error) {
-      console.error('Error refreshing data:', error);
+      console.log('Error refreshing data:', error.message);
       toast.error('เกิดข้อผิดพลาดในการรีเฟรชข้อมูล');
     } finally {
       // ปิด modal หลังจากที่โหลดข้อมูลเรียบร้อยแล้ว
       setIsWorkStatusModalOpen({ isOpen: false, viewOnly: false });
-      setLoading(false);
+      // setLoading(false);
     }
   };
 
+  // เรียกใช้งานฟังก์ชันดึงข้อมูลเมื่อมีการเปลี่ยนแปลงเดือนหรือปี
   useEffect(() => {
+    // ดึงข้อมูลสถานะการทำงานเมื่อมีการเปลี่ยนเดือน
     if (session) {
-      fetchCalendarData();
-      fetchWorkStatuses();
+      setIsDataFetching(true); // ตั้งค่าสถานะกำลังโหลดข้อมูล
+      setLoading(true); // เพิ่ม loading state เพื่อแสดงหน้า loading
+      
+      const previousMonth = new Date(currentDate);
+      previousMonth.setMonth(previousMonth.getMonth() - 1);
+      
+      const nextMonth = new Date(currentDate);
+      nextMonth.setMonth(nextMonth.getMonth() + 1);
+      
+      // ดึงข้อมูลสถานะการทำงานของเดือนปัจจุบัน
+      fetchWorkStatuses(currentDate, setWorkStatuses, setIsDataFetching);
+      
+      // ดึงข้อมูลสถานะการทำงานล่วงหน้าของเดือนถัดไป
+      fetchWorkStatuses(nextMonth, (data) => {
+        // ไม่ต้องทำอะไรกับข้อมูลเดือนถัดไป เพราะดึงมาเก็บไว้ใน cache เท่านั้น
+      });
+      
+      // ดึงข้อมูลสถานะการทำงานของเดือนก่อนหน้า
+      fetchWorkStatuses(previousMonth, (data) => {
+        // ไม่ต้องทำอะไรกับข้อมูลเดือนก่อนหน้า เพราะดึงมาเก็บไว้ใน cache เท่านั้น
+      }).finally(() => {
+        setIsDataFetching(false); // เมื่อดึงข้อมูลเสร็จแล้ว ตั้งค่าสถานะเป็น false
+        setLoading(false); // ปิด loading state เมื่อโหลดข้อมูลเสร็จ
+      });
     }
-  }, [currentDate, session, selectedDepartment, selectedTeam]);
-
+  }, [session, currentDate]);
+  
+  // เรียกใช้ fetchWorkStatuses อีกครั้งเมื่อ employees โหลดเสร็จ
+  useEffect(() => {
+    if (session && employees.length > 0) {
+      setLoading(true); // เพิ่ม loading state เมื่อเริ่มโหลดข้อมูล
+      setIsDataFetching(true); // ตั้งค่าสถานะกำลังโหลดข้อมูล
+      
+      const currentMonth = new Date(currentDate);
+      fetchWorkStatuses(currentMonth, setWorkStatuses, setIsDataFetching)
+        .finally(() => {
+          setLoading(false); // ปิด loading state เมื่อโหลดข้อมูลเสร็จ
+          setIsDataFetching(false); // ตั้งค่าสถานะโหลดข้อมูลเป็น false
+        });
+    }
+  }, [session, employees]);
+  
   // กรองพนักงานตามแผนกและทีม
   const filteredEmployees = employees.filter(emp => {
     // กรองตามแผนก
@@ -1137,19 +1469,61 @@ export default function EmployeeCalendarPage() {
   });
 
   // แสดง loading ถ้ากำลังโหลดข้อมูลและยังไม่มีข้อมูลพนักงาน
-  if (status === 'loading' || (loading && employees.length === 0)) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <LoadingPage message="กำลังโหลดข้อมูลปฏิทินพนักงาน..." />
-      </div>
-    );
-  }
+  // เพิ่ม console.log เพื่อตรวจสอบค่า loading
+  console.log('สถานะ Loading:', loading);
+  console.log('สถานะ isDataFetching:', isDataFetching);
+  console.log('จำนวนพนักงาน:', employees.length);
 
   if (!session) {
     return null;
   }
 
+  // แสดงข้อความเมื่อไม่มีข้อมูลพนักงาน
+  if (!loading && employees.length === 0) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex flex-col space-y-4">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <h1 className="text-2xl md:text-3xl font-bold">ปฏิทินพนักงาน</h1>
+          </div>
+          <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-sm flex flex-col items-center justify-center">
+            <div className="text-center">
+              <FiUsers className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+              <h3 className="text-lg font-medium">ไม่พบข้อมูลพนักงาน</h3>
+              <p className="mt-2 text-sm text-gray-500">ระบบได้รับการตอบกลับจาก API แล้ว แต่ไม่พบข้อมูลพนักงาน</p>
+              <button 
+                onClick={() => {
+                  setLoading(true);
+                  fetchCalendarData().finally(() => setLoading(false));
+                }}
+                className="mt-4 px-4 py-2 rounded-md bg-primary text-primary-foreground shadow hover:bg-primary/90 transition-colors font-medium"
+              >
+                โหลดข้อมูลใหม่
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const daysArray = getDaysArray();
+
+  // แสดงผลกรณีที่กำลังโหลดข้อมูล
+  if (loading) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex flex-col space-y-4">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <h1 className="text-2xl md:text-3xl font-bold">ปฏิทินพนักงาน</h1>
+          </div>
+          <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-sm flex flex-col items-center justify-center">
+            <LoadingPage message="กำลังโหลดข้อมูลปฏิทินพนักงาน..." />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">

@@ -1770,25 +1770,37 @@ export async function getEmployeeCalendarData(startDate, endDate) {
 }
 
 /**
- * ฟังก์ชันสำหรับดึงข้อมูลสถานะการทำงาน (WFH)
+ * ฟังก์ชันสำหรับดึงสถานะการทำงาน (WFH)
  */
 export async function getWorkStatuses(employeeId = null, date = null, startDate = null, endDate = null) {
   try {
     // ตรวจสอบว่ามี workStatus model หรือไม่
-    if (typeof prisma.workStatus === 'undefined') {
+    const hasWorkStatusModel = typeof prisma.workStatus !== 'undefined';
+    const hasWorkStatusesModel = typeof prisma.work_statuses !== 'undefined';
+    
+    if (!hasWorkStatusModel && !hasWorkStatusesModel) {
       return {
         success: false,
-        message: 'โมเดล workStatus ยังไม่พร้อมใช้งาน กรุณาตรวจสอบการติดตั้งฐานข้อมูล',
+        message: 'โมเดลข้อมูลสถานะการทำงานยังไม่พร้อมใช้งาน กรุณาตรวจสอบการติดตั้งฐานข้อมูล',
         data: []
       };
     }
     
+    // ใช้โมเดลที่มีอยู่ (work_statuses หรือ workStatus)
+    const model = hasWorkStatusesModel ? prisma.work_statuses : prisma.workStatus;
+    
     console.log('================ WORK STATUS FETCH DEBUG ================');
+    console.log(`Using model: ${hasWorkStatusesModel ? 'work_statuses' : 'workStatus'}`);
     
     const whereClause = {};
     
     if (employeeId) {
-      whereClause.employeeId = employeeId;
+      // ปรับตามชื่อฟิลด์ของแต่ละโมเดล
+      if (hasWorkStatusesModel) {
+        whereClause.employee_id = employeeId;
+      } else {
+        whereClause.employeeId = employeeId;
+      }
       console.log('Filtering by employeeId:', employeeId);
     }
     
@@ -1835,54 +1847,99 @@ export async function getWorkStatuses(employeeId = null, date = null, startDate 
     
     console.log('Final where clause:', JSON.stringify(whereClause, null, 2));
     
-    const workStatuses = await prisma.workStatus.findMany({
-      where: whereClause,
-      include: {
-        employee: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            position: true,
-            teamId: true,
-            teamData: true,
-            department: true,
-            image: true,
+    // ดึงข้อมูลตามโมเดลที่มี
+    let workStatuses;
+    
+    if (hasWorkStatusesModel) {
+      // ถ้าใช้โมเดล work_statuses
+      workStatuses = await model.findMany({
+        where: whereClause,
+        include: {
+          employees_work_statuses_employee_idToemployees: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              position: true,
+              departmentId: true,
+              image: true,
+            },
+          },
+          employees_work_statuses_created_by_idToemployees: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+            },
           },
         },
-        createdBy: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
+        orderBy: {
+          date: 'desc',
+        },
+      });
+      
+      // แปลงชื่อ field ให้เป็นรูปแบบ camelCase
+      workStatuses = workStatuses.map(item => ({
+        id: item.id,
+        employeeId: item.employee_id,
+        date: item.date,
+        status: item.status,
+        note: item.note,
+        createdById: item.created_by_id,
+        createdAt: item.created_at,
+        updatedAt: item.updated_at,
+        employee: item.employees_work_statuses_employee_idToemployees ? {
+          id: item.employees_work_statuses_employee_idToemployees.id,
+          firstName: item.employees_work_statuses_employee_idToemployees.firstName,
+          lastName: item.employees_work_statuses_employee_idToemployees.lastName,
+          position: item.employees_work_statuses_employee_idToemployees.position,
+          departmentId: item.employees_work_statuses_employee_idToemployees.departmentId,
+          image: item.employees_work_statuses_employee_idToemployees.image,
+        } : null,
+        createdBy: item.employees_work_statuses_created_by_idToemployees ? {
+          id: item.employees_work_statuses_created_by_idToemployees.id,
+          firstName: item.employees_work_statuses_created_by_idToemployees.firstName,
+          lastName: item.employees_work_statuses_created_by_idToemployees.lastName,
+        } : null,
+      }));
+    } else {
+      // ถ้าใช้โมเดล workStatus
+      workStatuses = await model.findMany({
+        where: whereClause,
+        include: {
+          employee: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              position: true,
+              teamId: true,
+              teamData: true,
+              department: true,
+              image: true,
+            },
+          },
+          createdBy: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+            },
           },
         },
-      },
-      orderBy: {
-        date: 'desc',
-      },
-    });
+        orderBy: {
+          date: 'desc',
+        },
+      });
+    }
     
     console.log(`Found ${workStatuses.length} work status records`);
     
-    // แปลงวันที่ในผลลัพธ์ให้เป็น UTC เพื่อให้มีรูปแบบที่แน่นอน
-    const processedResults = workStatuses.map(item => {
-      if (item.date) {
-        const dateObj = new Date(item.date);
-        const year = dateObj.getFullYear();
-        const month = dateObj.getMonth();
-        const day = dateObj.getDate();
-        // ตั้งเวลาให้เป็น 12:00 น. UTC เพื่อป้องกันปัญหา timezone
-        item.date = new Date(Date.UTC(year, month, day, 12, 0, 0));
-      }
-      return item;
-    });
-    
-    if (processedResults.length > 0) {
+    if (workStatuses.length > 0) {
       console.log('Sample processed results:');
-      console.log('- First date:', processedResults[0].date?.toISOString());
-      if (processedResults.length > 1) {
-        console.log('- Last date:', processedResults[processedResults.length-1].date?.toISOString());
+      console.log('- First date:', workStatuses[0].date?.toISOString());
+      if (workStatuses.length > 1) {
+        console.log('- Last date:', workStatuses[workStatuses.length-1].date?.toISOString());
       }
     }
     
@@ -1890,7 +1947,7 @@ export async function getWorkStatuses(employeeId = null, date = null, startDate 
     
     return {
       success: true,
-      data: processedResults,
+      data: workStatuses,
     };
   } catch (error) {
     console.error('Error fetching work statuses:', error);
@@ -1899,32 +1956,103 @@ export async function getWorkStatuses(employeeId = null, date = null, startDate 
 }
 
 /**
- * ฟังก์ชันสำหรับดึงข้อมูลสถานะการทำงาน (WFH) ตาม ID
+ * ฟังก์ชันสำหรับดึงสถานะการทำงาน (WFH) ตาม ID
  */
 export async function getWorkStatusById(id) {
   try {
-    const workStatus = await prisma.workStatus.findUnique({
-      where: { id },
-      include: {
-        employee: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            position: true,
-            department: true,
-            image: true,
+    // ตรวจสอบว่ามี workStatus model หรือไม่
+    const hasWorkStatusModel = typeof prisma.workStatus !== 'undefined';
+    const hasWorkStatusesModel = typeof prisma.work_statuses !== 'undefined';
+    
+    if (!hasWorkStatusModel && !hasWorkStatusesModel) {
+      return {
+        success: false,
+        message: 'โมเดลข้อมูลสถานะการทำงานยังไม่พร้อมใช้งาน กรุณาตรวจสอบการติดตั้งฐานข้อมูล',
+        data: null
+      };
+    }
+    
+    // ใช้โมเดลที่มีอยู่ (work_statuses หรือ workStatus)
+    const model = hasWorkStatusesModel ? prisma.work_statuses : prisma.workStatus;
+    
+    let workStatus;
+    
+    if (hasWorkStatusesModel) {
+      // ถ้าใช้โมเดล work_statuses
+      workStatus = await model.findUnique({
+        where: { id },
+        include: {
+          employees_work_statuses_employee_idToemployees: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              position: true,
+              departmentId: true,
+              image: true,
+            },
+          },
+          employees_work_statuses_created_by_idToemployees: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+            },
           },
         },
-        createdBy: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
+      });
+      
+      if (workStatus) {
+        // แปลงชื่อ field ให้เป็นรูปแบบ camelCase
+        workStatus = {
+          id: workStatus.id,
+          employeeId: workStatus.employee_id,
+          date: workStatus.date,
+          status: workStatus.status,
+          note: workStatus.note,
+          createdById: workStatus.created_by_id,
+          createdAt: workStatus.created_at,
+          updatedAt: workStatus.updated_at,
+          employee: workStatus.employees_work_statuses_employee_idToemployees ? {
+            id: workStatus.employees_work_statuses_employee_idToemployees.id,
+            firstName: workStatus.employees_work_statuses_employee_idToemployees.firstName,
+            lastName: workStatus.employees_work_statuses_employee_idToemployees.lastName,
+            position: workStatus.employees_work_statuses_employee_idToemployees.position,
+            departmentId: workStatus.employees_work_statuses_employee_idToemployees.departmentId,
+            image: workStatus.employees_work_statuses_employee_idToemployees.image,
+          } : null,
+          createdBy: workStatus.employees_work_statuses_created_by_idToemployees ? {
+            id: workStatus.employees_work_statuses_created_by_idToemployees.id,
+            firstName: workStatus.employees_work_statuses_created_by_idToemployees.firstName,
+            lastName: workStatus.employees_work_statuses_created_by_idToemployees.lastName,
+          } : null,
+        };
+      }
+    } else {
+      // ถ้าใช้โมเดล workStatus
+      workStatus = await model.findUnique({
+        where: { id },
+        include: {
+          employee: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              position: true,
+              departmentId: true,
+              image: true,
+            },
+          },
+          createdBy: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+            },
           },
         },
-      },
-    });
+      });
+    }
     
     if (!workStatus) {
       return { success: false, message: 'ไม่พบข้อมูลสถานะการทำงาน' };
@@ -1941,108 +2069,44 @@ export async function getWorkStatusById(id) {
 }
 
 /**
- * ฟังก์ชันสำหรับสร้างหรืออัปเดตสถานะการทำงาน (WFH)
- */
-export async function createOrUpdateWorkStatus(data) {
-  try {
-    const { employeeId, date, status, note, createdById } = data;
-    
-    // ตรวจสอบข้อมูลวันที่ที่รับเข้ามา
-    console.log('================ WORK STATUS SAVE DEBUG ================');
-    console.log('Input date:', date);
-    
-    // แปลงวันที่ให้เป็น Date object
-    let dateObj;
-    if (date instanceof Date) {
-      dateObj = new Date(date);
-    } else {
-      dateObj = new Date(date);
-    }
-    
-    // คัดลอกเฉพาะส่วนของวันที่ เดือน ปี โดยไม่สนใจเวลา
-    const year = dateObj.getFullYear();
-    const month = dateObj.getMonth();
-    const day = dateObj.getDate();
-    
-    // สร้าง Date object ใหม่ที่ไม่มีส่วนของเวลา ตั้งเวลาเป็น 12:00 น. เพื่อป้องกันปัญหา timezone
-    const formattedDate = new Date(Date.UTC(year, month, day, 12, 0, 0));
-    
-    console.log('Date object:', dateObj.toISOString());
-    console.log('UTC Date:', formattedDate.toISOString());
-    console.log('Local date (th-TH):', formattedDate.toLocaleDateString('th-TH'));
-    console.log('Local date (en-US):', formattedDate.toLocaleDateString('en-US'));
-    console.log('========================================================');
-    
-    // ตรวจสอบว่าพนักงานคนนี้มีสถานะการทำงานในวันนี้อยู่แล้วหรือไม่
-    const existingWorkStatus = await prisma.workStatus.findFirst({
-      where: {
-        employeeId,
-        date: formattedDate,
-      },
-    });
-    
-    if (existingWorkStatus) {
-      // ถ้ามีข้อมูลอยู่แล้ว ให้อัปเดต
-      console.log(`Updating existing work status (ID: ${existingWorkStatus.id}) for date ${formattedDate.toISOString()}`);
-      
-      return {
-        success: true,
-        data: await prisma.workStatus.update({
-          where: { id: existingWorkStatus.id },
-          data: {
-            status,
-            note,
-            updatedById: createdById,
-            updatedAt: new Date(),
-          },
-          include: {
-            employee: true,
-          },
-        }),
-        message: 'อัปเดตสถานะการทำงานเรียบร้อยแล้ว',
-      };
-    } else {
-      // ถ้ายังไม่มีข้อมูล ให้สร้างใหม่
-      console.log(`Creating new work status for date ${formattedDate.toISOString()}`);
-      
-      return {
-        success: true,
-        data: await prisma.workStatus.create({
-          data: {
-            employeeId,
-            date: formattedDate,
-            status,
-            note,
-            createdById,
-          },
-          include: {
-            employee: true,
-          },
-        }),
-        message: 'บันทึกสถานะการทำงานเรียบร้อยแล้ว',
-      };
-    }
-  } catch (error) {
-    console.error('Error in createOrUpdateWorkStatus:', error);
-    return {
-      success: false,
-      message: `เกิดข้อผิดพลาดในการบันทึกข้อมูล: ${error.message}`,
-    };
-  }
-}
-
-/**
  * ฟังก์ชันสำหรับลบสถานะการทำงาน (WFH)
  */
 export async function deleteWorkStatus(id) {
   try {
-    await prisma.workStatus.delete({
-      where: { id },
+    // ตรวจสอบว่ามี workStatus model หรือไม่
+    const hasWorkStatusModel = typeof prisma.workStatus !== 'undefined';
+    const hasWorkStatusesModel = typeof prisma.work_statuses !== 'undefined';
+    
+    if (!hasWorkStatusModel && !hasWorkStatusesModel) {
+      return {
+        success: false,
+        message: 'โมเดลข้อมูลสถานะการทำงานยังไม่พร้อมใช้งาน กรุณาตรวจสอบการติดตั้งฐานข้อมูล',
+        data: null
+      };
+    }
+    
+    // ใช้โมเดลที่มีอยู่ (work_statuses หรือ workStatus)
+    const model = hasWorkStatusesModel ? prisma.work_statuses : prisma.workStatus;
+    
+    // ตรวจสอบว่ามีข้อมูลนี้อยู่หรือไม่
+    const existingWorkStatus = await model.findUnique({
+      where: { id }
+    });
+    
+    if (!existingWorkStatus) {
+      return {
+        success: false,
+        message: 'ไม่พบข้อมูลสถานะการทำงานที่ต้องการลบ'
+      };
+    }
+    
+    await model.delete({
+      where: { id }
     });
     
     return {
       success: true,
-      message: 'ลบสถานะการทำงานสำเร็จ',
+      message: 'ลบข้อมูลสำเร็จ'
     };
   } catch (error) {
     console.error('Error deleting work status:', error);
@@ -2364,4 +2428,267 @@ export async function deleteLeave(id) {
     console.error(`Error deleting leave with ID ${id}:`, error);
     return { success: false, message: error.message };
   }
-} 
+}
+
+/**
+ * ฟังก์ชันสำหรับสร้างหรืออัปเดตสถานะการทำงาน (WFH)
+ */
+export async function createOrUpdateWorkStatus(data) {
+  try {
+    const { employeeId, date, status, note, createdById } = data;
+    
+    // ตรวจสอบว่ามี workStatus model หรือไม่
+    const hasWorkStatusModel = typeof prisma.workStatus !== 'undefined';
+    const hasWorkStatusesModel = typeof prisma.work_statuses !== 'undefined';
+    
+    if (!hasWorkStatusModel && !hasWorkStatusesModel) {
+      return {
+        success: false,
+        message: 'โมเดลข้อมูลสถานะการทำงานยังไม่พร้อมใช้งาน กรุณาตรวจสอบการติดตั้งฐานข้อมูล',
+        data: null
+      };
+    }
+    
+    // ใช้โมเดลที่มีอยู่ (work_statuses หรือ workStatus)
+    const model = hasWorkStatusesModel ? prisma.work_statuses : prisma.workStatus;
+    
+    // ตรวจสอบข้อมูลวันที่ที่รับเข้ามา
+    console.log('================ WORK STATUS SAVE DEBUG ================');
+    console.log('Input date:', date);
+    console.log(`Using model: ${hasWorkStatusesModel ? 'work_statuses' : 'workStatus'}`);
+    
+    // แปลงวันที่ให้เป็น Date object
+    let dateObj;
+    if (date instanceof Date) {
+      dateObj = new Date(date);
+    } else {
+      dateObj = new Date(date);
+    }
+    
+    // คัดลอกเฉพาะส่วนของวันที่ เดือน ปี โดยไม่สนใจเวลา
+    const year = dateObj.getFullYear();
+    const month = dateObj.getMonth();
+    const day = dateObj.getDate();
+    
+    // สร้าง Date object ใหม่ที่ไม่มีส่วนของเวลา ตั้งเวลาเป็น 12:00 น. เพื่อป้องกันปัญหา timezone
+    const formattedDate = new Date(Date.UTC(year, month, day, 12, 0, 0));
+    
+    console.log('Date object:', dateObj.toISOString());
+    console.log('UTC Date:', formattedDate.toISOString());
+    console.log('Local date (th-TH):', formattedDate.toLocaleDateString('th-TH'));
+    console.log('Local date (en-US):', formattedDate.toLocaleDateString('en-US'));
+    console.log('========================================================');
+    
+    let existingWorkStatus;
+    let result;
+    
+    if (hasWorkStatusesModel) {
+      // ถ้าใช้โมเดล work_statuses
+      // ตรวจสอบว่ามีข้อมูลอยู่แล้วหรือไม่
+      existingWorkStatus = await model.findFirst({
+        where: {
+          employee_id: employeeId,
+          date: formattedDate
+        }
+      });
+      
+      if (existingWorkStatus) {
+        // ถ้ามีข้อมูลอยู่แล้ว ให้อัปเดตข้อมูลเดิม
+        console.log(`Updating existing work status (ID: ${existingWorkStatus.id}) for date ${formattedDate.toISOString()}`);
+        
+        result = await model.update({
+          where: { id: existingWorkStatus.id },
+          data: {
+            status,
+            note,
+            created_by_id: createdById, // อัปเดต created_by_id เป็นคนล่าสุดที่แก้ไขข้อมูล
+          },
+          include: {
+            employees_work_statuses_employee_idToemployees: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                position: true,
+                departmentId: true,
+                image: true,
+              },
+            },
+            employees_work_statuses_created_by_idToemployees: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        });
+        
+        // แปลงชื่อ field ให้เป็นรูปแบบ camelCase
+        result = {
+          id: result.id,
+          employeeId: result.employee_id,
+          date: result.date,
+          status: result.status,
+          note: result.note,
+          createdById: result.created_by_id,
+          createdAt: result.created_at,
+          updatedAt: result.updated_at,
+          employee: result.employees_work_statuses_employee_idToemployees ? {
+            id: result.employees_work_statuses_employee_idToemployees.id,
+            firstName: result.employees_work_statuses_employee_idToemployees.firstName,
+            lastName: result.employees_work_statuses_employee_idToemployees.lastName,
+            position: result.employees_work_statuses_employee_idToemployees.position,
+            departmentId: result.employees_work_statuses_employee_idToemployees.departmentId,
+            image: result.employees_work_statuses_employee_idToemployees.image,
+          } : null,
+          createdBy: result.employees_work_statuses_created_by_idToemployees ? {
+            id: result.employees_work_statuses_created_by_idToemployees.id,
+            firstName: result.employees_work_statuses_created_by_idToemployees.firstName,
+            lastName: result.employees_work_statuses_created_by_idToemployees.lastName,
+          } : null
+        };
+      } else {
+        // ถ้าไม่มีข้อมูลอยู่ ให้สร้างข้อมูลใหม่
+        console.log(`Creating new work status for ${employeeId} on date ${formattedDate.toISOString()}`);
+        
+        result = await model.create({
+          data: {
+            employee_id: employeeId,
+            date: formattedDate,
+            status,
+            note,
+            created_by_id: createdById
+          },
+          include: {
+            employees_work_statuses_employee_idToemployees: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                position: true,
+                departmentId: true,
+                image: true,
+              },
+            },
+            employees_work_statuses_created_by_idToemployees: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        });
+        
+        // แปลงชื่อ field ให้เป็นรูปแบบ camelCase
+        result = {
+          id: result.id,
+          employeeId: result.employee_id,
+          date: result.date,
+          status: result.status,
+          note: result.note,
+          createdById: result.created_by_id,
+          createdAt: result.created_at,
+          updatedAt: result.updated_at,
+          employee: result.employees_work_statuses_employee_idToemployees ? {
+            id: result.employees_work_statuses_employee_idToemployees.id,
+            firstName: result.employees_work_statuses_employee_idToemployees.firstName,
+            lastName: result.employees_work_statuses_employee_idToemployees.lastName,
+            position: result.employees_work_statuses_employee_idToemployees.position,
+            departmentId: result.employees_work_statuses_employee_idToemployees.departmentId,
+            image: result.employees_work_statuses_employee_idToemployees.image,
+          } : null,
+          createdBy: result.employees_work_statuses_created_by_idToemployees ? {
+            id: result.employees_work_statuses_created_by_idToemployees.id,
+            firstName: result.employees_work_statuses_created_by_idToemployees.firstName,
+            lastName: result.employees_work_statuses_created_by_idToemployees.lastName,
+          } : null
+        };
+      }
+    } else {
+      // ถ้าใช้โมเดล workStatus
+      // ตรวจสอบว่ามีข้อมูลอยู่แล้วหรือไม่
+      existingWorkStatus = await model.findFirst({
+        where: {
+          employeeId,
+          date: formattedDate
+        }
+      });
+      
+      if (existingWorkStatus) {
+        // ถ้ามีข้อมูลอยู่แล้ว ให้อัปเดตข้อมูลเดิม
+        console.log(`Updating existing work status (ID: ${existingWorkStatus.id}) for date ${formattedDate.toISOString()}`);
+        
+        result = await model.update({
+          where: { id: existingWorkStatus.id },
+          data: {
+            status,
+            note,
+            createdById, // อัปเดต createdById เป็นคนล่าสุดที่แก้ไขข้อมูล
+          },
+          include: {
+            employee: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                position: true,
+                departmentId: true,
+                image: true,
+              },
+            },
+            createdBy: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        });
+      } else {
+        // ถ้าไม่มีข้อมูลอยู่ ให้สร้างข้อมูลใหม่
+        console.log(`Creating new work status for date ${formattedDate.toISOString()}`);
+        
+        result = await model.create({
+          data: {
+            employeeId,
+            date: formattedDate,
+            status,
+            note,
+            createdById
+          },
+          include: {
+            employee: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                position: true,
+                departmentId: true,
+                image: true,
+              },
+            },
+            createdBy: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        });
+      }
+    }
+    
+    return {
+      success: true,
+      data: result,
+      message: existingWorkStatus ? 'อัปเดตสถานะการทำงานเรียบร้อยแล้ว' : 'บันทึกสถานะการทำงานเรียบร้อยแล้ว'
+    };
+  } catch (error) {
+    console.error('Error in createOrUpdateWorkStatus:', error);
+    return { success: false, message: error.message };
+  }
+}
