@@ -548,12 +548,16 @@ export default function EmployeeCalendarPage() {
           const processedWorkStatuses = (data.data.workStatuses || []).map(item => {
             if (item && item.date) {
               const dateObj = new Date(item.date);
-              item.date = new Date(Date.UTC(
+              // ไม่ต้องตั้งเวลาเป็น 12:00 น. แต่ใช้เวลาของ dateObj เดิม
+              // เพียงแค่สร้าง Date object ใหม่เพื่อให้แน่ใจว่าเป็น Date object จริง
+              item.date = new Date(
                 dateObj.getFullYear(),
                 dateObj.getMonth(),
                 dateObj.getDate(),
-                12, 0, 0
-              ));
+                dateObj.getHours(),
+                dateObj.getMinutes(),
+                dateObj.getSeconds()
+              );
             }
             return item;
           });
@@ -563,21 +567,23 @@ export default function EmployeeCalendarPage() {
           const processedLeaves = (data.data.leaves || []).map(item => {
             if (item && item.startDate) {
               const startDateObj = new Date(item.startDate);
-              item.startDate = new Date(Date.UTC(
+              // สำหรับวันที่เริ่มต้น ให้ตั้งเวลาเป็น 00:00:00 เสมอ
+              item.startDate = new Date(
                 startDateObj.getFullYear(),
                 startDateObj.getMonth(),
                 startDateObj.getDate(),
                 0, 0, 0
-              ));
+              );
             }
             if (item && item.endDate) {
               const endDateObj = new Date(item.endDate);
-              item.endDate = new Date(Date.UTC(
+              // สำหรับวันที่สิ้นสุด ให้ตั้งเวลาเป็น 23:59:59 เสมอ
+              item.endDate = new Date(
                 endDateObj.getFullYear(),
                 endDateObj.getMonth(),
                 endDateObj.getDate(),
                 23, 59, 59
-              ));
+              );
             }
             return item;
           });
@@ -587,12 +593,15 @@ export default function EmployeeCalendarPage() {
           const processedOvertimes = (data.data.overtimes || []).map(item => {
             if (item && item.date) {
               const dateObj = new Date(item.date);
-              item.date = new Date(Date.UTC(
+              // ไม่ต้องตั้งเวลาเป็น 12:00 น. แต่ใช้เวลาของ dateObj เดิม
+              item.date = new Date(
                 dateObj.getFullYear(),
                 dateObj.getMonth(),
                 dateObj.getDate(),
-                12, 0, 0
-              ));
+                dateObj.getHours(),
+                dateObj.getMinutes(),
+                dateObj.getSeconds()
+              );
             }
             return item;
           });
