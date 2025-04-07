@@ -151,7 +151,7 @@ export function TeamMembersCard() {
 
   // ฟังก์ชั่นดึงสถานะการทำงานล่าสุดของวันนี้
   const getTodayWorkStatus = (workStatuses) => {
-    if (!workStatuses || workStatuses.length === 0) return 'OFFICE';
+    if (!workStatuses || workStatuses.length === 0) return null;
     
     // สร้างวันที่ปัจจุบันแบบเดียวกับที่ใช้ดึงข้อมูล
     const today = new Date();
@@ -169,12 +169,14 @@ export function TeamMembersCard() {
       return isMatch;
     });
     
-    // ถ้ามีสถานะของวันนี้ให้ใช้ค่านั้น ถ้าไม่มีให้ใช้ค่าดีฟอลต์ OFFICE
-    return todayStatus ? todayStatus.status : 'OFFICE';
+    // ถ้ามีสถานะของวันนี้ให้ใช้ค่านั้น ถ้าไม่มีให้ส่งคืนค่า null
+    return todayStatus ? todayStatus.status : null;
   };
 
   // ฟังก์ชั่นสำหรับแสดงไอคอนตามสถานะการทำงาน
   const getStatusIcon = (status) => {
+    if (!status) return <FiRefreshCw className="w-4 h-4" />;
+    
     switch (status) {
       case 'OFFICE':
         return <FiBriefcase className="w-4 h-4" />;
@@ -194,6 +196,8 @@ export function TeamMembersCard() {
   };
 
   const getWorkStatusColor = (status) => {
+    if (!status) return 'bg-gray-100 text-gray-800 border-gray-200';
+    
     switch (status) {
       case 'OFFICE':
         return 'bg-emerald-100 text-emerald-800 border-emerald-200';
@@ -213,6 +217,8 @@ export function TeamMembersCard() {
   };
 
   const getWorkStatusText = (status) => {
+    if (!status) return 'ไม่ได้กรอก';
+    
     switch (status) {
       case 'OFFICE':
         return 'Office';
