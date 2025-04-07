@@ -1010,9 +1010,74 @@ export default function EmployeeCalendarPage() {
     }
   };
 
+  // เพิ่มฟังก์ชันสำหรับดึงข้อมูลสถานะการทำงานโดยเฉพาะ
+  const fetchWorkStatuses = async () => {
+    try {
+      // คำนวณเดือนและปีที่ต้องการดึงข้อมูล
+      const dateToFetch = new Date(currentDate);
+      const month = dateToFetch.getMonth() + 1; // เดือนใน JS เริ่มจาก 0
+      const year = dateToFetch.getFullYear();
+      
+      console.log(`======== FETCH WORK STATUSES ========`);
+      console.log(`กำลังดึงข้อมูลสถานะการทำงานสำหรับ: ${month}/${year}`);
+      
+      // ดึงข้อมูลสถานะการทำงานจาก API โดยระบุเดือนและปีที่ต้องการ
+      const response = await fetch(`/api/work-status?month=${month}&year=${year}`);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Error fetching work statuses:', errorData);
+        throw new Error(errorData.message || 'ไม่สามารถดึงข้อมูลสถานะการทำงานได้');
+      }
+      
+      const data = await response.json();
+      
+      if (data.success && Array.isArray(data.data)) {
+        console.log(`ดึงข้อมูลสถานะการทำงานสำเร็จ: ${data.data.length} รายการ`);
+        
+        // แปลงวันที่ในข้อมูลเป็น UTC เพื่อแก้ปัญหา timezone
+        const processedData = data.data.map(item => {
+          if (item.date) {
+            const dateObj = new Date(item.date);
+            const year = dateObj.getFullYear();
+            const month = dateObj.getMonth();
+            const day = dateObj.getDate();
+            
+            // กำหนดเวลาเป็น 12:00 น. UTC เพื่อป้องกันปัญหา timezone
+            item.date = new Date(Date.UTC(year, month, day, 12, 0, 0));
+          }
+          return item;
+        });
+        
+        setWorkStatuses(processedData);
+        
+        // แสดงตัวอย่างข้อมูลเพื่อการ debug
+        if (processedData.length > 0) {
+          console.log('ตัวอย่างข้อมูลสถานะการทำงาน:');
+          processedData.slice(0, 3).forEach((record, idx) => {
+            console.log(`รายการที่ ${idx + 1}:`, {
+              id: record.id,
+              employeeId: record.employeeId,
+              date: record.date,
+              status: record.status
+            });
+          });
+        }
+      } else {
+        console.error('รูปแบบข้อมูลไม่ถูกต้อง:', data);
+        setWorkStatuses([]);
+      }
+      console.log(`===================================`);
+    } catch (error) {
+      console.error('เกิดข้อผิดพลาดในการดึงข้อมูลสถานะการทำงาน:', error);
+      toast.error('ไม่สามารถดึงข้อมูลสถานะการทำงานได้');
+    }
+  };
+
   useEffect(() => {
     if (session) {
       fetchCalendarData();
+      fetchWorkStatuses();
     }
   }, [currentDate, session, selectedDepartment, selectedTeam]);
 
@@ -1796,86 +1861,3 @@ const renderStatus = (status) => {
     </div>
   );
 };
-
-// เพิ่มฟังก์ชันสำหรับดึงข้อมูลสถานะการทำงานโดยเฉพาะ
-const fetchWorkStatuses = async () => {
-  try {
-    // คำนวณเดือนและปีที่ต้องการดึงข้อมูล
-    const dateToFetch = new Date(currentDate);
-    const month = dateToFetch.getMonth() + 1; // เดือนใน JS เริ่มจาก 0
-    const year = dateToFetch.getFullYear();
-    
-    console.log(`======== FETCH WORK STATUSES ========`);
-    console.log(`กำลังดึงข้อมูลสถานะการทำงานสำหรับ: ${month}/${year}`);
-    
-    // ดึงข้อมูลสถานะการทำงานจาก API โดยระบุเดือนและปีที่ต้องการ
-    const response = await fetch(`/api/work-status?month=${month}&year=${year}`);
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('Error fetching work statuses:', errorData);
-      throw new Error(errorData.message || 'ไม่สามารถดึงข้อมูลสถานะการทำงานได้');
-    }
-    
-    const data = await response.json();
-    
-    if (data.success && Array.isArray(data.data)) {
-      console.log(`ดึงข้อมูลสถานะการทำงานสำเร็จ: ${data.data.length} รายการ`);
-      
-      // แปลงวันที่ในข้อมูลเป็น UTC เพื่อแก้ปัญหา timezone
-      const processedData = data.data.map(item => {
-        if (item.date) {
-          const dateObj = new Date(item.date);
-          const year = dateObj.getFullYear();
-          const month = dateObj.getMonth();
-          const day = dateObj.getDate();
-          
-          // กำหนดเวลาเป็น 12:00 น. UTC เพื่อป้องกันปัญหา timezone
-          item.date = new Date(Date.UTC(year, month, day, 12, 0, 0));
-        }
-        return item;
-      });
-      
-      setWorkStatuses(processedData);
-      
-      // แสดงตัวอย่างข้อมูลเพื่อการ debug
-      if (processedData.length > 0) {
-        console.log('ตัวอย่างข้อมูลสถานะการทำงาน:');
-        processedData.slice(0, 3).forEach((record, idx) => {
-          console.log(`รายการที่ ${idx + 1}:`, {
-            id: record.id,
-            employeeId: record.employeeId,
-            date: record.date,
-            status: record.status
-          });
-        });
-      }
-    } else {
-      console.error('รูปแบบข้อมูลไม่ถูกต้อง:', data);
-      setWorkStatuses([]);
-    }
-    console.log(`===================================`);
-  } catch (error) {
-    console.error('เกิดข้อผิดพลาดในการดึงข้อมูลสถานะการทำงาน:', error);
-    toast.error('ไม่สามารถดึงข้อมูลสถานะการทำงานได้');
-  }
-};
-
-// useEffect สำหรับเรียกดึงข้อมูลสถานะการทำงานเมื่อเดือนหรือปีเปลี่ยน
-useEffect(() => {
-  if (session) {
-    // ดึงข้อมูลปฏิทินปกติ
-    fetchCalendarData();
-    
-    // เพิ่มการดึงข้อมูล workStatus เฉพาะเดือนปัจจุบัน
-    fetchWorkStatuses();
-  }
-}, [currentDate, session]);
-
-// ใช้ useEffect ตัวเดิมเพื่อดึงข้อมูลเมื่อโหลดหน้าครั้งแรก
-useEffect(() => {
-  if (session && status !== 'loading') {
-    fetchCalendarData();
-    fetchWorkStatuses();
-  }
-}, [session?.user?.id, status]);

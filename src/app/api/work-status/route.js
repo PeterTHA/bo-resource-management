@@ -34,6 +34,7 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const month = parseInt(searchParams.get('month')) || new Date().getMonth() + 1;
     const year = parseInt(searchParams.get('year')) || new Date().getFullYear();
+    const employeeId = searchParams.get('employeeId');
 
     // สร้างวันที่เริ่มต้นและสิ้นสุดของเดือนโดยใช้ UTC เพื่อแก้ปัญหา timezone
     const startDate = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0));
@@ -43,9 +44,24 @@ export async function GET(request) {
     console.log(`Fetching work status for: ${month}/${year}`);
     console.log(`Start date (UTC): ${startDate.toISOString()}`);
     console.log(`End date (UTC): ${endDate.toISOString()}`);
+    if (employeeId) {
+      console.log(`Employee ID: ${employeeId}`);
+    }
     console.log(`===================================`);
 
-    // ดึงข้อมูลสถานะการทำงานของทุกคนในเดือนที่กำหนด
+    // ใช้ฟังก์ชัน getWorkStatuses ที่มีการแก้ไขให้รองรับ startDate และ endDate
+    const workStatusesResult = await getWorkStatuses(employeeId, null, startDate, endDate);
+
+    if (!workStatusesResult.success) {
+      return NextResponse.json({
+        success: false,
+        message: workStatusesResult.message || 'เกิดข้อผิดพลาดในการดึงข้อมูลสถานะการทำงาน',
+        data: []
+      }, { status: 500 });
+    }
+
+    // ฟังก์ชันเดิมที่ใช้ prisma โดยตรง
+    /*
     const workStatuses = await prisma.workStatus.findMany({
       where: {
         date: {
@@ -70,10 +86,11 @@ export async function GET(request) {
         date: 'asc'
       }
     });
+    */
 
     return NextResponse.json({
       success: true,
-      data: workStatuses
+      data: workStatusesResult.data
     });
 
   } catch (error) {
