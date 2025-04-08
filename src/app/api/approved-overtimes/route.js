@@ -13,8 +13,8 @@ export async function GET(request) {
 
     // ดึง query parameters
     const { searchParams } = new URL(request.url);
-    const startDate = searchParams.get('startDate');
-    const endDate = searchParams.get('endDate');
+    const startDate = searchParams.get('start_date');
+    const endDate = searchParams.get('end_date');
 
     if (!startDate || !endDate) {
       return NextResponse.json({ 
@@ -28,7 +28,7 @@ export async function GET(request) {
     const end = new Date(endDate);
 
     // ดึงข้อมูล OT ที่อนุมัติแล้ว
-    const overtimes = await prisma.overtime.findMany({
+    const overtimes = await prisma.overtimes.findMany({
       where: {
         date: {
           gte: start,
@@ -37,12 +37,12 @@ export async function GET(request) {
         status: 'อนุมัติ'
       },
       include: {
-        employee: {
+        employees: {
           select: {
             id: true,
-            firstName: true,
-            lastName: true,
-            department: true
+            first_name: true,
+            last_name: true,
+            departments: true
           }
         }
       }

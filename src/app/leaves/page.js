@@ -9,7 +9,7 @@ import { redirect } from 'next/navigation';
 
 // เปลี่ยนจาก Heroicons เป็น react-icons
 import { FiCheckCircle, FiXCircle, FiTrash2, FiPlus, FiFilter, FiCalendar, FiUser, FiClock, 
-         FiFileText, FiDownload, FiInfo, FiAlertTriangle, FiMessageCircle, FiEdit, FiEye, FiChevronUp, FiChevronDown, FiXSquare, FiX, FiCheck, FiPaperclip, FiImage, FiArchive, FiUploadCloud, FiUpload, FiFile, FiSave } from 'react-icons/fi';
+         FiFileText, FiDownload, FiInfo, FiAlertTriangle, FiMessageCircle, FiEdit, FiEye, FiChevronUp, FiChevronDown, FiXSquare, FiX, FiCheck, FiPaperclip, FiImage, FiArchive, FiUploadCloud, FiUpload, FiFile, FiSave, FiSlash, FiAlertCircle } from 'react-icons/fi';
 import { LoadingPage, LoadingButton, LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import ErrorMessage from '../../components/ui/ErrorMessage';
 import {
@@ -45,6 +45,8 @@ import { format } from "date-fns";
 import { th } from "date-fns/locale";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 
 // เพิ่มฟังก์ชันตรวจสอบว่าเป็นรูปภาพจาก mock-images หรือไม่
 const isMockImage = (src) => {
@@ -177,25 +179,9 @@ export default function LeavesPage() {
         const data = await res.json();
         
         if (data.success) {
-          // ปรับปรุงข้อมูลโดยเพิ่ม isDuringCancel
-          const leavesWithStatus = data.data.map(leave => {
-            // ตรวจสอบว่ามีคำขอยกเลิกที่ยังรออนุมัติหรือไม่
-            const hasPendingCancelRequest = leave.approvals?.some(a => 
-              a.type === 'request_cancel' && 
-              a.status === 'completed' && 
-              !leave.approvals.some(b => 
-                (b.type === 'approve_cancel' || b.type === 'reject_cancel') && 
-                b.status === 'completed' && 
-                b.createdAt > a.createdAt
-              )
-            );
-            
-            // เพิ่ม flag เพื่อใช้ในการแสดงผล
-            return {
-              ...leave,
-              isDuringCancel: hasPendingCancelRequest
-            };
-          });
+          // ใช้ข้อมูลที่ได้จาก API โดยตรง ไม่ต้องแปลงข้อมูลอีก
+          // เพราะข้อมูลถูกแปลงเป็น camelCase มาแล้วจาก API
+          const leavesWithStatus = data.data;
           
           setLeaves(leavesWithStatus);
           
@@ -203,15 +189,15 @@ export default function LeavesPage() {
           const counts = {
             all: leavesWithStatus.length,
             pending: leavesWithStatus.filter(leave => 
-              leave.status === 'รออนุมัติ'
+              leave.status === 'waiting_for_approve'
             ).length,
             approved: leavesWithStatus.filter(leave => 
-              leave.status === 'อนุมัติ' && 
+              leave.status === 'approved' && 
               !leave.isDuringCancel
             ).length,
-            rejected: leavesWithStatus.filter(leave => leave.status === 'ไม่อนุมัติ').length,
+            rejected: leavesWithStatus.filter(leave => leave.status === 'rejected').length,
             cancelled: leavesWithStatus.filter(leave => 
-              leave.status === 'ยกเลิก' ||
+              leave.status === 'canceled' ||
               leave.approvals?.some(a => a.type === 'approve_cancel' && a.status === 'completed')
             ).length,
             pendingCancel: leavesWithStatus.filter(leave => leave.isDuringCancel).length
@@ -253,8 +239,9 @@ export default function LeavesPage() {
         // อัปเดตสถิติ
         setStatusCounts(prev => {
           const deletedLeave = leaves.find(leave => leave.id === id);
-          const status = deletedLeave?.status === 'รออนุมัติ' ? 'pending' : 
-                         deletedLeave?.status === 'อนุมัติ' ? 'approved' : 'rejected';
+          const status = deletedLeave?.status === 'waiting_for_approve' ? 'pending' : 
+                         deletedLeave?.status === 'approved' ? 'approved' : 
+                         deletedLeave?.status === 'rejected' ? 'rejected' : 'cancelled';
           
           return {
             ...prev,
@@ -301,7 +288,7 @@ export default function LeavesPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ 
-          status: 'อนุมัติ',
+          status: 'approved',
           approvedById: session.user.id,
           comment: approveReason || null
         }),
@@ -314,7 +301,7 @@ export default function LeavesPage() {
         setLeaves(leaves.map(leave => 
           leave.id === selectedLeaveId ? { 
             ...leave, 
-            status: 'อนุมัติ',
+            status: 'approved',
             approvedBy: {
               id: session.user.id,
               firstName: session.user.firstName || session.user.name?.split(' ')[0] || '',
@@ -386,9 +373,9 @@ export default function LeavesPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ 
-          status: 'ไม่อนุมัติ',
+          status: 'rejected',
           approvedById: session.user.id,
-          comment: rejectReason || null
+          comment: rejectReason
         }),
       });
       
@@ -399,14 +386,14 @@ export default function LeavesPage() {
         setLeaves(leaves.map(leave => 
           leave.id === selectedLeaveId ? { 
             ...leave, 
-            status: 'ไม่อนุมัติ',
+            status: 'rejected',
             approvedBy: {
               id: session.user.id,
               firstName: session.user.firstName || session.user.name?.split(' ')[0] || '',
               lastName: session.user.lastName || session.user.name?.split(' ')[1] || '',
             },
             approvedAt: new Date().toISOString(),
-            comment: rejectReason || null
+            comment: rejectReason
           } : leave
         ));
         
@@ -684,7 +671,7 @@ export default function LeavesPage() {
           leave.id === selectedLeaveId ? { 
             ...leave,
             isDuringCancel: false,
-            status: 'อนุมัติ', // ยังคงสถานะอนุมัติไว้
+            status: 'approved', // ยังคงสถานะอนุมัติไว้
             approvals: [
               {
                 type: 'reject_cancel',
@@ -741,17 +728,17 @@ export default function LeavesPage() {
     
     // กรองตามสถานะ
     if (filter === 'pending') {
-      filtered = leaves.filter(leave => leave.status === 'รออนุมัติ');
+      filtered = leaves.filter(leave => leave.status === 'waiting_for_approve');
     } else if (filter === 'approved') {
       filtered = leaves.filter(leave => 
-        leave.status === 'อนุมัติ' && 
+        leave.status === 'approved' && 
         !leave.isDuringCancel
       );
     } else if (filter === 'rejected') {
-      filtered = leaves.filter(leave => leave.status === 'ไม่อนุมัติ');
+      filtered = leaves.filter(leave => leave.status === 'rejected');
     } else if (filter === 'cancelled') {
       filtered = leaves.filter(leave => 
-        leave.status === 'ยกเลิก' ||
+        leave.status === 'canceled' ||
         leave.approvals?.some(a => a.type === 'approve_cancel' && a.status === 'completed')
       );
     } else if (filter === 'pendingCancel') {
@@ -954,6 +941,20 @@ export default function LeavesPage() {
       minute: '2-digit',
     });
   };
+  
+  // ฟังก์ชันสำหรับแสดงช่วงวันที่
+  const formatDateRange = (startDate, endDate) => {
+    if (!startDate) return '-';
+    
+    const formattedStart = formatDate(startDate);
+    
+    if (!endDate || startDate === endDate) {
+      return formattedStart;
+    }
+    
+    const formattedEnd = formatDate(endDate);
+    return `${formattedStart} - ${formattedEnd}`;
+  };
 
   // เช็คว่าเป็นหัวหน้างานหรือแอดมินหรือไม่
   const isManager = session?.user?.role === 'supervisor' || session?.user?.role === 'admin';
@@ -982,173 +983,65 @@ export default function LeavesPage() {
 
   // ตรวจสอบว่าผู้ใช้มีสิทธิ์อนุมัติหรือไม่
   const canApprove = (leave) => {
-    if (!session || !leave) return false;
+    // สามารถอนุมัติได้หาก:
+    // 1. เป็นแอดมิน/HR หรือหัวหน้าทีม
+    // 2. การลาอยู่ในสถานะรออนุมัติ
+    // 3. ไม่ใช่การลาของตัวเอง
+    const isAdminOrHROrTeamLead = session?.user?.role === 'admin' || session?.user?.role === 'hr' || session?.user?.role === 'team_lead';
+    const isPending = leave.status === 'waiting_for_approve';
+    const isNotOwnLeave = String(leave.employeeId) !== String(session?.user?.id);
     
-    // แอดมินและหัวหน้างานอนุมัติได้ (ไม่ต้องตรวจสอบว่าเป็นการลาของตัวเองหรือไม่)
-    if ((session.user.role === 'admin' || session.user.role === 'supervisor') && 
-        leave.status === 'รออนุมัติ') {
-      return true;
-    }
-    
-    return false;
+    return isAdminOrHROrTeamLead && isPending && isNotOwnLeave && !leave.isDuringCancel;
   };
 
   // ตรวจสอบว่าสามารถลบได้หรือไม่
   const canDelete = (leave) => {
-    if (!session || !leave) return false;
+    // สามารถลบได้หาก:
+    // 1. เป็นแอดมิน หรือ HR
+    const isAdminOrHR = session?.user?.role === 'admin' || session?.user?.role === 'hr';
     
-    // พนักงานลบของตัวเองได้ถ้ายังไม่อนุมัติ
-    if ((session.user.id === leave.employeeId) && leave.status === 'รออนุมัติ') {
-      return true;
-    }
-    
-    // แอดมินลบอะไรก็ได้
-    if (session.user.role === 'admin') {
-      return true;
-    }
-    
-    return false;
+    return isAdminOrHR;
   };
 
-  // ตรวจสอบว่าสามารถแก้ไขได้หรือไม่
+  // ฟังก์ชันตรวจสอบสิทธิ์การแก้ไขการลา
   const canEdit = (leave) => {
-    if (!session || !leave) return false;
+    // ไม่สามารถแก้ไขได้หาก:
+    // 1. ไม่ใช่การลาของตัวเอง และไม่ใช่แอดมิน/HR
+    // 2. การลาไม่ได้อยู่ในสถานะรออนุมัติหรือถูกปฏิเสธ
+    // 3. การลาอยู่ในสถานะรอยกเลิก
+    const isOwnLeave = String(leave.employeeId) === String(session?.user?.id);
+    const isAdminOrHR = session?.user?.role === 'admin' || session?.user?.role === 'hr';
+    const isPendingOrRejected = leave.status === 'waiting_for_approve' || leave.status === 'rejected';
     
-    // พนักงานแก้ไขข้อมูลของตัวเองได้ถ้ายังไม่อนุมัติ
-    if ((session.user.id === leave.employeeId) && leave.status === 'รออนุมัติ') {
-      return true;
-    }
-    
-    // แอดมินแก้ไขได้ทุกรายการที่ยังไม่อนุมัติ
-    if (session.user.role === 'admin' && leave.status === 'รออนุมัติ') {
-      return true;
-    }
-    
-    return false;
+    // ตรวจสอบว่ามีการขอยกเลิกหรือไม่
+    return (isOwnLeave || isAdminOrHR) && isPendingOrRejected && !leave.isDuringCancel;
   };
 
   // ตรวจสอบว่าสามารถอนุมัติคำขอยกเลิกการลาได้หรือไม่
   const canApproveCancelRequest = (leave) => {
-    if (!session || !leave) return false;
+    // สามารถอนุมัติการยกเลิกได้หาก:
+    // 1. เป็นแอดมิน/HR หรือหัวหน้าทีม
+    // 2. มีคำขอยกเลิกที่รออนุมัติ
+    // 3. ไม่ใช่การลาของตัวเอง
+    const isAdminOrHROrTeamLead = session?.user?.role === 'admin' || session?.user?.role === 'hr' || session?.user?.role === 'team_lead';
+    const isNotOwnLeave = String(leave.employeeId) !== String(session?.user?.id);
     
-    // แอดมินและหัวหน้างานเท่านั้นที่สามารถอนุมัติการยกเลิกได้
-    if (session.user.role === 'admin' || session.user.role === 'supervisor') {
-      // ตรวจสอบว่ามีการขอยกเลิกล่าสุดหรือไม่
-      if (leave.approvals && leave.approvals.length > 0) {
-        // เรียงลำดับการดำเนินการจากล่าสุดไปเก่าสุด
-        const sortedApprovals = [...leave.approvals].sort(
-          (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
-        );
-        
-        // หาการดำเนินการล่าสุด
-        const latestAction = sortedApprovals[0];
-        
-        // ถ้าการดำเนินการล่าสุดเป็นการอนุมัติหรือปฏิเสธการยกเลิกแล้ว ไม่ต้องแสดงปุ่มอีก
-        if (latestAction.type === 'approve_cancel' || latestAction.type === 'reject_cancel') {
-          return false;
-        }
-        
-        // ถ้าการดำเนินการล่าสุดเป็นการขอยกเลิก ให้แสดงปุ่มอนุมัติหรือไม่อนุมัติการยกเลิก
-        if (latestAction.type === 'request_cancel' && latestAction.status === 'completed') {
-          return true;
-        }
-      }
-      
-      // กรณีที่ใบลายังอยู่ในสถานะ isDuringCancel และไม่มีการอนุมัติหรือปฏิเสธการยกเลิกล่าสุด
-      if (leave.isDuringCancel === true && 
-          (!leave.approvals || !leave.approvals.some(a => 
-            (a.type === 'approve_cancel' || a.type === 'reject_cancel') && 
-            a.status === 'completed'))) {
-        return true;
-      }
-    }
-    
-    return false;
+    return isAdminOrHROrTeamLead && leave.isDuringCancel && isNotOwnLeave;
   };
 
   // ตรวจสอบว่าสามารถขอยกเลิกการลาได้หรือไม่
   const canCancelRequest = (leave) => {
-    if (!session || !leave) return false;
+    // สามารถขอยกเลิกได้หาก:
+    // 1. เป็นการลาของตัวเอง หรือเป็นแอดมิน/HR
+    // 2. การลาอยู่ในสถานะอนุมัติแล้ว
+    // 3. ยังไม่มีคำขอยกเลิกที่รออนุมัติ
+    const isOwnLeaveOrAdminOrHR = String(leave.employeeId) === String(session?.user?.id) || 
+                                 session?.user?.role === 'admin' || 
+                                 session?.user?.role === 'hr';
+    const isApproved = leave.status === 'approved';
     
-    // ตรวจสอบว่าเป็นการลาที่อนุมัติแล้ว
-    if (leave.status !== 'อนุมัติ') return false;
-    
-    // ตรวจสอบว่ามีคำขอยกเลิกที่ยังรออนุมัติอยู่หรือไม่
-    const hasPendingCancelRequest = leave.approvals?.some(a => 
-      a.type === 'request_cancel' && 
-      a.status === 'completed' && 
-      !leave.approvals.some(b => 
-        ((b.type === 'approve_cancel' && b.status === 'completed') || 
-        (b.type === 'reject_cancel' && b.status === 'completed')) && 
-        b.createdAt > a.createdAt
-      )
-    );
-    
-    // ถ้ามีคำขอยกเลิกที่ยังรออนุมัติอยู่ จะไม่สามารถขอยกเลิกซ้ำได้
-    if (hasPendingCancelRequest) return false;
-    
-    // หาคำขอยกเลิกล่าสุด
-    let latestCancelRequest = null;
-    let latestResponse = null;
-    
-    if (leave.approvals && leave.approvals.length > 0) {
-      // หาคำขอยกเลิกล่าสุด
-      const cancelRequests = leave.approvals
-        .filter(a => a.type === 'request_cancel' && a.status === 'completed')
-        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-      
-      if (cancelRequests.length > 0) {
-        latestCancelRequest = cancelRequests[0];
-        
-        // หาการตอบกลับล่าสุด (อนุมัติหรือปฏิเสธ) ต่อคำขอยกเลิกล่าสุด
-        const responses = leave.approvals
-          .filter(a => (a.type === 'approve_cancel' || a.type === 'reject_cancel') && a.status === 'completed')
-          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-        
-        if (responses.length > 0) {
-          latestResponse = responses[0];
-        }
-      }
-    }
-    
-    // ถ้ามีคำขอยกเลิกล่าสุด และมีการตอบกลับล่าสุด และการตอบกลับเกิดขึ้นหลังคำขอ
-    // และการตอบกลับล่าสุดคือปฏิเสธ จะสามารถขอยกเลิกได้อีกครั้ง
-    if (latestCancelRequest && latestResponse && 
-        new Date(latestResponse.createdAt) > new Date(latestCancelRequest.createdAt) && 
-        latestResponse.type === 'reject_cancel') {
-      // อนุญาตให้ขอยกเลิกอีกครั้งได้
-    } else if (latestCancelRequest && !latestResponse) {
-      // ถ้ามีคำขอยกเลิกล่าสุดแต่ไม่มีการตอบกลับ จะไม่สามารถขอยกเลิกได้
-      return false;
-    }
-    
-    // พนักงานขอยกเลิกการลาของตัวเองได้
-    if (session.user.id === leave.employeeId) return true;
-    
-    // หัวหน้าทีมขอยกเลิกแทนคนในทีมได้
-    if (canRequestCancelForTeam(leave)) return true;
-    
-    // แอดมินขอยกเลิกการลาได้ทุกรายการ
-    if (session.user.role === 'admin') return true;
-    
-    return false;
-  };
-  
-  // ตรวจสอบว่าหัวหน้าทีมสามารถขอยกเลิกการลาแทนสมาชิกในทีมได้หรือไม่
-  const canRequestCancelForTeam = (leave) => {
-    if (!session || !leave) return false;
-    
-    // ต้องเป็นหัวหน้าทีม
-    if (session.user.role !== 'supervisor') return false;
-    
-    // ต้องเป็นการลาที่อนุมัติแล้ว
-    if (leave.status !== 'อนุมัติ') return false;
-    
-    // ตรวจสอบว่าพนักงานที่ลาอยู่ในทีมของหัวหน้าหรือไม่
-    const isSameTeam = session.user.teamId && 
-                       leave.employee?.teamId === session.user.teamId;
-    
-    return isSameTeam;
+    // ตรวจสอบว่ามีการขอยกเลิกหรือไม่
+    return isOwnLeaveOrAdminOrHR && isApproved && !leave.isDuringCancel;
   };
 
   // ฟังก์ชันเปิด Sheet แก้ไขข้อมูล
@@ -1643,6 +1536,41 @@ export default function LeavesPage() {
     document.dispatchEvent(event);
   };
 
+  // เพิ่มฟังก์ชันแปลงสถานะเป็นภาษาไทย
+  const translateStatus = (status) => {
+    if (!status) return '';
+    
+    switch (status) {
+      case 'waiting_for_approve':
+        return 'รออนุมัติ';
+      case 'approved':
+        return 'อนุมัติ';
+      case 'rejected':
+        return 'ไม่อนุมัติ';
+      case 'canceled':
+        return 'ยกเลิกแล้ว';
+      default:
+        return status;
+    }
+  };
+
+  // ฟังก์ชัน openDetailSheet ต้องทำความสะอาดข้อมูลก่อนแสดง
+  const openDetailSheet = (leave) => {
+    // ทำสำเนาข้อมูลเพื่อไม่กระทบข้อมูลต้นฉบับ
+    const leaveDetail = { ...leave };
+    
+    // ถ้าไม่มีข้อมูลสถานะในรูปแบบภาษาไทย ให้แปลงสถานะเป็นภาษาไทย
+    leaveDetail.statusText = translateStatus(leave.status);
+    
+    // ตรวจสอบสถานะการขอยกเลิก
+    if (leave.cancelStatus) {
+      leaveDetail.cancelStatusText = translateStatus(leave.cancelStatus);
+    }
+    
+    setSelectedLeaveDetail(leaveDetail);
+    setIsDetailSheetOpen(true);
+  };
+
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -1918,38 +1846,36 @@ export default function LeavesPage() {
                         <div className="text-xs text-gray-500 dark:text-gray-400">({leave.leaveFormat})</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex flex-col gap-1">
-                          {leave.status === 'ยกเลิก' || leave.approvals?.some(a => a.type === 'approve_cancel' && a.status === 'completed') ? (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400">
-                              ยกเลิก
-                            </span>
-                          ) : leave.isDuringCancel ? (
-                            <div className="flex flex-col gap-1">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400`}>
-                                ขอยกเลิก
-                              </span>
-                              <span className="text-xs text-gray-500 dark:text-gray-400">(รออนุมัติการยกเลิก)</span>
-                            </div>
-                          ) : (
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              leave.status === 'อนุมัติ' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 
-                              leave.status === 'ไม่อนุมัติ' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 
-                              'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
-                            }`}>
-                              {leave.status}
-                            </span>
-                          )}
-                          
-                          {/* ส่วนนี้ไม่จำเป็นแล้วเพราะเราใช้ isDuringCancel แล้ว
-                          {!leave.approvals?.some(a => a.type === 'approve_cancel' && a.status === 'completed') &&
-                           leave.status !== 'ยกเลิก' &&
-                           leave.approvals?.some(a => a.type === 'request_cancel' && a.status === 'completed') && 
-                           !leave.approvals?.some(a => (a.type === 'approve_cancel' || a.type === 'reject_cancel') && a.status === 'completed') && (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400">
+                        {leave.isDuringCancel ? (
+                          // หากมีการขอยกเลิก แสดงป้ายรอยกเลิก
+                          <div className="flex items-center">
+                            <span className="inline-flex items-center rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-800 dark:bg-orange-900/30 dark:text-orange-400">
+                              <FiClock className="mr-1 h-3 w-3" />
                               รอยกเลิก
                             </span>
-                          )}*/}
-                        </div>
+                          </div>
+                        ) : (
+                          // แสดงสถานะปกติ
+                          <div className={`flex items-center ${
+                              leave.status === 'waiting_for_approve' ? 'text-yellow-600 dark:text-yellow-400' : 
+                              leave.status === 'approved' ? 'text-green-600 dark:text-green-400' : 
+                              leave.status === 'rejected' ? 'text-red-600 dark:text-red-400' : 
+                              'text-purple-600 dark:text-purple-400'
+                            }`}>
+                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                                leave.status === 'waiting_for_approve' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' : 
+                                leave.status === 'approved' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 
+                                leave.status === 'rejected' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 
+                                'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400'
+                              }`}>
+                              {leave.status === 'waiting_for_approve' ? <FiClock className="mr-1 h-3 w-3" /> : 
+                               leave.status === 'approved' ? <FiCheckCircle className="mr-1 h-3 w-3" /> : 
+                               leave.status === 'rejected' ? <FiXCircle className="mr-1 h-3 w-3" /> : 
+                               <FiSlash className="mr-1 h-3 w-3" />}
+                              {translateStatus(leave.status)}
+                            </span>
+                          </div>
+                        )}
                       </td>
                       {/* เซลล์แสดงเอกสารแนบ */}
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -3073,31 +2999,37 @@ export default function LeavesPage() {
         </SheetContent>
       </Sheet>
       
-      {/* หน้ารายละเอียดการลา (เปลี่ยนจาก Sheet เป็น AlertDialog) */}
+      {/* Sheet แสดงรายละเอียดการลา */}
       <AlertDialog open={isDetailSheetOpen} onOpenChange={setIsDetailSheetOpen}>
         <AlertDialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto block p-6">
-          <div className="flex justify-between items-start mb-4">
-            <div className="flex items-center gap-2">
+          <div className="flex justify-between items-start mb-6">
+            <div className="flex items-center gap-3">
               <FiFileText className="h-6 w-6 text-primary" />
-              <AlertDialogTitle className="text-2xl">
+              <AlertDialogTitle className="text-2xl flex items-center gap-2">
                 รายละเอียดการลา
                 {selectedLeaveDetail && (
-                  <span className={`ml-2 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                    selectedLeaveDetail.status === 'อนุมัติ' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : 
-                    selectedLeaveDetail.status === 'ไม่อนุมัติ' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300' : 
-                    'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
-                  }`}>
-                    {selectedLeaveDetail.status}
-                  </span>
+                  <Badge
+                    className={cn(
+                      "rounded-md px-2.5 py-0.5 text-xs font-medium",
+                      {
+                        "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-500": selectedLeaveDetail.status === "waiting_for_approve",
+                        "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-500": selectedLeaveDetail.status === "approved",
+                        "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-500": selectedLeaveDetail.status === "rejected",
+                        "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-500": selectedLeaveDetail.status === "canceled"
+                      }
+                    )}
+                  >
+                    {selectedLeaveDetail.statusText || translateStatus(selectedLeaveDetail.status)}
+                  </Badge>
                 )}
                 {selectedLeaveDetail?.isDuringCancel && (
-                  <span className="ml-2 inline-flex items-center rounded-full bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300 px-2.5 py-0.5 text-xs font-medium">
+                  <Badge variant="outline" className="ml-2 border-amber-500 text-amber-600">
                     รอยกเลิก
-                  </span>
+                  </Badge>
                 )}
               </AlertDialogTitle>
             </div>
-            <AlertDialogCancel className="h-8 w-8 p-0 rounded-full">
+            <AlertDialogCancel className="h-10 w-10 p-0 rounded-full">
               <FiX className="h-4 w-4" />
               <span className="sr-only">ปิด</span>
             </AlertDialogCancel>
@@ -3108,33 +3040,32 @@ export default function LeavesPage() {
               <LoadingSpinner />
             </div>
           ) : selectedLeaveDetail ? (
-            <div className="space-y-6">
+            <div className="space-y-8">
               {/* ข้อมูลพนักงาน */}
-              <div className="bg-accent/50 p-4 rounded-lg">
+              <div className="bg-muted/50 p-4 rounded-lg">
                 <div className="flex items-center gap-3">
                   {selectedLeaveDetail.employee?.image ? (
-                    <div className="h-12 w-12 rounded-full overflow-hidden">
+                    <div className="h-16 w-16 rounded-full overflow-hidden border border-border">
                       <Image
                         src={selectedLeaveDetail.employee.image}
                         alt={`${selectedLeaveDetail.employee.firstName} ${selectedLeaveDetail.employee.lastName}`}
-                        width={48}
-                        height={48}
+                        width={64}
+                        height={64}
                         className="h-full w-full object-cover"
-                        unoptimized={isMockImage(selectedLeaveDetail.employee.image)}
                       />
                     </div>
                   ) : (
-                    <div className="flex h-12 w-12 rounded-full bg-primary text-primary-foreground items-center justify-center">
-                      <span className="text-lg font-semibold">
+                    <div className="flex h-16 w-16 rounded-full bg-primary text-primary-foreground items-center justify-center">
+                      <span className="text-xl font-semibold">
                         {selectedLeaveDetail.employee?.firstName?.[0] || ''}{selectedLeaveDetail.employee?.lastName?.[0] || ''}
                       </span>
                     </div>
                   )}
                   <div>
-                    <h3 className="font-medium">
+                    <h3 className="text-lg font-medium">
                       {selectedLeaveDetail.employee?.firstName} {selectedLeaveDetail.employee?.lastName}
                     </h3>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-muted-foreground">
                       {selectedLeaveDetail.employee?.position || 'ไม่ระบุตำแหน่ง'}
                     </p>
                   </div>
@@ -3143,96 +3074,81 @@ export default function LeavesPage() {
               
               {/* ข้อมูลการลา */}
               <div className="space-y-4">
-                <h3 className="font-semibold border-b pb-2">ข้อมูลการลา</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex items-start gap-2">
-                    <FiFileText className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                <h3 className="text-lg font-semibold border-b border-border pb-2">ข้อมูลการลา</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="flex items-start gap-3">
+                    <div className="bg-primary/10 p-2 rounded-md">
+                      <FiFileText className="h-5 w-5 text-primary" />
+                    </div>
                     <div>
-                      <div className="font-medium text-sm">ประเภทการลา</div>
-                      <div>{selectedLeaveDetail.leaveType}</div>
+                      <div className="text-sm text-muted-foreground">ประเภทการลา</div>
+                      <div className="font-medium">{selectedLeaveDetail.leaveType}</div>
                     </div>
                   </div>
                   
-                  <div className="flex items-start gap-2">
-                    <FiCalendar className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                  <div className="flex items-start gap-3">
+                    <div className="bg-primary/10 p-2 rounded-md">
+                      <FiCalendar className="h-5 w-5 text-primary" />
+                    </div>
                     <div>
-                      <div className="font-medium text-sm">วันที่ลา</div>
-                      <div>
-                        {formatDate(selectedLeaveDetail.startDate)}
-                        {selectedLeaveDetail.startDate !== selectedLeaveDetail.endDate && 
-                          ` ถึง ${formatDate(selectedLeaveDetail.endDate)}`}
-                      </div>
+                      <div className="text-sm text-muted-foreground">วันที่ลา</div>
+                      <div className="font-medium">{formatDateRange(selectedLeaveDetail.startDate, selectedLeaveDetail.endDate)}</div>
                     </div>
                   </div>
                   
-                  <div className="flex items-start gap-2">
-                    <FiClock className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                  <div className="flex items-start gap-3">
+                    <div className="bg-primary/10 p-2 rounded-md">
+                      <FiClock className="h-5 w-5 text-primary" />
+                    </div>
                     <div>
-                      <div className="font-medium text-sm">รูปแบบการลา</div>
-                      <div>{selectedLeaveDetail.leaveFormat || 'เต็มวัน'}</div>
+                      <div className="text-sm text-muted-foreground">รูปแบบการลา</div>
+                      <div className="font-medium">{selectedLeaveDetail.leaveFormat || 'เต็มวัน'}</div>
                     </div>
                   </div>
                   
-                  <div className="flex items-start gap-2">
-                    <FiInfo className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-                    <div>
-                      <div className="font-medium text-sm">จำนวนวันลา</div>
-                      <div>{selectedLeaveDetail.totalDays} วัน</div>
+                  <div className="flex items-start gap-3">
+                    <div className="bg-primary/10 p-2 rounded-md">
+                      <FiCalendar className="h-5 w-5 text-primary" />
                     </div>
-                  </div>
-                  
-                  <div className="flex items-start gap-2 md:col-span-2">
-                    <FiMessageCircle className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
                     <div>
-                      <div className="font-medium text-sm">เหตุผลการลา</div>
-                      <div className="whitespace-pre-wrap">{selectedLeaveDetail.reason}</div>
+                      <div className="text-sm text-muted-foreground">จำนวนวัน</div>
+                      <div className="font-medium">{selectedLeaveDetail.leaveDays || selectedLeaveDetail.totalDays} วัน</div>
                     </div>
                   </div>
                 </div>
               </div>
               
+              {/* เหตุผลการลา */}
+              {selectedLeaveDetail.reason && (
+                <div className="space-y-2">
+                  <h3 className="text-lg font-semibold border-b border-border pb-2">เหตุผลการลา</h3>
+                  <div className="bg-muted/30 p-4 rounded-lg whitespace-pre-wrap">
+                    {selectedLeaveDetail.reason}
+                  </div>
+                </div>
+              )}
+              
               {/* เอกสารแนบ */}
               {selectedLeaveDetail.attachments && selectedLeaveDetail.attachments.length > 0 && (
                 <div className="space-y-4">
-                  <h3 className="font-semibold border-b pb-2">เอกสารแนบ ({selectedLeaveDetail.attachments.length})</h3>
+                  <h3 className="text-lg font-semibold border-b border-border pb-2">
+                    เอกสารแนบ ({selectedLeaveDetail.attachments.length})
+                  </h3>
                   <div className="space-y-2">
                     {selectedLeaveDetail.attachments.map((attachment, index) => {
                       const fileName = attachment.split('/').pop();
-                      const fileExt = fileName.split('.').pop()?.toLowerCase();
-                      
-                      // เลือกไอคอนตามประเภทไฟล์
-                      let FileIcon = FiFileText;
-                      if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExt)) {
-                        FileIcon = FiImage;
-                      } else if (fileExt === 'pdf') {
-                        FileIcon = FiFile;
-                      } else if (['zip', 'rar', '7z'].includes(fileExt)) {
-                        FileIcon = FiArchive;
-                      }
-                      
                       return (
-                        <div key={index} className="flex justify-between items-center p-3 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                        <div key={index} className="flex justify-between items-center p-3 rounded-md bg-background border">
                           <div className="text-sm truncate flex items-center">
                             <div className="h-10 w-10 flex items-center justify-center rounded bg-primary/10 text-primary mr-3">
-                              <FileIcon className="h-5 w-5" />
+                              <FiFileText className="h-5 w-5" />
                             </div>
                             <div className="truncate">
                               <span className="font-medium truncate block">{fileName}</span>
-                              <span className="text-xs text-gray-500">แนบเมื่อ {formatDate(selectedLeaveDetail.createdAt)}</span>
+                              <span className="text-xs text-muted-foreground">แนบเมื่อ {formatDate(selectedLeaveDetail.createdAt)}</span>
                             </div>
                           </div>
                           <div className="flex">
-                            {['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExt) && (
-                              <a 
-                                href={attachment} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="mr-2 p-2 text-gray-500 hover:text-primary rounded-full hover:bg-primary/10 transition-colors"
-                                title="เปิดดู"
-                              >
-                                <FiEye className="h-4 w-4" />
-                              </a>
-                            )}
                             <a 
                               href={attachment} 
                               target="_blank" 
@@ -3251,16 +3167,18 @@ export default function LeavesPage() {
                 </div>
               )}
               
-              {/* ข้อมูลการอนุมัติ */}
-              {selectedLeaveDetail.status !== 'รออนุมัติ' && (
+              {/* ข้อมูลอนุมัติ */}
+              {selectedLeaveDetail.status !== 'waiting_for_approve' && (
                 <div className="space-y-4">
-                  <h3 className="font-semibold border-b pb-2">ข้อมูลการอนุมัติ</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="flex items-start gap-2">
-                      <FiUser className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                  <h3 className="text-lg font-semibold border-b border-border pb-2">ข้อมูลการอนุมัติ</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="flex items-start gap-3">
+                      <div className="bg-primary/10 p-2 rounded-md">
+                        <FiUser className="h-5 w-5 text-primary" />
+                      </div>
                       <div>
-                        <div className="font-medium text-sm">ผู้อนุมัติ</div>
-                        <div>
+                        <div className="text-sm text-muted-foreground">ผู้อนุมัติ</div>
+                        <div className="font-medium">
                           {selectedLeaveDetail.approvedBy ? 
                             `${selectedLeaveDetail.approvedBy.firstName || ''} ${selectedLeaveDetail.approvedBy.lastName || ''}` : 
                             'ไม่ระบุ'}
@@ -3268,166 +3186,178 @@ export default function LeavesPage() {
                       </div>
                     </div>
                     
-                    <div className="flex items-start gap-2">
-                      <FiCalendar className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                    <div className="flex items-start gap-3">
+                      <div className="bg-primary/10 p-2 rounded-md">
+                        <FiCalendar className="h-5 w-5 text-primary" />
+                      </div>
                       <div>
-                        <div className="font-medium text-sm">วันที่อนุมัติ</div>
-                        <div>{formatDateFull(selectedLeaveDetail.approvedAt)}</div>
+                        <div className="text-sm text-muted-foreground">วันที่อนุมัติ</div>
+                        <div className="font-medium">{formatDateFull(selectedLeaveDetail.approvedAt)}</div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {selectedLeaveDetail.comment && (
+                    <div className="space-y-2 mt-3">
+                      <div className="text-sm text-muted-foreground">ความเห็น</div>
+                      <div className="bg-muted/30 p-4 rounded-lg whitespace-pre-wrap">
+                        {selectedLeaveDetail.comment}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ข้อมูลการขอยกเลิกและการอนุมัติยกเลิก */}
+              {selectedLeaveDetail.cancelStatus && (
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold border-b border-border pb-2">ข้อมูลการยกเลิก</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* สถานะการยกเลิก */}
+                    <div className="flex items-start gap-3">
+                      <div className="bg-primary/10 p-2 rounded-md">
+                        <FiAlertCircle className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <div className="text-sm text-muted-foreground">สถานะการยกเลิก</div>
+                        <div className="font-medium">
+                          <Badge
+                            className={cn(
+                              "rounded-md px-2.5 py-0.5 text-xs font-medium mt-1",
+                              {
+                                "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-500": selectedLeaveDetail.cancelStatus === "waiting_for_approve",
+                                "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-500": selectedLeaveDetail.cancelStatus === "approved",
+                                "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-500": selectedLeaveDetail.cancelStatus === "rejected"
+                              }
+                            )}
+                          >
+                            {selectedLeaveDetail.cancelStatusText || translateStatus(selectedLeaveDetail.cancelStatus)}
+                          </Badge>
+                        </div>
                       </div>
                     </div>
                     
-                    {selectedLeaveDetail.comment && (
-                      <div className="flex items-start gap-2 md:col-span-2">
-                        <FiMessageCircle className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-                        <div>
-                          <div className="font-medium text-sm">ความเห็น</div>
-                          <div className="whitespace-pre-wrap">{selectedLeaveDetail.comment}</div>
+                    {/* ผู้ขอยกเลิก */}
+                    <div className="flex items-start gap-3">
+                      <div className="bg-primary/10 p-2 rounded-md">
+                        <FiUser className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <div className="text-sm text-muted-foreground">ผู้ขอยกเลิก</div>
+                        <div className="font-medium">
+                          {selectedLeaveDetail.cancelRequestBy ? 
+                            `${selectedLeaveDetail.cancelRequestBy.firstName || ''} ${selectedLeaveDetail.cancelRequestBy.lastName || ''}` : 
+                            'ไม่ระบุ'}
                         </div>
                       </div>
-                    )}
+                    </div>
+                    
+                    {/* วันที่ขอยกเลิก */}
+                    <div className="flex items-start gap-3">
+                      <div className="bg-primary/10 p-2 rounded-md">
+                        <FiCalendar className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <div className="text-sm text-muted-foreground">วันที่ขอยกเลิก</div>
+                        <div className="font-medium">{formatDateFull(selectedLeaveDetail.cancelRequestAt)}</div>
+                      </div>
+                    </div>
                   </div>
+                  
+                  {/* เหตุผลการยกเลิก */}
+                  {selectedLeaveDetail.cancelReason && (
+                    <div className="space-y-2 mt-3">
+                      <div className="text-sm text-muted-foreground">เหตุผลการยกเลิก</div>
+                      <div className="bg-muted/30 p-4 rounded-lg whitespace-pre-wrap">
+                        {selectedLeaveDetail.cancelReason}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* ข้อมูลการอนุมัติยกเลิก (ถ้ามี) */}
+                  {selectedLeaveDetail.cancelStatus !== 'waiting_for_approve' && selectedLeaveDetail.cancelResponseBy && (
+                    <div className="space-y-4 mt-6 pt-6 border-t border-border">
+                      <h3 className="text-lg font-semibold">ข้อมูลการตอบกลับการยกเลิก</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="flex items-start gap-3">
+                          <div className="bg-primary/10 p-2 rounded-md">
+                            <FiUser className="h-5 w-5 text-primary" />
+                          </div>
+                          <div>
+                            <div className="text-sm text-muted-foreground">ผู้ตอบกลับการยกเลิก</div>
+                            <div className="font-medium">
+                              {`${selectedLeaveDetail.cancelResponseBy.firstName || ''} ${selectedLeaveDetail.cancelResponseBy.lastName || ''}`}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-start gap-3">
+                          <div className="bg-primary/10 p-2 rounded-md">
+                            <FiCalendar className="h-5 w-5 text-primary" />
+                          </div>
+                          <div>
+                            <div className="text-sm text-muted-foreground">วันที่ตอบกลับ</div>
+                            <div className="font-medium">{formatDateFull(selectedLeaveDetail.cancelResponseAt)}</div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {selectedLeaveDetail.cancelResponseComment && (
+                        <div className="space-y-2 mt-3">
+                          <div className="text-sm text-muted-foreground">ความคิดเห็น</div>
+                          <div className="bg-muted/30 p-4 rounded-lg whitespace-pre-wrap">
+                            {selectedLeaveDetail.cancelResponseComment}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
               
-              {/* ข้อมูลการยกเลิก */}
-              {selectedLeaveDetail.isDuringCancel && selectedLeaveDetail.approvals && (
-                <div className="space-y-4">
-                  <h3 className="font-semibold border-b pb-2">ข้อมูลการยกเลิก</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {selectedLeaveDetail.approvals
-                      .filter(a => a.type === 'request_cancel' && a.status === 'completed')
-                      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-                      .slice(0, 1)
-                      .map((approval, index) => (
-                        <React.Fragment key={index}>
-                          <div className="flex items-start gap-2">
-                            <FiUser className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-                            <div>
-                              <div className="font-medium text-sm">ผู้ขอยกเลิก</div>
-                              <div>{approval.employee?.firstName} {approval.employee?.lastName}</div>
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-start gap-2">
-                            <FiCalendar className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-                            <div>
-                              <div className="font-medium text-sm">วันที่ขอยกเลิก</div>
-                              <div>{formatDateFull(approval.createdAt)}</div>
-                            </div>
-                          </div>
-                          
-                          {approval.reason && (
-                            <div className="flex items-start gap-2 md:col-span-2">
-                              <FiMessageCircle className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-                              <div>
-                                <div className="font-medium text-sm">เหตุผลการยกเลิก</div>
-                                <div className="whitespace-pre-wrap">{approval.reason}</div>
-                              </div>
-                            </div>
-                          )}
-                        </React.Fragment>
-                      ))}
-                  </div>
-                </div>
-              )}
-              
-              {/* ข้อมูลการอนุมัติยกเลิก */}
-              {selectedLeaveDetail.approvals?.some(a => (a.type === 'approve_cancel' || a.type === 'reject_cancel') && a.status === 'completed') && (
-                <div className="space-y-4">
-                  <h3 className="font-semibold border-b pb-2">ข้อมูลการอนุมัติยกเลิก</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {selectedLeaveDetail.approvals
-                      .filter(a => (a.type === 'approve_cancel' || a.type === 'reject_cancel') && a.status === 'completed')
-                      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-                      .slice(0, 1)
-                      .map((approval, index) => (
-                        <React.Fragment key={index}>
-                          <div className="flex items-start gap-2">
-                            <FiUser className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-                            <div>
-                              <div className="font-medium text-sm">ผู้อนุมัติการยกเลิก</div>
-                              <div>{approval.employee?.firstName} {approval.employee?.lastName}</div>
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-start gap-2">
-                            <FiCalendar className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-                            <div>
-                              <div className="font-medium text-sm">วันที่อนุมัติการยกเลิก</div>
-                              <div>{formatDateFull(approval.createdAt)}</div>
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-start gap-2 md:col-span-2">
-                            <FiInfo className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-                            <div>
-                              <div className="font-medium text-sm">สถานะ</div>
-                              <div className={approval.type === 'approve_cancel' ? 'text-green-600' : 'text-red-600'}>
-                                {approval.type === 'approve_cancel' ? 'อนุมัติการยกเลิก' : 'ปฏิเสธการยกเลิก'}
-                              </div>
-                            </div>
-                          </div>
-                          
-                          {approval.reason && (
-                            <div className="flex items-start gap-2 md:col-span-2">
-                              <FiMessageCircle className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-                              <div>
-                                <div className="font-medium text-sm">ความเห็น</div>
-                                <div className="whitespace-pre-wrap">{approval.reason}</div>
-                              </div>
-                            </div>
-                          )}
-                        </React.Fragment>
-                      ))}
-                  </div>
-                </div>
-              )}
-              
-              {/* ส่วนแสดงข้อมูลสถานะทั้งหมดของการลา (Transaction Logs) */}
-              {selectedLeaveDetail && selectedLeaveDetail.approvals && selectedLeaveDetail.approvals.length > 0 && (
+              {/* ประวัติการทำรายการ */}
+              {selectedLeaveDetail.approvals && selectedLeaveDetail.approvals.length > 0 && (
                 <div className="space-y-4 mt-6">
-                  <h3 className="font-semibold border-b pb-2">ประวัติการทำรายการ</h3>
+                  <h3 className="text-lg font-semibold border-b border-border pb-2">ประวัติการทำรายการ</h3>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="bg-gray-50 dark:bg-gray-800">
+                    <table className="w-full border-collapse">
+                      <thead className="bg-muted/50">
                         <tr>
-                          <th className="px-4 py-2 text-left">วันที่</th>
-                          <th className="px-4 py-2 text-left">ประเภทรายการ</th>
-                          <th className="px-4 py-2 text-left">ผู้ดำเนินการ</th>
-                          <th className="px-4 py-2 text-left">สถานะ</th>
-                          <th className="px-4 py-2 text-left">รายละเอียด</th>
+                          <th className="py-3 px-4 text-left text-sm font-medium text-muted-foreground border-b">วันที่</th>
+                          <th className="py-3 px-4 text-left text-sm font-medium text-muted-foreground border-b">ประเภทรายการ</th>
+                          <th className="py-3 px-4 text-left text-sm font-medium text-muted-foreground border-b">ผู้ดำเนินการ</th>
+                          <th className="py-3 px-4 text-left text-sm font-medium text-muted-foreground border-b">สถานะ</th>
+                          <th className="py-3 px-4 text-left text-sm font-medium text-muted-foreground border-b">รายละเอียด</th>
                         </tr>
                       </thead>
                       <tbody>
                         {selectedLeaveDetail.approvals.map((approval, index) => (
-                          <tr key={index} className={index % 2 === 0 ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800'}>
-                            <td className="px-4 py-2 whitespace-nowrap">{formatDateFull(approval.createdAt)}</td>
-                            <td className="px-4 py-2">
+                          <tr key={index} className={index % 2 === 0 ? 'bg-white dark:bg-gray-900' : 'bg-muted/20'}>
+                            <td className="py-2.5 px-4 text-sm border-b">{formatDateFull(approval.createdAt)}</td>
+                            <td className="py-2.5 px-4 text-sm border-b">
                               {approval.type === 'approve' ? 'อนุมัติ' : 
                               approval.type === 'reject' ? 'ไม่อนุมัติ' : 
                               approval.type === 'request_cancel' ? 'ขอยกเลิก' : 
                               approval.type === 'approve_cancel' ? 'อนุมัติการยกเลิก' : 
                               approval.type === 'reject_cancel' ? 'ปฏิเสธการยกเลิก' : approval.type}
                             </td>
-                            <td className="px-4 py-2 whitespace-nowrap">
-                              {approval.employee ? 
-                                `${approval.employee.firstName || ''} ${approval.employee.lastName || ''}` : 
+                            <td className="py-2.5 px-4 text-sm border-b">
+                              {approval.employees ? 
+                                `${approval.employees.firstName || ''} ${approval.employees.lastName || ''}` : 
                                 'ไม่ระบุ'}
                             </td>
-                            <td className="px-4 py-2">
-                              <div className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
-                                approval.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : 
-                                'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
-                              }`}>
+                            <td className="py-2.5 px-4 text-sm border-b">
+                              <Badge
+                                className={cn(
+                                  "rounded-full",
+                                  approval.status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
+                                )}
+                              >
                                 {approval.status === 'completed' ? 'สำเร็จ' : 'รอดำเนินการ'}
-                              </div>
+                              </Badge>
                             </td>
-                            <td className="px-4 py-2">
-                              {(approval.reason || approval.comment) && (
-                                <div className="max-w-xs truncate">
-                                  {approval.reason || approval.comment}
-                                </div>
-                              )}
+                            <td className="py-2.5 px-4 text-sm border-b max-w-xs truncate">
+                              {approval.reason || approval.comment || '-'}
                             </td>
                           </tr>
                         ))}
@@ -3436,10 +3366,10 @@ export default function LeavesPage() {
                   </div>
                 </div>
               )}
-              
+                        
               {/* ปุ่มด้านล่าง */}
-              <AlertDialogFooter className="flex justify-between border-t pt-4">
-                <div className="flex space-x-2">
+              <div className="flex flex-wrap items-center justify-between border-t border-border pt-4 mt-6 gap-3">
+                <div className="flex flex-wrap gap-2">
                   {/* แสดงปุ่มตามสิทธิ์ */}
                   {canApprove(selectedLeaveDetail) && (
                     <Button 
@@ -3531,15 +3461,17 @@ export default function LeavesPage() {
                 >
                   ปิด
                 </Button>
-              </AlertDialogFooter>
+              </div>
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center py-8 text-center">
-              <FiAlertTriangle className="h-10 w-10 text-yellow-500 mb-2" />
-              <h3 className="text-lg font-medium">ไม่พบข้อมูลการลา</h3>
-              <p className="text-sm text-muted-foreground mt-1">
-                ข้อมูลที่คุณกำลังค้นหาอาจถูกลบหรือไม่มีอยู่ในระบบ
-              </p>
+            <div className="flex justify-center items-center h-64">
+              <div className="text-center">
+                <FiAlertTriangle className="h-10 w-10 text-yellow-500 mx-auto mb-4" />
+                <h3 className="text-lg font-medium">ไม่พบข้อมูลการลา</h3>
+                <p className="text-muted-foreground mt-2">
+                  ข้อมูลที่คุณกำลังค้นหาอาจถูกลบหรือไม่มีอยู่ในระบบ
+                </p>
+              </div>
             </div>
           )}
         </AlertDialogContent>

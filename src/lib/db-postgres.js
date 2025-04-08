@@ -106,7 +106,7 @@ export async function getEmployeeById(id) {
     }
     return { success: true, data: result.rows[0] };
   } catch (error) {
-    console.error('Error fetching employee:', error);
+    console.error('Error fetching employees:', error);
     return { success: false, error: error.message };
   }
 }
@@ -133,14 +133,14 @@ export async function getEmployeeByEmail(email) {
 export async function createEmployee(employeeData) {
   try {
     const { 
-      employeeId, 
-      firstName, 
-      lastName, 
+      employee_id, 
+      first_name, 
+      last_name, 
       email, 
       password, 
       position, 
       department, 
-      hireDate, 
+      hire_date, 
       role = 'employee', 
       isActive = true 
     } = employeeData;
@@ -149,14 +149,14 @@ export async function createEmployee(employeeData) {
       INSERT INTO employees (
         employee_id, first_name, last_name, email, password, position, department, hire_date, role, is_active
       ) VALUES (
-        ${employeeId}, ${firstName}, ${lastName}, ${email}, ${password}, ${position}, ${department}, ${hireDate}, ${role}, ${isActive}
+        ${employee_id}, ${first_name}, ${last_name}, ${email}, ${password}, ${position}, ${department}, ${hire_date}, ${role}, ${is_active}
       )
       RETURNING *
     `;
 
     return { success: true, data: result.rows[0] };
   } catch (error) {
-    console.error('Error creating employee:', error);
+    console.error('Error creating employees:', error);
     return { success: false, error: error.message };
   }
 }
@@ -167,25 +167,25 @@ export async function createEmployee(employeeData) {
 export async function updateEmployee(id, employeeData) {
   try {
     const { 
-      firstName, 
-      lastName, 
+      first_name, 
+      last_name, 
       email, 
       position, 
       department, 
       role, 
-      isActive 
+      is_active 
     } = employeeData;
 
     const result = await sql`
       UPDATE employees
       SET 
-        first_name = ${firstName},
-        last_name = ${lastName},
+        first_name = ${first_name},
+        last_name = ${last_name},
         email = ${email},
         position = ${position},
         department = ${department},
         role = COALESCE(${role}, role),
-        is_active = COALESCE(${isActive}, is_active),
+        is_active = COALESCE(${is_active}, is_active),
         updated_at = NOW()
       WHERE id = ${id}
       RETURNING *
@@ -197,7 +197,7 @@ export async function updateEmployee(id, employeeData) {
 
     return { success: true, data: result.rows[0] };
   } catch (error) {
-    console.error('Error updating employee:', error);
+    console.error('Error updating employees:', error);
     return { success: false, error: error.message };
   }
 }
@@ -215,7 +215,7 @@ export async function deleteEmployee(id) {
 
     return { success: true, data: result.rows[0] };
   } catch (error) {
-    console.error('Error deleting employee:', error);
+    console.error('Error deleting employees:', error);
     return { success: false, error: error.message };
   }
 }
@@ -252,12 +252,12 @@ export async function getLeaves(employeeId = null) {
   try {
     let result;
     
-    if (employeeId) {
+    if (employeeId {
       result = await sql`
         SELECT l.*, e.first_name, e.last_name, e.employee_id
         FROM leaves l
         JOIN employees e ON l.employee_id = e.id
-        WHERE l.employee_id = ${employeeId}
+        WHERE l.employee_id = ${employee_id}
         ORDER BY l.created_at DESC
       `;
     } else {
@@ -294,7 +294,7 @@ export async function getLeaveById(id) {
     
     return { success: true, data: result.rows[0] };
   } catch (error) {
-    console.error('Error fetching leave:', error);
+    console.error('Error fetching leaves:', error);
     return { success: false, error: error.message };
   }
 }
@@ -306,9 +306,9 @@ export async function createLeave(leaveData) {
   try {
     const {
       employee,
-      leaveType,
-      startDate,
-      endDate,
+      leave_type,
+      start_date,
+      end_date,
       reason,
       status = 'รออนุมัติ'
     } = leaveData;
@@ -317,14 +317,14 @@ export async function createLeave(leaveData) {
       INSERT INTO leaves (
         employee_id, leave_type, start_date, end_date, reason, status
       ) VALUES (
-        ${employee}, ${leaveType}, ${startDate}, ${endDate}, ${reason}, ${status}
+        ${employee}, ${leave_type}, ${start_date}, ${end_date}, ${reason}, ${status}
       )
       RETURNING *
     `;
     
     return { success: true, data: result.rows[0] };
   } catch (error) {
-    console.error('Error creating leave:', error);
+    console.error('Error creating leaves:', error);
     return { success: false, error: error.message };
   }
 }
@@ -335,9 +335,9 @@ export async function createLeave(leaveData) {
 export async function updateLeave(id, leaveData) {
   try {
     const {
-      leaveType,
-      startDate,
-      endDate,
+      leave_type,
+      start_date,
+      end_date,
       reason,
       status,
       approvedBy,
@@ -352,9 +352,9 @@ export async function updateLeave(id, leaveData) {
     const result = await sql`
       UPDATE leaves
       SET
-        leave_type = COALESCE(${leaveType}, leave_type),
-        start_date = COALESCE(${startDate}, start_date),
-        end_date = COALESCE(${endDate}, end_date),
+        leave_type = COALESCE(${leave_type}, leave_type),
+        start_date = COALESCE(${start_date}, start_date),
+        end_date = COALESCE(${end_date}, end_date),
         reason = COALESCE(${reason}, reason),
         status = COALESCE(${status}, status),
         approved_by = COALESCE(${approvedBy}, approved_by),
@@ -371,7 +371,7 @@ export async function updateLeave(id, leaveData) {
     
     return { success: true, data: result.rows[0] };
   } catch (error) {
-    console.error('Error updating leave:', error);
+    console.error('Error updating leaves:', error);
     return { success: false, error: error.message };
   }
 }
@@ -389,7 +389,7 @@ export async function deleteLeave(id) {
     
     return { success: true, data: result.rows[0] };
   } catch (error) {
-    console.error('Error deleting leave:', error);
+    console.error('Error deleting leaves:', error);
     return { success: false, error: error.message };
   }
 }
@@ -401,12 +401,12 @@ export async function getOvertimes(employeeId = null) {
   try {
     let result;
     
-    if (employeeId) {
+    if (employeeId {
       result = await sql`
         SELECT o.*, e.first_name, e.last_name, e.employee_id
         FROM overtimes o
         JOIN employees e ON o.employee_id = e.id
-        WHERE o.employee_id = ${employeeId}
+        WHERE o.employee_id = ${employee_id}
         ORDER BY o.created_at DESC
       `;
     } else {
@@ -443,7 +443,7 @@ export async function getOvertimeById(id) {
     
     return { success: true, data: result.rows[0] };
   } catch (error) {
-    console.error('Error fetching overtime:', error);
+    console.error('Error fetching overtimes:', error);
     return { success: false, error: error.message };
   }
 }
@@ -456,9 +456,9 @@ export async function createOvertime(overtimeData) {
     const {
       employee,
       date,
-      startTime,
-      endTime,
-      totalHours,
+      start_time,
+      end_time,
+      total_hours,
       reason,
       status = 'รออนุมัติ'
     } = overtimeData;
@@ -467,14 +467,14 @@ export async function createOvertime(overtimeData) {
       INSERT INTO overtimes (
         employee_id, date, start_time, end_time, total_hours, reason, status
       ) VALUES (
-        ${employee}, ${date}, ${startTime}, ${endTime}, ${totalHours}, ${reason}, ${status}
+        ${employee}, ${date}, ${start_time}, ${end_time}, ${total_hours}, ${reason}, ${status}
       )
       RETURNING *
     `;
     
     return { success: true, data: result.rows[0] };
   } catch (error) {
-    console.error('Error creating overtime:', error);
+    console.error('Error creating overtimes:', error);
     return { success: false, error: error.message };
   }
 }
@@ -486,9 +486,9 @@ export async function updateOvertime(id, overtimeData) {
   try {
     const {
       date,
-      startTime,
-      endTime,
-      totalHours,
+      start_time,
+      end_time,
+      total_hours,
       reason,
       status,
       approvedBy,
@@ -504,9 +504,9 @@ export async function updateOvertime(id, overtimeData) {
       UPDATE overtimes
       SET
         date = COALESCE(${date}, date),
-        start_time = COALESCE(${startTime}, start_time),
-        end_time = COALESCE(${endTime}, end_time),
-        total_hours = COALESCE(${totalHours}, total_hours),
+        start_time = COALESCE(${start_time}, start_time),
+        end_time = COALESCE(${end_time}, end_time),
+        total_hours = COALESCE(${total_hours}, total_hours),
         reason = COALESCE(${reason}, reason),
         status = COALESCE(${status}, status),
         approved_by = COALESCE(${approvedBy}, approved_by),
@@ -523,7 +523,7 @@ export async function updateOvertime(id, overtimeData) {
     
     return { success: true, data: result.rows[0] };
   } catch (error) {
-    console.error('Error updating overtime:', error);
+    console.error('Error updating overtimes:', error);
     return { success: false, error: error.message };
   }
 }
@@ -541,7 +541,7 @@ export async function deleteOvertime(id) {
     
     return { success: true, data: result.rows[0] };
   } catch (error) {
-    console.error('Error deleting overtime:', error);
+    console.error('Error deleting overtimes:', error);
     return { success: false, error: error.message };
   }
 } 

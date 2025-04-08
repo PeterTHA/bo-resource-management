@@ -14,7 +14,7 @@ export async function GET(req) {
       );
     }
 
-    const roles = await prisma.projectRole.findMany({
+    const roles = await prisma.project_roles.findMany({
       orderBy: {
         name: 'asc'
       }

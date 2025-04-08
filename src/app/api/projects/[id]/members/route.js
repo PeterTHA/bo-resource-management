@@ -16,16 +16,16 @@ export async function GET(req, { params }) {
     
     const { id } = await Promise.resolve(params);
     
-    const members = await prisma.projectMember.findMany({
+    const members = await prisma.project_members.findMany({
       where: {
-        projectId: id
+        project_id: id
       },
       include: {
-        employee: {
+        employees: {
           select: {
             id: true,
-            firstName: true,
-            lastName: true,
+            first_name: true,
+            last_name: true,
             position: true,
             image: true
           }
@@ -33,7 +33,7 @@ export async function GET(req, { params }) {
         role: true
       },
       orderBy: {
-        createdAt: 'asc'
+        created_at: 'asc'
       }
     });
     
@@ -63,11 +63,11 @@ export async function POST(req, { params }) {
     
     const { id } = await Promise.resolve(params);
     const body = await req.json();
-    const { employeeId, roleId } = body;
+    const { employee_id, role_id } = body;
     
     // ตรวจสอบว่าพนักงานมีอยู่จริงหรือไม่
-    const employee = await prisma.employee.findUnique({
-      where: { id: employeeId }
+    const employee = await prisma.employees.findUnique({
+      where: { id: employee_id }
     });
     
     if (!employee) {
@@ -78,8 +78,8 @@ export async function POST(req, { params }) {
     }
     
     // ตรวจสอบว่า role มีอยู่จริงหรือไม่
-    const role = await prisma.projectRole.findUnique({
-      where: { id: roleId }
+    const role = await prisma.project_roles.findUnique({
+      where: { id: role_id }
     });
     
     if (!role) {
@@ -90,10 +90,10 @@ export async function POST(req, { params }) {
     }
     
     // ตรวจสอบว่าพนักงานเป็นสมาชิกในโปรเจคนี้อยู่แล้วหรือไม่
-    const existingMember = await prisma.projectMember.findFirst({
+    const existingMember = await prisma.project_members.findFirst({
       where: {
-        projectId: id,
-        employeeId: employeeId
+        project_id: id,
+        employee_id: employee_id
       }
     });
     
@@ -105,24 +105,24 @@ export async function POST(req, { params }) {
     }
     
     // เพิ่มสมาชิกใหม่
-    const member = await prisma.projectMember.create({
+    const member = await prisma.project_members.create({
       data: {
-        project: {
+        projects: {
           connect: { id: id }
         },
-        employee: {
-          connect: { id: employeeId }
+        employees: {
+          connect: { id: employee_id }
         },
         role: {
-          connect: { id: roleId }
+          connect: { id: role_id }
         }
       },
       include: {
-        employee: {
+        employees: {
           select: {
             id: true,
-            firstName: true,
-            lastName: true,
+            first_name: true,
+            last_name: true,
             position: true
           }
         },
@@ -131,14 +131,14 @@ export async function POST(req, { params }) {
     });
     
     // บันทึก activity log
-    await prisma.projectActivityLog.create({
+    await prisma.project_activity_logs.create({
       data: {
-        projectId: id,
-        employeeId: session.user.id,
+        project_id: id,
+        employee_id: session.user.id,
         action: 'add_member',
         details: {
           memberId: member.id,
-          memberName: `${member.employee.firstName} ${member.employee.lastName}`,
+          memberName: `${member.employees.first_name} ${member.employees.last_name}`,
           role: member.role.name
         }
       }
@@ -170,11 +170,11 @@ export async function PUT(req, { params }) {
     
     const { id } = await Promise.resolve(params);
     const body = await req.json();
-    const { memberId, roleId } = body;
+    const { memberId, role_id } = body;
 
     // ตรวจสอบว่า role มีอยู่จริงหรือไม่
-    const role = await prisma.projectRole.findUnique({
-      where: { id: roleId }
+    const role = await prisma.project_roles.findUnique({
+      where: { id: role_id }
     });
 
     if (!role) {
@@ -185,10 +185,10 @@ export async function PUT(req, { params }) {
     }
 
     // ตรวจสอบว่าสมาชิกอยู่ในโปรเจคนี้จริงหรือไม่
-    const existingMember = await prisma.projectMember.findFirst({
+    const existingMember = await prisma.project_members.findFirst({
       where: {
         id: memberId,
-        projectId: id
+        project_id: id
       }
     });
 
@@ -199,19 +199,19 @@ export async function PUT(req, { params }) {
       );
     }
 
-    const member = await prisma.projectMember.update({
+    const member = await prisma.project_members.update({
       where: {
         id: memberId
       },
       data: {
-        roleId
+        role_id
       },
       include: {
-        employee: {
+        employees: {
           select: {
             id: true,
-            firstName: true,
-            lastName: true,
+            first_name: true,
+            last_name: true,
             position: true
           }
         },
@@ -220,14 +220,14 @@ export async function PUT(req, { params }) {
     });
 
     // บันทึก activity log
-    await prisma.projectActivityLog.create({
+    await prisma.project_activity_logs.create({
       data: {
-        projectId: id,
-        employeeId: session.user.id,
+        project_id: id,
+        employee_id: session.user.id,
         action: 'update_member_role',
         details: {
           memberId: member.id,
-          memberName: `${member.employee.firstName} ${member.employee.lastName}`,
+          memberName: `${member.employees.first_name} ${member.employees.last_name}`,
           newRole: member.role.name
         }
       }
@@ -261,31 +261,31 @@ export async function DELETE(req, { params }) {
     const { searchParams } = new URL(req.url);
     const memberId = searchParams.get('memberId');
 
-    const member = await prisma.projectMember.delete({
+    const member = await prisma.project_members.delete({
       where: {
         id: memberId,
-        projectId: id
+        project_id: id
       },
       include: {
-        employee: {
+        employees: {
           select: {
             id: true,
-            firstName: true,
-            lastName: true
+            first_name: true,
+            last_name: true
           }
         }
       }
     });
 
     // บันทึก activity log
-    await prisma.projectActivityLog.create({
+    await prisma.project_activity_logs.create({
       data: {
-        projectId: id,
-        employeeId: session.user.id,
+        project_id: id,
+        employee_id: session.user.id,
         action: 'remove_member',
         details: {
           memberId: member.id,
-          memberName: `${member.employee.firstName} ${member.employee.lastName}`
+          memberName: `${member.employees.first_name} ${member.employees.last_name}`
         }
       }
     });

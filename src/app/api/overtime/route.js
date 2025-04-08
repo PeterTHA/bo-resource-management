@@ -16,9 +16,9 @@ export async function GET(request) {
     }
     
     const { searchParams } = new URL(request.url);
-    const employeeId = searchParams.get('employeeId');
-    const startDate = searchParams.get('startDate');
-    const endDate = searchParams.get('endDate');
+    const employeeId = searchParams.get('employee_id');
+    const startDate = searchParams.get('start_date');
+    const endDate = searchParams.get('end_date');
     const summary = searchParams.get('summary') === 'true';
     
     // ดึงข้อมูลการทำงานล่วงเวลาจาก Prisma
@@ -91,7 +91,7 @@ export async function GET(request) {
             monthGroups[month] = {
               month: thaiMonthNames[month],
               count: 0,
-              totalHours: 0.00
+              total_hours: 0.00
             };
           }
         }
@@ -104,7 +104,7 @@ export async function GET(request) {
           monthGroups[month] = {
             month: thaiMonthNames[month],
             count: 0,
-            totalHours: 0.00
+            total_hours: 0.00
           };
         }
       }
@@ -118,24 +118,24 @@ export async function GET(request) {
           monthGroups[monthKey] = {
             month: thaiMonthNames[monthKey],
             count: 0,
-            totalHours: 0.00
+            total_hours: 0.00
           };
         }
         
         monthGroups[monthKey].count += 1;
-        monthGroups[monthKey].totalHours += parseFloat(ot.totalHours || 0);
+        monthGroups[monthKey].total_hours += parseFloat(ot.total_hours || 0);
       });
       
       // แปลงเป็น array และเรียงตามเดือน และกำหนดทศนิยม 2 ตำแหน่ง
       const monthlySummary = Object.keys(monthGroups)
         .map(key => {
           // คำนวณชั่วโมงรวมและแปลงเป็นทศนิยม 2 ตำแหน่ง
-          const formattedHours = monthGroups[key].totalHours.toFixed(2);
+          const formattedHours = monthGroups[key].total_hours.toFixed(2);
           
           return {
             month: thaiMonthNames[key],
             count: monthGroups[key].count,
-            totalHours: Number(formattedHours) // แปลงกลับเป็นตัวเลข
+            total_hours: Number(formattedHours) // แปลงกลับเป็นตัวเลข
           };
         })
         .sort((a, b) => thaiMonthNames.indexOf(a.month) - thaiMonthNames.indexOf(b.month));
@@ -151,7 +151,7 @@ export async function GET(request) {
     
     return NextResponse.json({ success: true, data: result.data }, { status: 200 });
   } catch (error) {
-    console.error('Error in GET /api/overtime:', error);
+    console.error('Error in GET /api/overtimes:', error);
     return NextResponse.json(
       { success: false, message: error.message, connectionError: true },
       { status: 500 }
@@ -175,11 +175,11 @@ export async function POST(request) {
     
     // ถ้าเป็นพนักงานทั่วไป ให้ใช้ ID ของตัวเอง
     if (session.user.role === 'permanent' || session.user.role === 'temporary') {
-      data.employeeId = session.user.id;
-    } else if (data.employee) {
+      data.employee_id = session.user.id;
+    } else if (data.employees) {
       // แปลงจาก employee เป็น employeeId ถ้ามีการส่ง employee มา
-      data.employeeId = data.employee;
-      delete data.employee;
+      data.employee_id = data.employees;
+      delete data.employees;
     }
     
     // เพิ่มข้อมูลการทำงานล่วงเวลาใน Prisma
@@ -197,7 +197,7 @@ export async function POST(request) {
       { status: 201 }
     );
   } catch (error) {
-    console.error('Error in POST /api/overtime:', error);
+    console.error('Error in POST /api/overtimes:', error);
     return NextResponse.json(
       { success: false, message: error.message },
       { status: 500 }

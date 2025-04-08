@@ -17,10 +17,10 @@ export async function GET(req) {
     }
 
     // เงื่อนไขพื้นฐานคือตำแหน่งที่ยังใช้งานอยู่
-    const where = { isActive: true };
+    const where = { is_active: true };
 
     // ดึงข้อมูลตำแหน่ง
-    let positions = await prisma.position.findMany({
+    let positions = await prisma.positions.findMany({
       where,
       orderBy: { name: 'asc' }
     });
@@ -28,25 +28,25 @@ export async function GET(req) {
     // ถ้าเป็น admin เพิ่มตำแหน่ง Web Master ที่มีไว้สำหรับ admin เท่านั้น
     if (session.user.role === 'admin') {
       // ตรวจสอบว่ามีตำแหน่ง Web Master อยู่แล้วหรือไม่
-      const webMasterExists = await prisma.position.findUnique({
+      const webMasterExists = await prisma.positions.findUnique({
         where: { code: 'WEBMASTER' }
       });
       
       // ถ้ายังไม่มี ให้สร้างตำแหน่ง Web Master
       if (!webMasterExists) {
-        await prisma.position.create({
+        await prisma.positions.create({
           data: {
             code: 'WEBMASTER',
             name: 'Web Master',
             category: 'admin',
             description: 'ผู้ดูแลระบบเว็บไซต์ (สำหรับ Admin เท่านั้น)',
-            isActive: true
+            is_active: true
           }
         });
       }
       
       // ดึงข้อมูลตำแหน่งทั้งหมดอีกครั้งเพื่อให้ได้ข้อมูลล่าสุด
-      positions = await prisma.position.findMany({
+      positions = await prisma.positions.findMany({
         where,
         orderBy: { name: 'asc' }
       });

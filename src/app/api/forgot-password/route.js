@@ -21,7 +21,7 @@ export async function POST(request) {
   try {
     // รับข้อมูลจาก request
     const data = await request.json();
-    const { email, employeeId } = data;
+    const { email, employee_id } = data;
 
     // ตรวจสอบข้อมูลที่จำเป็น
     if (!email || !employeeId) {
@@ -35,16 +35,16 @@ export async function POST(request) {
     }
 
     // ค้นหาพนักงานจากอีเมลและรหัสพนักงาน
-    const employee = await prisma.employee.findFirst({
+    const employee = await prisma.employees.findFirst({
       where: {
         email: email,
-        employeeId: employeeId
+        employee_id: employee_id
       }
     });
 
     // หากไม่พบพนักงาน ให้ส่งข้อความว่าจะส่งอีเมลหากพบบัญชี (เพื่อความปลอดภัย)
     if (!employee) {
-      console.log(`[FORGOT PASSWORD] Account not found for email: ${email} with ID: ${employeeId}`);
+      console.log(`[FORGOT PASSWORD] Account not found for email: ${email} with ID: ${employee_id}`);
       
       return NextResponse.json(
         { 
@@ -62,7 +62,7 @@ export async function POST(request) {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
     // อัปเดตรหัสผ่านในฐานข้อมูล
-    await prisma.employee.update({
+    await prisma.employees.update({
       where: {
         id: employee.id
       },
@@ -72,16 +72,16 @@ export async function POST(request) {
     });
 
     // เก็บรหัสผ่านใหม่ไว้ในส่วนของ debug log (ไม่แสดงกลับไปที่ผู้ใช้)
-    console.log(`[FORGOT PASSWORD] New password for employee ${employee.email} (${employee.employeeId}): ${newPassword}`);
+    console.log(`[FORGOT PASSWORD] New password for employee ${employee.email} (${employee.employee_id}): ${newPassword}`);
 
     // ส่งอีเมลแจ้งรหัสผ่านใหม่ไปให้พนักงาน
     try {
       const emailResult = await sendPasswordResetEmail({
         email: employee.email,
-        firstName: employee.firstName,
-        lastName: employee.lastName,
+        first_name: employee.first_name,
+        last_name: employee.last_name,
         password: newPassword,
-        employeeId: employee.employeeId,
+        employee_id: employee.employee_id,
         role: employee.role,
         resetBy: 'ระบบลืมรหัสผ่าน'
       });

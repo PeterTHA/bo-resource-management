@@ -92,7 +92,7 @@ export default function LeaveDetailPage() {
       if (data.success) {
         // กรองเฉพาะการลาในปีปัจจุบันที่อนุมัติแล้ว
         const approvedLeaves = data.data.filter(leave => 
-          leave.status === 'อนุมัติ' && 
+          leave.status === 'approved' && 
           !leave.isCancelled &&
           new Date(leave.startDate).getFullYear() === currentYear
         );
@@ -160,7 +160,7 @@ export default function LeaveDetailPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ 
-          status: 'อนุมัติ',
+          status: 'approved',
           approvedById: session.user.id,
           comment: null
         }),
@@ -199,7 +199,7 @@ export default function LeaveDetailPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ 
-          status: 'ไม่อนุมัติ',
+          status: 'rejected',
           approvedById: session.user.id,
           comment: rejectReason || null
         }),
@@ -260,7 +260,7 @@ export default function LeaveDetailPage() {
     
     // แอดมินและหัวหน้างานอนุมัติได้ (ไม่ต้องตรวจสอบว่าเป็นการลาของตัวเองหรือไม่)
     if ((session.user.role === 'admin' || session.user.role === 'supervisor') && 
-        leave.status === 'รออนุมัติ') {
+        leave.status === 'waiting_for_approve') {
       return true;
     }
     
@@ -272,7 +272,7 @@ export default function LeaveDetailPage() {
     if (!session || !leave) return false;
     
     // พนักงานลบของตัวเองได้ถ้ายังไม่อนุมัติ
-    if ((session.user.id === leave.employeeId) && leave.status === 'รออนุมัติ') {
+    if ((session.user.id === leave.employeeId) && leave.status === 'waiting_for_approve') {
       return true;
     }
     
@@ -289,12 +289,12 @@ export default function LeaveDetailPage() {
     if (!session || !leave) return false;
     
     // พนักงานแก้ไขข้อมูลของตัวเองได้ถ้ายังไม่อนุมัติ
-    if ((session.user.id === leave.employeeId) && leave.status === 'รออนุมัติ') {
+    if ((session.user.id === leave.employeeId) && leave.status === 'waiting_for_approve') {
       return true;
     }
     
     // แอดมินแก้ไขได้ทุกรายการที่ยังไม่อนุมัติ
-    if (session.user.role === 'admin' && leave.status === 'รออนุมัติ') {
+    if (session.user.role === 'admin' && leave.status === 'waiting_for_approve') {
       return true;
     }
     
@@ -310,10 +310,10 @@ export default function LeaveDetailPage() {
     
     // ต้องเป็นการลาที่อนุมัติแล้ว และยังไม่ได้ยกเลิก
     // กรณีที่ cancelStatus เป็น null หมายความว่าไม่เคยขอยกเลิกหรือถูกปฏิเสธการยกเลิกและถูกซ่อนสถานะแล้ว (รวมถึงกรณีถูกปฏิเสธการยกเลิก) ก็สามารถขอยกเลิกใหม่ได้
-    const isApprovedNotCancelled = leave.status === 'อนุมัติ' && 
+    const isApprovedNotCancelled = leave.status === 'approved' && 
                                   !leave.isCancelled && 
-                                  leave.cancelStatus !== 'รออนุมัติ' && 
-                                  leave.cancelStatus !== 'ยกเลิกแล้ว';
+                                  leave.cancelStatus !== 'waiting_for_approve' && 
+                                  leave.cancelStatus !== 'canceled';
     
     return isOwnerOrAdmin && isApprovedNotCancelled;
   };
@@ -326,7 +326,7 @@ export default function LeaveDetailPage() {
     const isAdminOrSupervisor = session.user.role === 'admin' || session.user.role === 'supervisor';
     
     // ต้องเป็นการลาที่ขอยกเลิกและรออนุมัติ
-    const isPendingCancelRequest = leave.cancelStatus === 'รออนุมัติ';
+    const isPendingCancelRequest = leave.cancelStatus === 'waiting_for_approve';
     
     return isAdminOrSupervisor && isPendingCancelRequest;
   };
@@ -447,6 +447,20 @@ export default function LeaveDetailPage() {
     }
   };
 
+  // เพิ่มฟังก์ชัน translateStatus สำหรับแสดงสถานะเป็นภาษาไทย
+  const translateStatus = (status) => {
+    if (!status) return '';
+    
+    const statusMap = {
+      'waiting_for_approve': 'รออนุมัติ',
+      'approved': 'อนุมัติ',
+      'rejected': 'ไม่อนุมัติ',
+      'canceled': 'ยกเลิกแล้ว'
+    };
+    
+    return statusMap[status] || status;
+  };
+
   // แสดงหน้าโหลดข้อมูล
   if (loading) {
     return <LoadingPage />;
@@ -529,20 +543,20 @@ export default function LeaveDetailPage() {
                 <h2 className="card-title text-2xl mb-4 flex items-center flex-wrap">
                   <span className="mr-2">รายละเอียดการลา</span>
                   <div className={`badge ${
-                    leave.status === 'อนุมัติ' ? 'badge-success' : 
-                    leave.status === 'ไม่อนุมัติ' ? 'badge-error' : 
+                    leave.status === 'approved' ? 'badge-success' : 
+                    leave.status === 'rejected' ? 'badge-error' : 
                     'badge-warning'
                   } badge-lg mr-2`}>
-                    {leave.status}
+                    {translateStatus(leave.status)}
                   </div>
                   
                   {/* แสดงสถานะการยกเลิก */}
-                  {leave.cancelStatus === 'อนุมัติ' && (
+                  {leave.cancelStatus === 'approved' && (
                     <div className="badge badge-info badge-lg">
                       ยกเลิกแล้ว
                     </div>
                   )}
-                  {leave.cancelStatus === 'รออนุมัติ' && (
+                  {leave.cancelStatus === 'waiting_for_approve' && (
                     <div className="badge badge-warning badge-lg">
                       รอยกเลิก
                     </div>
@@ -671,7 +685,7 @@ export default function LeaveDetailPage() {
                 </div>
                 
                 {/* ข้อมูลการอนุมัติ */}
-                {leave.status !== 'รออนุมัติ' && (
+                {leave.status !== 'waiting_for_approve' && (
                   <div className="mt-6 border-t border-gray-200 pt-4">
                     <h3 className="font-semibold text-lg mb-2">ข้อมูลการอนุมัติ</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -719,11 +733,11 @@ export default function LeaveDetailPage() {
                           <div className="font-semibold">สถานะการยกเลิก</div>
                           <div>
                             <span className={`px-2 py-1 rounded-full text-xs ${
-                              leave.cancelStatus === 'อนุมัติ' ? 'bg-blue-100 text-blue-800' : 
-                              leave.cancelStatus === 'ไม่อนุมัติ' ? 'bg-red-100 text-red-800' : 
+                              leave.cancelStatus === 'approved' ? 'bg-blue-100 text-blue-800' : 
+                              leave.cancelStatus === 'rejected' ? 'bg-red-100 text-red-800' : 
                               'bg-yellow-100 text-yellow-800'
                             }`}>
-                              {leave.cancelStatus}
+                              {translateStatus(leave.cancelStatus)}
                             </span>
                           </div>
                         </div>
@@ -745,7 +759,7 @@ export default function LeaveDetailPage() {
                         </div>
                       </div>
                       
-                      {leave.cancelStatus !== 'รออนุมัติ' && (
+                      {leave.cancelStatus !== 'waiting_for_approve' && (
                         <>
                           {leave.cancelApprovedById && (
                             <div className="flex items-start gap-2">

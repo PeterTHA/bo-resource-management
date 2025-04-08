@@ -4,72 +4,82 @@ import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/db-prisma';
 
 export async function GET(request) {
+  const { searchParams } = new URL(request.url);
+  
   try {
+    // Get parameters
+    const start_date = searchParams.get('start_date');
+    const end_date = searchParams.get('end_date');
+    
+    console.log("Parameters:", { start_date, end_date });
+    
+    // Check if required parameters are provided
+    if (!start_date || !end_date) {
+      return NextResponse.json(
+        { message: "start_date and end_date are required" },
+        { status: 400 }
+      );
+    }
+    
+    // Create Date objects with UTC time set to midnight
+    const startDate = new Date(start_date);
+    startDate.setUTCHours(0, 0, 0, 0);
+    
+    const endDate = new Date(end_date);
+    endDate.setUTCHours(23, 59, 59, 999);
+    
     // ตรวจสอบการ authentication
     const session = await getServerSession(authOptions);
     if (!session) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
-    // ดึง query parameters
-    const { searchParams } = new URL(request.url);
-    const startDate = searchParams.get('startDate');
-    const endDate = searchParams.get('endDate');
-
-    if (!startDate || !endDate) {
-      return NextResponse.json({ 
-        success: false, 
-        message: 'Missing required parameters' 
-      }, { status: 400 });
-    }
-
-    // แปลงวันที่เป็น Date object และจัดการ timezone
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-
-    // ปรับเวลาเป็น UTC
-    const startUTC = new Date(Date.UTC(
-      start.getUTCFullYear(),
-      start.getUTCMonth(),
-      start.getUTCDate(),
-      0, 0, 0, 0
-    ));
-
-    const endUTC = new Date(Date.UTC(
-      end.getUTCFullYear(),
-      end.getUTCMonth(),
-      end.getUTCDate(),
-      0, 0, 0, 0
-    ));
-
     // เพิ่ม log สำหรับ parameter
     console.log('Leave API Parameters:', {
-      originalStartDate: startDate,
-      originalEndDate: endDate,
-      startUTC: startUTC.toISOString(),
-      endUTC: endUTC.toISOString()
+      originalStartDate: start_date,
+      originalEndDate: end_date,
+      startUTC: startDate.toISOString(),
+      endUTC: endDate.toISOString()
     });
 
     // ดึงข้อมูลการลาที่อนุมัติแล้ว
-    const leaves = await prisma.leave.findMany({
+    const leaves = await prisma.leaves.findMany({
       where: {
-        startDate: {
-          gte: startUTC
+        start_date: {
+          gte: startDate
         },
-        endDate: {
-          lte: endUTC
+        end_date: {
+          lte: endDate
         },
-        status: 'approved'
+        leave_approvals: {
+          some: {
+            status: 'approved'
+          }
+        }
       },
       include: {
-        employee: {
+        employees: {
           select: {
             id: true,
-            firstName: true,
-            lastName: true,
-            department: true,
+            first_name: true,
+            last_name: true,
+            departments: true,
             position: true,
-            teamId: true
+            team_id: true
+          }
+        },
+        leave_approvals: {
+          orderBy: {
+            created_at: 'desc'
+          },
+          include: {
+            employees: {
+              select: {
+                id: true,
+                first_name: true,
+                last_name: true
+              }
+            }
           }
         }
       }
@@ -78,13 +88,17 @@ export async function GET(request) {
     // เพิ่ม log สำหรับ result และ SQL query
     console.log('Leave API Query:', {
       where: {
-        startDate: {
-          lte: startUTC.toISOString()
+        start_date: {
+          gte: startDate.toISOString()
         },
-        endDate: {
-          gte: endUTC.toISOString()
+        end_date: {
+          lte: endDate.toISOString()
         },
-        status: 'approved'
+        leave_approvals: {
+          some: {
+            status: 'approved'
+          }
+        }
       }
     });
 
@@ -92,12 +106,12 @@ export async function GET(request) {
       totalLeaves: leaves.length,
       leaves: leaves.map(leave => ({
         id: leave.id,
-        employeeId: leave.employeeId,
-        startDate: leave.startDate,
-        endDate: leave.endDate,
-        leaveType: leave.leaveType,
+        employee_id: leave.employee_id,
+        start_date: leave.start_date,
+        end_date: leave.end_date,
+        leave_type: leave.leave_type,
         status: leave.status,
-        employee: leave.employee
+        employees: leave.employees
       }))
     });
 

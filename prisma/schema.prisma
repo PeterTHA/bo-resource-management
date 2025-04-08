@@ -184,6 +184,8 @@ model projects {
   attachments           String[]                @default([])
   created_at            DateTime                @default(now())
   updated_at            DateTime
+  confluence_url        String?
+  jira_url              String?
   project_activity_logs project_activity_logs[]
   project_members       project_members[]
   employees             employees               @relation(fields: [created_by_id], references: [id])

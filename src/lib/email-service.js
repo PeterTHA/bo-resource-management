@@ -230,7 +230,7 @@ export async function sendEmail(options) {
  * @returns {Promise<Object>} - ข้อมูลการส่งอีเมล
  */
 export async function sendWelcomeEmail(options) {
-  const { to, name, firstName, lastName, password, position, department, team, employeeId, role } = options;
+  const { to, name, first_name, last_name, password, position, department, team, employee_id, role } = options;
   
   // ตรวจสอบว่ามีอีเมลผู้รับหรือไม่
   if (!to) {
@@ -244,9 +244,9 @@ export async function sendWelcomeEmail(options) {
   
   console.log('Sending welcome email with data:', { 
     to, 
-    firstName, 
-    lastName, 
-    employeeId, 
+    first_name, 
+    last_name, 
+    employee_id, 
     position, 
     department, 
     role 
@@ -288,13 +288,13 @@ export async function sendWelcomeEmail(options) {
  * @returns {Promise<Object>} - ข้อมูลการส่งอีเมล
  */
 export async function sendPasswordResetEmail(options) {
-  const { email, firstName, lastName, password, role, employeeId, resetBy = 'ผู้ดูแลระบบ' } = options;
+  const { email, first_name, last_name, password, role, employee_id, resetBy = 'ผู้ดูแลระบบ' } = options;
   
   // สร้างเนื้อหาอีเมล
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
       <h2 style="color: #9333ea;">รหัสผ่านใหม่ของคุณ</h2>
-      <p>สวัสดี ${firstName} ${lastName},</p>
+      <p>สวัสดี ${first_name} ${last_name},</p>
       <p>รหัสผ่านของคุณได้ถูกรีเซ็ตแล้วโดย ${resetBy}</p>
       <div style="background-color: #f3f4f6; padding: 15px; border-radius: 5px; margin: 15px 0;">
         <p style="margin: 5px 0;"><strong>รหัสพนักงาน:</strong> ${employeeId || 'ไม่ระบุ'}</p>

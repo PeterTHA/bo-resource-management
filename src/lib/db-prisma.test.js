@@ -32,7 +32,7 @@ describe('db-prisma functions', () => {
     
     // Setup mock implementation
     mockPrismaClient = {
-      employee: {
+      employees: {
         findMany: jest.fn(),
         findUnique: jest.fn(),
         create: jest.fn(),
@@ -40,7 +40,7 @@ describe('db-prisma functions', () => {
         delete: jest.fn(),
         count: jest.fn(),
       },
-      leave: {
+      leaves: {
         findMany: jest.fn(),
         findUnique: jest.fn(),
         create: jest.fn(),
@@ -48,7 +48,7 @@ describe('db-prisma functions', () => {
         delete: jest.fn(),
         count: jest.fn(),
       },
-      overtime: {
+      overtimes: {
         findMany: jest.fn(),
         findUnique: jest.fn(),
         create: jest.fn(),
@@ -66,22 +66,22 @@ describe('db-prisma functions', () => {
   describe('Employee functions', () => {
     test('getEmployees returns all employees', async () => {
       const mockEmployees = [
-        { id: '1', firstName: 'John', lastName: 'Doe' },
-        { id: '2', firstName: 'Jane', lastName: 'Smith' },
+        { id: '1', first_name: 'John', last_name: 'Doe' },
+        { id: '2', first_name: 'Jane', last_name: 'Smith' },
       ];
       
-      mockPrismaClient.employee.findMany.mockResolvedValue(mockEmployees);
+      mockPrismaClient.employees.findMany.mockResolvedValue(mockEmployees);
       
       const result = await getEmployees();
       
       expect(result.success).toBe(true);
       expect(result.data).toEqual(mockEmployees);
-      expect(mockPrismaClient.employee.findMany).toHaveBeenCalledTimes(1);
+      expect(mockPrismaClient.employees.findMany).toHaveBeenCalledTimes(1);
     });
     
     test('getEmployees handles errors', async () => {
       const mockError = new Error('Database error');
-      mockPrismaClient.employee.findMany.mockRejectedValue(mockError);
+      mockPrismaClient.employees.findMany.mockRejectedValue(mockError);
       
       const result = await getEmployees();
       
@@ -91,21 +91,21 @@ describe('db-prisma functions', () => {
     });
     
     test('getEmployeeById returns employee by ID', async () => {
-      const mockEmployee = { id: '1', firstName: 'John', lastName: 'Doe' };
-      mockPrismaClient.employee.findUnique.mockResolvedValue(mockEmployee);
+      const mockEmployee = { id: '1', first_name: 'John', last_name: 'Doe' };
+      mockPrismaClient.employees.findUnique.mockResolvedValue(mockEmployee);
       
       const result = await getEmployeeById('1');
       
       expect(result.success).toBe(true);
       expect(result.data).toEqual(mockEmployee);
-      expect(mockPrismaClient.employee.findUnique).toHaveBeenCalledWith({
+      expect(mockPrismaClient.employees.findUnique).toHaveBeenCalledWith({
         where: { id: '1' },
         select: expect.any(Object),
       });
     });
     
     test('getEmployeeById returns error when employee not found', async () => {
-      mockPrismaClient.employee.findUnique.mockResolvedValue(null);
+      mockPrismaClient.employees.findUnique.mockResolvedValue(null);
       
       const result = await getEmployeeById('999');
       
@@ -117,34 +117,34 @@ describe('db-prisma functions', () => {
   describe('Leave functions', () => {
     test('getLeaves returns all leaves when no employeeId provided', async () => {
       const mockLeaves = [
-        { id: '1', leaveType: 'ลาป่วย', employeeId: '1' },
-        { id: '2', leaveType: 'ลากิจ', employeeId: '2' },
+        { id: '1', leave_type: 'ลาป่วย', employee_id: '1' },
+        { id: '2', leave_type: 'ลากิจ', employee_id: '2' },
       ];
       
-      mockPrismaClient.leave.findMany.mockResolvedValue(mockLeaves);
+      mockPrismaClient.leaves.findMany.mockResolvedValue(mockLeaves);
       
       const result = await getLeaves();
       
       expect(result.success).toBe(true);
       expect(result.data).toEqual(mockLeaves);
-      expect(mockPrismaClient.leave.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockPrismaClient.leaves.findMany).toHaveBeenCalledWith(expect.objectContaining({
         where: {},
       }));
     });
     
     test('getLeaves returns leaves for specific employee', async () => {
       const mockLeaves = [
-        { id: '1', leaveType: 'ลาป่วย', employeeId: '1' },
+        { id: '1', leave_type: 'ลาป่วย', employee_id: '1' },
       ];
       
-      mockPrismaClient.leave.findMany.mockResolvedValue(mockLeaves);
+      mockPrismaClient.leaves.findMany.mockResolvedValue(mockLeaves);
       
       const result = await getLeaves('1');
       
       expect(result.success).toBe(true);
       expect(result.data).toEqual(mockLeaves);
-      expect(mockPrismaClient.leave.findMany).toHaveBeenCalledWith(expect.objectContaining({
-        where: { employeeId: '1' },
+      expect(mockPrismaClient.leaves.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: { employee_id: '1' },
       }));
     });
   });
@@ -152,17 +152,17 @@ describe('db-prisma functions', () => {
   describe('Overtime functions', () => {
     test('getOvertimes returns all overtimes when no employeeId provided', async () => {
       const mockOvertimes = [
-        { id: '1', date: new Date(), employeeId: '1' },
-        { id: '2', date: new Date(), employeeId: '2' },
+        { id: '1', date: new Date(), employee_id: '1' },
+        { id: '2', date: new Date(), employee_id: '2' },
       ];
       
-      mockPrismaClient.overtime.findMany.mockResolvedValue(mockOvertimes);
+      mockPrismaClient.overtimes.findMany.mockResolvedValue(mockOvertimes);
       
       const result = await getOvertimes();
       
       expect(result.success).toBe(true);
       expect(result.data).toEqual(mockOvertimes);
-      expect(mockPrismaClient.overtime.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockPrismaClient.overtimes.findMany).toHaveBeenCalledWith(expect.objectContaining({
         where: {},
       }));
     });
@@ -170,11 +170,11 @@ describe('db-prisma functions', () => {
   
   describe('Statistics function', () => {
     test('getStatistics returns correct statistics', async () => {
-      mockPrismaClient.employee.count.mockResolvedValue(10);
-      mockPrismaClient.leave.count.mockResolvedValue(5);
-      mockPrismaClient.overtime.count.mockResolvedValue(3);
+      mockPrismaClient.employees.count.mockResolvedValue(10);
+      mockPrismaClient.leaves.count.mockResolvedValue(5);
+      mockPrismaClient.overtimes.count.mockResolvedValue(3);
       
-      mockPrismaClient.leave.findMany.mockResolvedValue([
+      mockPrismaClient.leaves.findMany.mockResolvedValue([
         { id: '1', status: 'รออนุมัติ' },
         { id: '2', status: 'อนุมัติ' },
         { id: '3', status: 'อนุมัติ' },
@@ -182,7 +182,7 @@ describe('db-prisma functions', () => {
         { id: '5', status: 'รออนุมัติ' },
       ]);
       
-      mockPrismaClient.overtime.findMany.mockResolvedValue([
+      mockPrismaClient.overtimes.findMany.mockResolvedValue([
         { id: '1', status: 'รออนุมัติ' },
         { id: '2', status: 'อนุมัติ' },
         { id: '3', status: 'รออนุมัติ' },

@@ -42,7 +42,7 @@ export function OvertimeBarChart() {
           // สร้างข้อมูลเริ่มต้นสำหรับทุกเดือน
           const allMonthsData = thaiMonthNames.map(month => ({
             month,
-            totalHours: 0,
+            total_hours: 0,
             count: 0
           }));
           
@@ -50,7 +50,7 @@ export function OvertimeBarChart() {
           data.data.monthlySummary.forEach(monthData => {
             const monthIndex = thaiMonthNames.findIndex(m => m === monthData.month);
             if (monthIndex !== -1) {
-              allMonthsData[monthIndex].totalHours = Math.round(monthData.totalHours);
+              allMonthsData[monthIndex].total_hours = Math.round(monthData.total_hours);
               allMonthsData[monthIndex].count = monthData.count;
             }
           });
@@ -66,17 +66,17 @@ export function OvertimeBarChart() {
           
           const mockData = thaiMonthNames.map(month => ({
             month,
-            totalHours: 0,
+            total_hours: 0,
             count: 0
           }));
           
           // ตัวอย่างข้อมูล
-          mockData[0].totalHours = 186; // มกราคม
-          mockData[1].totalHours = 305; // กุมภาพันธ์
-          mockData[2].totalHours = 237; // มีนาคม
-          mockData[3].totalHours = 73;  // เมษายน
-          mockData[4].totalHours = 209; // พฤษภาคม
-          mockData[5].totalHours = 214; // มิถุนายน
+          mockData[0].total_hours = 186; // มกราคม
+          mockData[1].total_hours = 305; // กุมภาพันธ์
+          mockData[2].total_hours = 237; // มีนาคม
+          mockData[3].total_hours = 73;  // เมษายน
+          mockData[4].total_hours = 209; // พฤษภาคม
+          mockData[5].total_hours = 214; // มิถุนายน
           
           setChartData(mockData);
         }

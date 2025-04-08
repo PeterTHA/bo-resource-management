@@ -19,16 +19,16 @@ export async function GET() {
     today.setHours(0, 0, 0, 0);
     
     // ดึงข้อมูลพนักงานในทีมเดียวกัน - ลดจำนวนที่ select ลงเหลือเฉพาะที่จำเป็น
-    const employees = await prisma.employee.findMany({
+    const employees = await prisma.employees.findMany({
       where: {
-        teamId: session.user.teamId,
-        isActive: true
+        team_id: session.user.team_id,
+        is_active: true
       },
       select: {
         id: true,
-        firstName: true,
-        lastName: true,
-        positionTitle: true,
+        first_name: true,
+        last_name: true,
+        position_title: true,
         image: true,
         work_statuses_work_statuses_employee_idToemployees: {
           where: {
@@ -46,20 +46,20 @@ export async function GET() {
         }
       },
       orderBy: {
-        firstName: 'asc'
+        first_name: 'asc'
       }
     });
 
     // ดึงข้อมูลการลาของวันนี้
-    const todayLeaves = await prisma.leave.findMany({
+    const todayLeaves = await prisma.leaves.findMany({
       where: {
-        employeeId: {
+        employee_id: {
           in: employees.map(emp => emp.id)
         },
-        startDate: {
+        start_date: {
           lte: today
         },
-        endDate: {
+        end_date: {
           gte: today
         },
         OR: [
@@ -68,8 +68,8 @@ export async function GET() {
         ]
       },
       select: {
-        employeeId: true,
-        leaveType: true,
+        employee_id: true,
+        leave_type: true,
         status: true
       }
     });
@@ -77,7 +77,7 @@ export async function GET() {
     // สร้างตัวแปรชั่วคราวเพื่อเก็บความสัมพันธ์ระหว่าง id พนักงานกับการลา
     const employeeLeaveMap = {};
     todayLeaves.forEach(leave => {
-      employeeLeaveMap[leave.employeeId] = leave;
+      employeeLeaveMap[leave.employee_id] = leave;
     });
 
     // แปลงข้อมูลให้อยู่ในรูปแบบที่ต้องการและรวมกับข้อมูลการลา
@@ -89,16 +89,16 @@ export async function GET() {
       
       return {
         id: employee.id,
-        firstName: employee.firstName || '',
-        lastName: employee.lastName || '',
-        positionTitle: employee.positionTitle || '',
+        first_name: employee.first_name || '',
+        last_name: employee.last_name || '',
+        position_title: employee.position_title || '',
         image: employee.image || null,
         workStatuses: [{
           status: status
         }],
         // เพิ่มข้อมูลการลาถ้ามี
-        leave: todayLeave ? {
-          leaveType: todayLeave.leaveType,
+        leaves: todayLeave ? {
+          leave_type: todayLeave.leave_type,
           status: todayLeave.status
         } : null
       };

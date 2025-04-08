@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../../lib/auth';
-import { getLeaveById, updateLeave, deleteLeave, requestCancelLeave, approveCancelLeave, rejectCancelLeave } from '../../../../lib/db-prisma';
+import { getLeaveById, updateLeave, deleteLeave, requestCancelLeave, approveCancelLeave, rejectCancelLeave, approveLeave, rejectLeave } from '../../../../lib/db-prisma';
 
 // GET - ดึงข้อมูลการลาตาม ID
 export async function GET(request, { params }) {
@@ -29,7 +29,7 @@ export async function GET(request, { params }) {
     }
     
     // ตรวจสอบสิทธิ์การเข้าถึง
-    if ((session.user.role === 'permanent' || session.user.role === 'temporary') && session.user.id !== result.data.employeeId) {
+    if ((session.user.role === 'permanent' || session.user.role === 'temporary') && session.user.id !== result.data.employee_id) {
       return NextResponse.json(
         { success: false, message: 'ไม่มีสิทธิ์เข้าถึงข้อมูลการลาของผู้อื่น' },
         { status: 403 }
@@ -77,7 +77,7 @@ export async function PUT(request, { params }) {
     // - พนักงานสามารถแก้ไขข้อมูลการลาของตัวเองได้เฉพาะเมื่อสถานะเป็น "รออนุมัติ"
     // - หัวหน้างานและแอดมินสามารถอนุมัติหรือไม่อนุมัติการลาได้
     if ((session.user.role === 'permanent' || session.user.role === 'temporary')) {
-      if (session.user.id !== leave.employeeId) {
+      if (session.user.id !== leave.employee_id) {
         return NextResponse.json(
           { success: false, message: 'ไม่มีสิทธิ์แก้ไขข้อมูลการลาของผู้อื่น' },
           { status: 403 }
@@ -95,12 +95,12 @@ export async function PUT(request, { params }) {
     const body = await request.json();
     
     const leaveData = {
-      leaveType: body.leaveType,
-      startDate: body.startDate && new Date(body.startDate),
-      endDate: body.endDate && new Date(body.endDate),
+      leave_type: body.leave_type,
+      start_date: body.start_date && new Date(body.start_date),
+      end_date: body.end_date && new Date(body.end_date),
       reason: body.reason,
-      totalDays: body.totalDays,
-      leaveFormat: body.leaveFormat,
+      total_days: body.total_days,
+      leave_format: body.leave_format,
     };
 
     // อัพเดทลิงก์ไฟล์แนบ (ถ้ามี)
@@ -119,8 +119,8 @@ export async function PUT(request, { params }) {
       }
       
       // กรณีหัวหน้างานอนุมัติการลาของตัวเอง หรือหัวหน้างานคนอื่น (อนุญาตให้ทำได้)
-      const isApproverSelf = session.user.id === leave.employeeId;
-      const isHeadApprovingHead = session.user.role === 'supervisor' && leave.employee?.role === 'supervisor';
+      const isApproverSelf = session.user.id === leave.employee_id;
+      const isHeadApprovingHead = session.user.role === 'supervisor' && leave.employees?.role === 'supervisor';
       
       // ตรวจสอบพิเศษสำหรับกรณีที่หัวหน้างานอนุมัติให้พนักงานที่ไม่ใช่หัวหน้างาน
       // ไม่ต้องมีการตรวจสอบเพิ่มเติม อนุญาตให้ทำได้
@@ -186,7 +186,7 @@ export async function DELETE(request, { params }) {
     // - พนักงานสามารถลบข้อมูลการลาของตัวเองได้เฉพาะเมื่อสถานะเป็น "รออนุมัติ"
     // - แอดมินสามารถลบข้อมูลการลาได้ทั้งหมด
     if ((session.user.role === 'permanent' || session.user.role === 'temporary')) {
-      if (session.user.id !== leave.employeeId) {
+      if (session.user.id !== leave.employee_id) {
         return NextResponse.json(
           { success: false, message: 'ไม่มีสิทธิ์ลบข้อมูลการลาของผู้อื่น' },
           { status: 403 }
@@ -271,7 +271,7 @@ export async function PATCH(request, { params }) {
     switch (action) {
       case 'requestCancel':
         // ตรวจสอบสิทธิ์การเข้าถึง
-        if (session.user.id !== leave.employeeId && session.user.role !== 'admin') {
+        if (session.user.id !== leave.employee_id && session.user.role !== 'admin') {
           return NextResponse.json(
             { success: false, message: 'ไม่มีสิทธิ์ขอยกเลิกการลาของผู้อื่น' },
             { status: 403 }
@@ -297,7 +297,7 @@ export async function PATCH(request, { params }) {
         // เตรียมข้อมูลสำหรับการขอยกเลิกการลา
         const cancelData = {
           reason: data.reason,
-          employeeId: session.user.id
+          employee_id: session.user.id
         };
         
         // ส่งคำขอยกเลิกการลา

@@ -13,48 +13,73 @@ export const authOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
+          console.log('Missing email or password');
           throw new Error('กรุณาระบุอีเมลและรหัสผ่าน');
         }
+
+        console.log('Attempting to authenticate:', credentials.email);
 
         // ค้นหาพนักงานจากอีเมล
         let user;
         
         try {
-          user = await prisma.employee.findUnique({
+          user = await prisma.employees.findUnique({
             where: { email: credentials.email },
             include: {
-              department: true,
-              teamData: true
+              departments: true,
+              teams: true
             }
           });
+          
+          console.log('User found:', !!user);
+          if (user) {
+            console.log('User details:', {
+              id: user.id,
+              email: user.email,
+              is_active: user.is_active,
+              hasPassword: !!user.password
+            });
+          }
         } catch (error) {
+          console.error('Error in authorize:', error);
           throw new Error('ไม่สามารถเชื่อมต่อกับฐานข้อมูลได้');
         }
         
         if (!user) {
+          console.log('User not found');
           throw new Error('ไม่พบผู้ใช้งาน');
         }
         
-        if (user.isActive === false) {
+        if (user.is_active === false) {
+          console.log('User account is inactive');
           throw new Error('บัญชีผู้ใช้นี้ถูกระงับ');
         }
 
         // ตรวจสอบรหัสผ่าน
-        const isMatch = await bcrypt.compare(credentials.password, user.password);
+        let isMatch;
+        try {
+          isMatch = await bcrypt.compare(credentials.password, user.password);
+          console.log('Password match:', isMatch);
+        } catch (error) {
+          console.error('Error comparing passwords:', error);
+          throw new Error('เกิดข้อผิดพลาดในการตรวจสอบรหัสผ่าน');
+        }
         
         if (!isMatch) {
+          console.log('Password is incorrect');
           throw new Error('รหัสผ่านไม่ถูกต้อง');
         }
 
+        console.log('Authentication successful');
         return {
           id: user.id,
           email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
+          first_name: user.first_name,
+          last_name: user.last_name,
           role: user.role,
-          employeeId: user.employeeId,
-          teamId: user.teamId,
-          departmentId: user.departmentId
+          employee_id: user.employee_id,
+          team_id: user.team_id,
+          department_id: user.department_id
         };
       }
     })
@@ -65,14 +90,14 @@ export const authOptions = {
         // สร้าง token ใหม่จากข้อมูล user ที่ได้รับจาก authorize
         token.id = user.id;
         token.email = user.email;
-        token.firstName = user.firstName;
-        token.lastName = user.lastName;
+        token.first_name = user.first_name;
+        token.last_name = user.last_name;
         token.role = user.role;
-        token.employeeId = user.employeeId;
-        token.departmentId = user.departmentId;
-        token.department = user.department;
-        token.teamId = user.teamId;
-        token.team = user.teamData?.name || null;
+        token.employee_id = user.employee_id;
+        token.department_id = user.department_id;
+        token.departments = user.departments?.name || null;
+        token.team_id = user.team_id;
+        token.teams = user.teams?.name || null;
         token.position = user.position;
         token.image = user.image || null;
         // เพิ่ม timestamp เพื่อเช็คเวอร์ชันของ token
@@ -102,13 +127,13 @@ export const authOptions = {
         session.user.id = token.id;
         session.user.email = token.email;
         session.user.role = token.role;
-        session.user.firstName = token.firstName;
-        session.user.lastName = token.lastName;
-        session.user.employeeId = token.employeeId;
-        session.user.departmentId = token.departmentId;
-        session.user.department = token.department;
-        session.user.teamId = token.teamId;
-        session.user.team = token.team;
+        session.user.first_name = token.first_name;
+        session.user.last_name = token.last_name;
+        session.user.employee_id = token.employee_id;
+        session.user.department_id = token.department_id;
+        session.user.departments = token.departments;
+        session.user.team_id = token.team_id;
+        session.user.teams = token.teams;
         session.user.position = token.position;
         session.user.image = token.image;
         session.user.tokenVersion = token.tokenVersion;

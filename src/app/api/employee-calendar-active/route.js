@@ -12,20 +12,20 @@ export async function GET(request) {
     }
 
     // ดึงข้อมูลพนักงานทั้งหมดที่ active
-    const employees = await prisma.employee.findMany({
+    const employees = await prisma.employees.findMany({
       where: {
-        isActive: true
+        is_active: true
       },
       include: {
-        department: true,
-        teamData: true
+        departments: true,
+        teams: true
       }
     });
 
     // ดึงข้อมูลสถานะการทำงาน
-    const workStatuses = await prisma.workStatus.findMany({
+    const workStatuses = await prisma.work_statuses.findMany({
       where: {
-        employeeId: {
+        employee_id: {
           in: employees.map(emp => emp.id)
         }
       }

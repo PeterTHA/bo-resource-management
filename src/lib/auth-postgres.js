@@ -29,13 +29,13 @@ export const authOptionsPostgres = {
           throw new Error('รหัสผ่านไม่ถูกต้อง');
         }
 
-        if (employee.isActive === false) {
+        if (employee.is_active === false) {
           throw new Error('Account is suspended');
         }
 
         return {
           id: employee.id,
-          employeeId: employee.employee_id,
+          employee_id: employee.employee_id,
           name: `${employee.first_name} ${employee.last_name}`,
           email: employee.email,
           role: employee.role,
@@ -47,7 +47,7 @@ export const authOptionsPostgres = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        token.employeeId = user.employeeId;
+        token.employee_id = user.employee_id;
         token.role = user.role;
       }
       return token;
@@ -55,7 +55,7 @@ export const authOptionsPostgres = {
     async session({ session, token }) {
       if (token) {
         session.user.id = token.id;
-        session.user.employeeId = token.employeeId;
+        session.user.employee_id = token.employee_id;
         session.user.role = token.role;
       }
       return session;
@@ -102,7 +102,7 @@ export async function loginWithCredentials(credentials) {
     }
     
     // ถ้าบัญชีถูกระงับ ไม่อนุญาตให้เข้าสู่ระบบ
-    if (user.isActive === false) {
+    if (user.is_active === false) {
       return { success: false, error: 'Account is suspended' };
     }
 
@@ -111,14 +111,14 @@ export async function loginWithCredentials(credentials) {
       success: true,
       user: {
         id: user.id,
-        employeeId: user.employeeId,
-        firstName: user.firstName,
-        lastName: user.lastName,
+        employee_id: user.employee_id,
+        first_name: user.first_name,
+        last_name: user.last_name,
         email: user.email,
-        department: user.department,
+        departments: user.departments,
         position: user.position,
         role: user.role || 'employee',
-        teamId: user.teamId,
+        team_id: user.team_id,
         image: user.image
       }
     };

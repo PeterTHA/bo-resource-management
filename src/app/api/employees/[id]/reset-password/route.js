@@ -53,7 +53,7 @@ async function handleResetPassword(request, { params }) {
     console.log(`กำลังรีเซ็ตรหัสผ่านสำหรับพนักงาน ID: ${id}`);
     
     // ค้นหาพนักงานในฐานข้อมูล
-    const employee = await prisma.employee.findUnique({
+    const employee = await prisma.employees.findUnique({
       where: {
         id: id,
       },
@@ -73,7 +73,7 @@ async function handleResetPassword(request, { params }) {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     
     // อัปเดตรหัสผ่านใหม่ในฐานข้อมูล
-    await prisma.employee.update({
+    await prisma.employees.update({
       where: {
         id: id,
       },
@@ -83,18 +83,18 @@ async function handleResetPassword(request, { params }) {
     });
     
     // เก็บรหัสผ่านใหม่ไว้ในส่วนของ debug log (ไม่แสดงกลับไปที่ผู้ใช้)
-    console.log(`[PASSWORD RESET] New password for employee ${employee.email} (${employee.employeeId}): ${newPassword}`);
+    console.log(`[PASSWORD RESET] New password for employee ${employee.email} (${employee.employee_id}): ${newPassword}`);
     
     // ส่งอีเมลแจ้งรหัสผ่านใหม่ไปให้พนักงาน
     try {
       const emailResult = await sendPasswordResetEmail({
         email: employee.email,
-        firstName: employee.firstName,
-        lastName: employee.lastName,
+        first_name: employee.first_name,
+        last_name: employee.last_name,
         password: newPassword,
-        employeeId: employee.employeeId,
+        employee_id: employee.employee_id,
         role: employee.role,
-        resetBy: `${session.user.firstName} ${session.user.lastName} (${session.user.email})`
+        resetBy: `${session.user.first_name} ${session.user.last_name} (${session.user.email})`
       });
       
       if (emailResult.success) {

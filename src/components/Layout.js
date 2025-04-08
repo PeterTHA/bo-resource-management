@@ -168,7 +168,7 @@ export default function Layout({ children }) {
                     <div className="rounded-full w-10 h-10 relative overflow-hidden border-2 border-primary">
                       <Image 
                         src={userData.image} 
-                        alt={userData.firstName || 'User'} 
+                        alt={userData.first_name || 'User'} 
                         fill
                         sizes="40px"
                         className="object-cover" 
@@ -185,7 +185,7 @@ export default function Layout({ children }) {
                 <li className="menu-title py-3 px-4 border-b border-base-200 bg-base-200">
                   <div className="flex flex-col">
                     <span className="font-bold text-base">
-                      {userData ? `${userData.firstName} ${userData.lastName}` : userName}
+                      {userData ? `${userData.first_name} ${userData.last_name}` : userName}
                     </span>
                     <span className="text-sm opacity-80">{session.user.email}</span>
                   </div>

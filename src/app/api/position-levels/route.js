@@ -17,10 +17,10 @@ export async function GET(req) {
     }
 
     // เงื่อนไขพื้นฐานคือระดับตำแหน่งที่ยังใช้งานอยู่
-    const where = { isActive: true };
+    const where = { is_active: true };
 
     // ดึงข้อมูลระดับตำแหน่ง
-    let positionLevels = await prisma.positionLevel.findMany({
+    let positionLevels = await prisma.position_levels.findMany({
       where,
       orderBy: { level: 'asc' }
     });
@@ -28,25 +28,25 @@ export async function GET(req) {
     // ถ้าเป็น admin เพิ่มระดับตำแหน่ง Admin ที่มีไว้สำหรับ admin เท่านั้น
     if (session.user.role === 'admin') {
       // ตรวจสอบว่ามีระดับตำแหน่ง Admin อยู่แล้วหรือไม่
-      const adminLevelExists = await prisma.positionLevel.findUnique({
+      const adminLevelExists = await prisma.position_levels.findUnique({
         where: { code: 'ADMIN' }
       });
       
       // ถ้ายังไม่มี ให้สร้างระดับตำแหน่ง Admin
       if (!adminLevelExists) {
-        await prisma.positionLevel.create({
+        await prisma.position_levels.create({
           data: {
             code: 'ADMIN',
             name: 'Admin',
             level: 8, // ระดับสูงสุด (สูงกว่า Director)
             description: 'ระดับผู้ดูแลระบบ (สำหรับ Admin เท่านั้น)',
-            isActive: true
+            is_active: true
           }
         });
       }
       
       // ดึงข้อมูลระดับตำแหน่งทั้งหมดอีกครั้งเพื่อให้ได้ข้อมูลล่าสุด
-      positionLevels = await prisma.positionLevel.findMany({
+      positionLevels = await prisma.position_levels.findMany({
         where,
         orderBy: { level: 'asc' }
       });

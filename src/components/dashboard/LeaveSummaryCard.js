@@ -56,7 +56,7 @@ export function LeaveSummaryCard() {
   // คำนวณจำนวนรวมของวันลาทั้งหมด จากข้อมูลที่ได้จาก API
   const totalLeaveDays = useMemo(() => {
     if (!leavesByType) return 0;
-    return leavesByType.reduce((total, data) => total + data.totalDays, 0);
+    return leavesByType.reduce((total, data) => total + data.total_days, 0);
   }, [leavesByType]);
 
   // คำนวณจำนวนรวมของวันลาที่อนุมัติแล้ว จากข้อมูลที่ได้จาก API
@@ -127,7 +127,7 @@ export function LeaveSummaryCard() {
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">จำนวนวัน:</span>
-                    <span className="font-medium">{leaveData.totalDays} วัน</span>
+                    <span className="font-medium">{leaveData.total_days} วัน</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">อนุมัติแล้ว:</span>
@@ -142,7 +142,7 @@ export function LeaveSummaryCard() {
                   <div 
                     className="h-1.5 rounded-full" 
                     style={{ 
-                      width: `${Math.min(100, (leaveData.totalDays / (totalLeaveDays || 1)) * 100)}%`,
+                      width: `${Math.min(100, (leaveData.total_days / (totalLeaveDays || 1)) * 100)}%`,
                       backgroundColor: COLORS[leaveData.type] || COLORS.default
                     }}
                   />

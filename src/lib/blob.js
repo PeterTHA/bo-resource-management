@@ -23,7 +23,7 @@ export async function uploadProfileImage(file, employeeId) {
     }
     
     // ถ้าเป็น production ให้ใช้ Vercel Blob
-    const filename = `profile-images/${employeeId}/${uuid}-${Date.now()}-${file.name}`;
+    const filename = `profile-images/${employee_id}/${uuid}-${Date.now()}-${file.name}`;
     const blob = await put(filename, file, {
       access: 'public',
       addRandomSuffix: false,
@@ -63,7 +63,7 @@ export async function uploadLeaveAttachment(file, employeeId) {
     }
     
     // ถ้าเป็น production ให้ใช้ Vercel Blob
-    const filename = `leave-attachments/${employeeId}/${uuid}-${Date.now()}-${file.name}`;
+    const filename = `leave-attachments/${employee_id}/${uuid}-${Date.now()}-${file.name}`;
     const blob = await put(filename, file, {
       access: 'public',
       addRandomSuffix: false,
@@ -150,9 +150,9 @@ async function simulateUpload(file, uuid, type = 'profile') {
   }
 }
 
-export async function deleteProfileImage(employeeId) {
+export async function deleteProfileImage(employeeId {
   try {
-    await del(`profile-images/${employeeId}.jpg`);
+    await del(`profile-images/${employee_id}.jpg`);
     return { success: true };
   } catch (error) {
     console.error('Error deleting image:', error);

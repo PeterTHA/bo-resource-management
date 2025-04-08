@@ -87,7 +87,7 @@ export async function PUT(request, context) {
       );
     }
   } catch (error) {
-    console.error('Error requesting cancel leave:', error);
+    console.error('Error requesting cancel leaves:', error);
     return NextResponse.json(
       { success: false, message: 'เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์' },
       { status: 500 }

@@ -110,13 +110,13 @@ export async function GET(req) {
     
     for (const role of defaultRoles) {
       // ตรวจสอบว่ามีบทบาทนี้อยู่แล้วหรือไม่
-      const existingRole = await prisma.projectRole.findUnique({
+      const existingRole = await prisma.project_roles.findUnique({
         where: { id: role.id }
       });
       
       if (!existingRole) {
         // ถ้ายังไม่มี ให้สร้างใหม่
-        const newRole = await prisma.projectRole.create({
+        const newRole = await prisma.project_roles.create({
           data: {
             id: role.id,
             name: role.name,
