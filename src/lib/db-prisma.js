@@ -1,7 +1,15 @@
 import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
 
+// สร้างอินสแตนซ์ PrismaClient แบบเรียบง่าย
 const prisma = new PrismaClient();
+
+// เพิ่มจัดการปิดการเชื่อมต่อเมื่อแอปปิด
+if (process.env.NODE_ENV !== 'production') {
+  // เฉพาะใน development mode
+  // ในโหมด production จะมีการจัดการการเชื่อมต่อโดยอัตโนมัติ
+  global.$prisma = prisma;
+}
 
 export { prisma };
 export default prisma;
@@ -793,12 +801,14 @@ export async function createLeave(data) {
     if (data.approvedById && data.approvedAt) {
       await prisma.leave_approvals.create({
         data: {
+          id: crypto.randomUUID(),
           leave_id: newLeave.id,
           employee_id: data.approvedById,
           type: data.status === 'อนุมัติ' ? 'approve' : 'reject',
           status: 'completed',
           comment: data.comment || null,
           created_at: new Date(data.approvedAt),
+          updated_at: new Date(),
         },
       });
     }
@@ -876,6 +886,7 @@ export async function updateLeave(id, data) {
                 status: 'completed',
                 comment: data.comment || null,
                 created_at: data.approvedAt ? new Date(data.approvedAt) : new Date(),
+                updated_at: new Date()
               },
             })
           );
@@ -983,11 +994,13 @@ export async function requestCancelLeave(id, data) {
     try {
       // สร้างคำขอการยกเลิกใน LeaveApproval
       const approvalData = {
+        id: crypto.randomUUID(),
         leave_id: id,
         employee_id: data.requestedById,
         type: 'request_cancel',
         status: 'completed',
-        reason: data.cancelReason || null
+        reason: data.cancelReason || null,
+        updated_at: new Date()
       };
       
       console.log('Creating approval with data:', approvalData);
@@ -1062,11 +1075,13 @@ export async function approveLeave(id, approverId, comment = null) {
       }),
       prisma.leave_approvals.create({
         data: {
+          id: crypto.randomUUID(),
           leave_id: id,
           employee_id: approverId,
           type: 'approve',
           status: 'completed',
           comment: comment,
+          updated_at: new Date()
         },
       })
     ]);
@@ -1110,11 +1125,13 @@ export async function rejectLeave(id, approverId, comment = null) {
       }),
       prisma.leave_approvals.create({
         data: {
+          id: crypto.randomUUID(),
           leave_id: id,
           employee_id: approverId,
           type: 'reject',
           status: 'completed',
           comment: comment,
+          updated_at: new Date()
         },
       })
     ]);
@@ -1174,11 +1191,13 @@ export async function approveCancelLeave(id, approverId, comment = null) {
       }),
       prisma.leave_approvals.create({
         data: {
+          id: crypto.randomUUID(),
           leave_id: id,
           employee_id: approverId,
           type: 'approve_cancel',
           status: 'completed',
           comment: comment,
+          updated_at: new Date()
         },
       })
     ]);
@@ -1231,11 +1250,13 @@ export async function rejectCancelLeave(id, approverId, comment = null) {
     // สร้าง approval record สำหรับการไม่อนุมัติการยกเลิก
     const newApproval = await prisma.leave_approvals.create({
       data: {
+        id: crypto.randomUUID(),
         leave_id: id,
         employee_id: approverId,
         type: 'reject_cancel',
         status: 'completed',
         comment: comment,
+        updated_at: new Date()
       },
     });
     
@@ -2897,5 +2918,122 @@ export async function createOrUpdateWorkStatus(data) {
   } catch (error) {
     console.error('Error in createOrUpdateWorkStatus:', error);
     return { success: false, message: error.message };
+  }
+}
+
+/**
+ * ตรวจสอบว่าผู้ใช้มีสิทธิ์ที่กำหนดหรือไม่
+ * @param {string} userId - รหัสผู้ใช้
+ * @param {string} permissionCode - รหัสสิทธิ์
+ * @returns {Promise<boolean>} - ผลการตรวจสอบ
+ */
+export async function hasPermission(userId, permissionCode) {
+  try {
+    if (!userId || !permissionCode) {
+      return false;
+    }
+
+    // ดึงข้อมูลพนักงานพร้อมบทบาท
+    const employee = await prisma.employees.findUnique({
+      where: { id: userId },
+      include: {
+        roles_relation: true
+      }
+    });
+
+    if (!employee || !employee.is_active) {
+      return false;
+    }
+
+    // ถ้าเป็น admin จะมีทุกสิทธิ์
+    if (employee.role === 'admin') {
+      return true;
+    }
+
+    // ถ้าไม่ได้เชื่อมโยงกับบทบาท
+    if (!employee.role_id) {
+      return false;
+    }
+
+    // ค้นหาสิทธิ์ที่เชื่อมโยงกับบทบาทของผู้ใช้
+    const rolePermission = await prisma.role_permissions.findFirst({
+      where: {
+        role_id: employee.role_id,
+        is_active: true,
+        permissions: {
+          code: permissionCode,
+          is_active: true
+        }
+      },
+      include: {
+        permissions: true
+      }
+    });
+
+    return !!rolePermission;
+  } catch (error) {
+    console.error(`Error checking permission ${permissionCode} for user ${userId}:`, error);
+    return false;
+  }
+}
+
+/**
+ * ดึงรายการสิทธิ์ทั้งหมดของผู้ใช้
+ * @param {string} userId - รหัสผู้ใช้
+ * @returns {Promise<Array<string>>} - รายการรหัสสิทธิ์
+ */
+export async function getUserPermissions(userId) {
+  try {
+    if (!userId) {
+      return [];
+    }
+
+    // ดึงข้อมูลพนักงานพร้อมบทบาท
+    const employee = await prisma.employees.findUnique({
+      where: { id: userId },
+      include: {
+        roles_relation: true
+      }
+    });
+
+    if (!employee || !employee.is_active) {
+      return [];
+    }
+
+    // ถ้าเป็น admin จะดึงทุกสิทธิ์
+    if (employee.role === 'admin') {
+      const allPermissions = await prisma.permissions.findMany({
+        where: { is_active: true },
+        select: { code: true }
+      });
+      
+      return allPermissions.map(p => p.code);
+    }
+
+    // ถ้าไม่ได้เชื่อมโยงกับบทบาท
+    if (!employee.role_id) {
+      return [];
+    }
+
+    // ค้นหาสิทธิ์ที่เชื่อมโยงกับบทบาทของผู้ใช้
+    const rolePermissions = await prisma.role_permissions.findMany({
+      where: {
+        role_id: employee.role_id,
+        is_active: true,
+        permissions: {
+          is_active: true
+        }
+      },
+      include: {
+        permissions: {
+          select: { code: true }
+        }
+      }
+    });
+
+    return rolePermissions.map(rp => rp.permissions.code);
+  } catch (error) {
+    console.error(`Error fetching permissions for user ${userId}:`, error);
+    return [];
   }
 }

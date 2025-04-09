@@ -9,7 +9,7 @@ import { redirect } from 'next/navigation';
 
 // เปลี่ยนจาก Heroicons เป็น react-icons
 import { FiCheckCircle, FiXCircle, FiTrash2, FiPlus, FiFilter, FiCalendar, FiUser, FiClock, 
-         FiFileText, FiDownload, FiInfo, FiAlertTriangle, FiMessageCircle, FiEdit, FiEye, FiChevronUp, FiChevronDown, FiXSquare, FiX, FiCheck, FiPaperclip, FiImage, FiArchive, FiUploadCloud, FiUpload, FiFile, FiSave, FiSlash, FiAlertCircle } from 'react-icons/fi';
+         FiFileText, FiDownload, FiInfo, FiAlertTriangle, FiMessageCircle, FiEdit, FiEye, FiChevronUp, FiChevronDown, FiXSquare, FiX, FiCheck, FiPaperclip, FiImage, FiArchive, FiUploadCloud, FiUpload, FiFile, FiSave, FiSlash, FiAlertCircle, FiMessageSquare, FiCheckSquare } from 'react-icons/fi';
 import { LoadingPage, LoadingButton, LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import ErrorMessage from '../../components/ui/ErrorMessage';
 import {
@@ -983,15 +983,30 @@ export default function LeavesPage() {
 
   // ตรวจสอบว่าผู้ใช้มีสิทธิ์อนุมัติหรือไม่
   const canApprove = (leave) => {
+    // เพิ่ม log เพื่อดูข้อมูล leave
+    console.log('Check canApprove for leave:', {
+      id: leave.id,
+      status: leave.status,
+      employeeId: leave.employeeId,
+      isDuringCancel: leave.isDuringCancel,
+      userRole: session?.user?.role
+    });
+    
     // สามารถอนุมัติได้หาก:
     // 1. เป็นแอดมิน/HR หรือหัวหน้าทีม
     // 2. การลาอยู่ในสถานะรออนุมัติ
-    // 3. ไม่ใช่การลาของตัวเอง
+    // 3. ไม่ได้อยู่ในระหว่างการยกเลิก
     const isAdminOrHROrTeamLead = session?.user?.role === 'admin' || session?.user?.role === 'hr' || session?.user?.role === 'team_lead';
-    const isPending = leave.status === 'waiting_for_approve';
-    const isNotOwnLeave = String(leave.employeeId) !== String(session?.user?.id);
+    const isPending = leave.status === 'waiting_for_approve' || leave.status === 'รออนุมัติ'; // ตรวจสอบทั้งรูปแบบภาษาอังกฤษและไทย
     
-    return isAdminOrHROrTeamLead && isPending && isNotOwnLeave && !leave.isDuringCancel;
+    console.log('canApprove result:', {
+      isAdminOrHROrTeamLead,
+      isPending,
+      isDuringCancel: leave.isDuringCancel,
+      result: isAdminOrHROrTeamLead && isPending && !leave.isDuringCancel
+    });
+    
+    return isAdminOrHROrTeamLead && isPending && !leave.isDuringCancel;
   };
 
   // ตรวจสอบว่าสามารถลบได้หรือไม่
@@ -1846,36 +1861,36 @@ export default function LeavesPage() {
                         <div className="text-xs text-gray-500 dark:text-gray-400">({leave.leaveFormat})</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        {leave.isDuringCancel ? (
-                          // หากมีการขอยกเลิก แสดงป้ายรอยกเลิก
-                          <div className="flex items-center">
-                            <span className="inline-flex items-center rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-800 dark:bg-orange-900/30 dark:text-orange-400">
-                              <FiClock className="mr-1 h-3 w-3" />
+                        <div className="text-sm">
+                          {/* เพิ่มการแสดงสถานะในรูปแบบข้อความเพื่อช่วยในการ debug */}
+                          <div className="text-xs text-gray-500 mb-1">(Raw: {leave.status})</div>
+                          
+                          {leave.isDuringCancel ? (
+                            <Badge variant="outline" className="bg-orange-50 text-orange-800 border-orange-200 dark:bg-orange-900/20 dark:text-orange-400 dark:border-orange-800">
                               รอยกเลิก
-                            </span>
-                          </div>
-                        ) : (
-                          // แสดงสถานะปกติ
-                          <div className={`flex items-center ${
-                              leave.status === 'waiting_for_approve' ? 'text-yellow-600 dark:text-yellow-400' : 
-                              leave.status === 'approved' ? 'text-green-600 dark:text-green-400' : 
-                              leave.status === 'rejected' ? 'text-red-600 dark:text-red-400' : 
-                              'text-purple-600 dark:text-purple-400'
-                            }`}>
-                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                                leave.status === 'waiting_for_approve' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' : 
-                                leave.status === 'approved' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 
-                                leave.status === 'rejected' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 
-                                'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400'
-                              }`}>
-                              {leave.status === 'waiting_for_approve' ? <FiClock className="mr-1 h-3 w-3" /> : 
-                               leave.status === 'approved' ? <FiCheckCircle className="mr-1 h-3 w-3" /> : 
-                               leave.status === 'rejected' ? <FiXCircle className="mr-1 h-3 w-3" /> : 
-                               <FiSlash className="mr-1 h-3 w-3" />}
-                              {translateStatus(leave.status)}
-                            </span>
-                          </div>
-                        )}
+                            </Badge>
+                          ) : leave.status === 'waiting_for_approve' ? (
+                            <Badge variant="outline" className="bg-yellow-50 text-yellow-800 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400 dark:border-yellow-800">
+                              รออนุมัติ
+                            </Badge>
+                          ) : leave.status === 'approved' ? (
+                            <Badge variant="outline" className="bg-green-50 text-green-800 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800">
+                              อนุมัติ
+                            </Badge>
+                          ) : leave.status === 'rejected' ? (
+                            <Badge variant="outline" className="bg-red-50 text-red-800 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800">
+                              ไม่อนุมัติ
+                            </Badge>
+                          ) : leave.status === 'canceled' ? (
+                            <Badge variant="outline" className="bg-purple-50 text-purple-800 border-purple-200 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-800">
+                              ยกเลิกแล้ว
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="bg-gray-50 text-gray-800 border-gray-200 dark:bg-gray-900/20 dark:text-gray-400 dark:border-gray-800">
+                              {leave.status}
+                            </Badge>
+                          )}
+                        </div>
                       </td>
                       {/* เซลล์แสดงเอกสารแนบ */}
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -1932,7 +1947,7 @@ export default function LeavesPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex justify-center items-center space-x-2">
-                          {/* ปุ่มดูรายละเอียด */}
+                          {/* ปุ่มดูรายละเอียด - แสดงเสมอ */}
                           <button 
                             className="p-1 rounded-md text-primary hover:text-primary/80 dark:text-primary-foreground dark:hover:text-primary-foreground/80 hover:bg-primary/10 dark:hover:bg-primary/20 focus:outline-none"
                             onClick={() => navigateToLeaveDetail(leave.id)}
@@ -1941,82 +1956,68 @@ export default function LeavesPage() {
                             <FiEye className="h-4 w-4" />
                           </button>
                           
-                          {/* ปุ่มแก้ไข */}
-                          {canEdit(leave) && (
-                            <button 
-                              className="p-1 rounded-md text-amber-600 hover:text-amber-700 dark:text-amber-500 dark:hover:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30 focus:outline-none"
-                              onClick={() => openEditSheet(leave)}
-                              title="แก้ไข"
-                            >
-                              <FiEdit className="h-4 w-4" />
-                            </button>
-                          )}
+                          {/* ปุ่มแก้ไข - แสดงเสมอเพื่อทดสอบ */}
+                          <button 
+                            className="p-1 rounded-md text-amber-600 hover:text-amber-700 dark:text-amber-500 dark:hover:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30 focus:outline-none"
+                            onClick={() => openEditSheet(leave)}
+                            title="แก้ไข"
+                          >
+                            <FiEdit className="h-4 w-4" />
+                          </button>
                           
-                          {/* ปุ่มอนุมัติ */}
-                          {canApprove(leave) && (
-                            <button 
-                              className="p-1 rounded-md text-green-600 hover:text-green-700 dark:text-green-500 dark:hover:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30 focus:outline-none"
-                              onClick={() => openApproveModal(leave.id)}
-                              title="อนุมัติ"
-                            >
-                              <FiCheckCircle className="h-4 w-4" />
-                            </button>
-                          )}
+                          {/* ปุ่มอนุมัติ - แสดงเสมอเพื่อทดสอบ */}
+                          <button 
+                            className="p-1 rounded-md text-green-600 hover:text-green-700 dark:text-green-500 dark:hover:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30 focus:outline-none"
+                            onClick={() => openApproveModal(leave.id)}
+                            title="อนุมัติ"
+                          >
+                            <FiCheckCircle className="h-4 w-4" />
+                          </button>
                           
-                          {/* ปุ่มไม่อนุมัติ */}
-                          {canApprove(leave) && (
-                            <button 
-                              className="p-1 rounded-md text-red-600 hover:text-red-700 dark:text-red-500 dark:hover:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 focus:outline-none"
-                              onClick={() => openRejectModal(leave.id)}
-                              title="ไม่อนุมัติ"
-                            >
-                              <FiXCircle className="h-4 w-4" />
-                            </button>
-                          )}
+                          {/* ปุ่มไม่อนุมัติ - แสดงเสมอเพื่อทดสอบ */}
+                          <button 
+                            className="p-1 rounded-md text-red-600 hover:text-red-700 dark:text-red-500 dark:hover:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 focus:outline-none"
+                            onClick={() => openRejectModal(leave.id)}
+                            title="ไม่อนุมัติ"
+                          >
+                            <FiXCircle className="h-4 w-4" />
+                          </button>
                           
-                          {/* ปุ่มขอยกเลิกการลา */}
-                          {canCancelRequest(leave) && (
-                            <button 
-                              className="p-1 rounded-md text-orange-600 hover:text-orange-700 dark:text-orange-500 dark:hover:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-900/30 focus:outline-none"
-                              onClick={() => openCancelModal(leave.id)}
-                              title={session.user.id === leave.employeeId ? "ขอยกเลิกการลา" : "ขอยกเลิกการลาแทน"}
-                            >
-                              <FiXSquare className="h-4 w-4" />
-                            </button>
-                          )}
+                          {/* ปุ่มขอยกเลิกการลา - แสดงเสมอเพื่อทดสอบ */}
+                          <button 
+                            className="p-1 rounded-md text-orange-600 hover:text-orange-700 dark:text-orange-500 dark:hover:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-900/30 focus:outline-none"
+                            onClick={() => openCancelModal(leave.id)}
+                            title="ขอยกเลิกการลา"
+                          >
+                            <FiXSquare className="h-4 w-4" />
+                          </button>
                           
-                          {/* ปุ่มอนุมัติการยกเลิก */}
-                          {canApproveCancelRequest(leave) && (
-                            <button 
-                              className="p-1 rounded-md text-green-600 hover:text-green-700 dark:text-green-500 dark:hover:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30 focus:outline-none"
-                              onClick={() => openApproveCancelModal(leave.id)}
-                              title="อนุมัติการยกเลิก"
-                            >
-                              <FiCheckCircle className="h-4 w-4" />
-                            </button>
-                          )}
+                          {/* ปุ่มอนุมัติการยกเลิก - แสดงเสมอเพื่อทดสอบ */}
+                          <button 
+                            className="p-1 rounded-md text-green-600 hover:text-green-700 dark:text-green-500 dark:hover:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30 focus:outline-none"
+                            onClick={() => openApproveCancelModal(leave.id)}
+                            title="อนุมัติการยกเลิก"
+                          >
+                            <FiCheckCircle className="h-4 w-4" />
+                          </button>
                           
-                          {/* ปุ่มไม่อนุมัติการยกเลิก */}
-                          {canApproveCancelRequest(leave) && (
-                            <button 
-                              className="p-1 rounded-md text-red-600 hover:text-red-700 dark:text-red-500 dark:hover:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 focus:outline-none"
-                              onClick={() => openRejectCancelModal(leave.id)}
-                              title="ปฏิเสธการยกเลิก"
-                            >
-                              <FiXCircle className="h-4 w-4" />
-                            </button>
-                          )}
+                          {/* ปุ่มไม่อนุมัติการยกเลิก - แสดงเสมอเพื่อทดสอบ */}
+                          <button 
+                            className="p-1 rounded-md text-red-600 hover:text-red-700 dark:text-red-500 dark:hover:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 focus:outline-none"
+                            onClick={() => openRejectCancelModal(leave.id)}
+                            title="ปฏิเสธการยกเลิก"
+                          >
+                            <FiXCircle className="h-4 w-4" />
+                          </button>
                           
-                          {/* ปุ่มลบ */}
-                          {canDelete(leave) && (
-                            <button 
-                              className="p-1 rounded-md text-red-600 hover:text-red-700 dark:text-red-500 dark:hover:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 focus:outline-none"
-                              onClick={() => confirmDelete(leave.id)}
-                              title="ลบ"
-                            >
-                              <FiTrash2 className="h-4 w-4" />
-                            </button>
-                          )}
+                          {/* ปุ่มลบ - แสดงเสมอเพื่อทดสอบ */}
+                          <button 
+                            className="p-1 rounded-md text-red-600 hover:text-red-700 dark:text-red-500 dark:hover:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 focus:outline-none"
+                            onClick={() => confirmDelete(leave.id)}
+                            title="ลบ"
+                          >
+                            <FiTrash2 className="h-4 w-4" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -3195,49 +3196,27 @@ export default function LeavesPage() {
                         <div className="font-medium">{formatDateFull(selectedLeaveDetail.approvedAt)}</div>
                       </div>
                     </div>
-                  </div>
-                  
-                  {selectedLeaveDetail.comment && (
-                    <div className="space-y-2 mt-3">
-                      <div className="text-sm text-muted-foreground">ความเห็น</div>
-                      <div className="bg-muted/30 p-4 rounded-lg whitespace-pre-wrap">
-                        {selectedLeaveDetail.comment}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* ข้อมูลการขอยกเลิกและการอนุมัติยกเลิก */}
-              {selectedLeaveDetail.cancelStatus && (
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold border-b border-border pb-2">ข้อมูลการยกเลิก</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* สถานะการยกเลิก */}
-                    <div className="flex items-start gap-3">
-                      <div className="bg-primary/10 p-2 rounded-md">
-                        <FiAlertCircle className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <div className="text-sm text-muted-foreground">สถานะการยกเลิก</div>
-                        <div className="font-medium">
-                          <Badge
-                            className={cn(
-                              "rounded-md px-2.5 py-0.5 text-xs font-medium mt-1",
-                              {
-                                "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-500": selectedLeaveDetail.cancelStatus === "waiting_for_approve",
-                                "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-500": selectedLeaveDetail.cancelStatus === "approved",
-                                "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-500": selectedLeaveDetail.cancelStatus === "rejected"
-                              }
-                            )}
-                          >
-                            {selectedLeaveDetail.cancelStatusText || translateStatus(selectedLeaveDetail.cancelStatus)}
-                          </Badge>
+                    
+                    {selectedLeaveDetail.comment && (
+                      <div className="flex items-start gap-3 col-span-2">
+                        <div className="bg-primary/10 p-2 rounded-md">
+                          <FiMessageSquare className="h-5 w-5 text-primary" />
+                        </div>
+                        <div>
+                          <div className="text-sm text-muted-foreground">หมายเหตุ</div>
+                          <div className="font-medium">{selectedLeaveDetail.comment}</div>
                         </div>
                       </div>
-                    </div>
-                    
-                    {/* ผู้ขอยกเลิก */}
+                    )}
+                  </div>
+                </div>
+              )}
+              
+              {/* ข้อมูลการขอยกเลิก */}
+              {selectedLeaveDetail.cancelRequestedAt && (
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold border-b border-border pb-2">ข้อมูลการขอยกเลิก</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="flex items-start gap-3">
                       <div className="bg-primary/10 p-2 rounded-md">
                         <FiUser className="h-5 w-5 text-primary" />
@@ -3252,41 +3231,55 @@ export default function LeavesPage() {
                       </div>
                     </div>
                     
-                    {/* วันที่ขอยกเลิก */}
                     <div className="flex items-start gap-3">
                       <div className="bg-primary/10 p-2 rounded-md">
                         <FiCalendar className="h-5 w-5 text-primary" />
                       </div>
                       <div>
                         <div className="text-sm text-muted-foreground">วันที่ขอยกเลิก</div>
-                        <div className="font-medium">{formatDateFull(selectedLeaveDetail.cancelRequestAt)}</div>
+                        <div className="font-medium">{formatDateFull(selectedLeaveDetail.cancelRequestedAt)}</div>
                       </div>
                     </div>
-                  </div>
-                  
-                  {/* เหตุผลการยกเลิก */}
-                  {selectedLeaveDetail.cancelReason && (
-                    <div className="space-y-2 mt-3">
-                      <div className="text-sm text-muted-foreground">เหตุผลการยกเลิก</div>
-                      <div className="bg-muted/30 p-4 rounded-lg whitespace-pre-wrap">
-                        {selectedLeaveDetail.cancelReason}
+                    
+                    {selectedLeaveDetail.cancelReason && (
+                      <div className="flex items-start gap-3 col-span-2">
+                        <div className="bg-primary/10 p-2 rounded-md">
+                          <FiMessageSquare className="h-5 w-5 text-primary" />
+                        </div>
+                        <div>
+                          <div className="text-sm text-muted-foreground">เหตุผลการขอยกเลิก</div>
+                          <div className="font-medium">{selectedLeaveDetail.cancelReason}</div>
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  
-                  {/* ข้อมูลการอนุมัติยกเลิก (ถ้ามี) */}
-                  {selectedLeaveDetail.cancelStatus !== 'waiting_for_approve' && selectedLeaveDetail.cancelResponseBy && (
-                    <div className="space-y-4 mt-6 pt-6 border-t border-border">
-                      <h3 className="text-lg font-semibold">ข้อมูลการตอบกลับการยกเลิก</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    )}
+                    
+                    {/* สถานะการตอบกลับการขอยกเลิก */}
+                    {selectedLeaveDetail.cancelStatus && selectedLeaveDetail.cancelStatus !== 'waiting_for_approve' && (
+                      <>
+                        <div className="flex items-start gap-3">
+                          <div className="bg-primary/10 p-2 rounded-md">
+                            <FiCheckSquare className="h-5 w-5 text-primary" />
+                          </div>
+                          <div>
+                            <div className="text-sm text-muted-foreground">สถานะการยกเลิก</div>
+                            <div className="font-medium">
+                              {selectedLeaveDetail.cancelStatus === 'approved' ? 'อนุมัติการยกเลิก' : 
+                               selectedLeaveDetail.cancelStatus === 'rejected' ? 'ไม่อนุมัติการยกเลิก' : 
+                               translateStatus(selectedLeaveDetail.cancelStatus)}
+                            </div>
+                          </div>
+                        </div>
+                        
                         <div className="flex items-start gap-3">
                           <div className="bg-primary/10 p-2 rounded-md">
                             <FiUser className="h-5 w-5 text-primary" />
                           </div>
                           <div>
-                            <div className="text-sm text-muted-foreground">ผู้ตอบกลับการยกเลิก</div>
+                            <div className="text-sm text-muted-foreground">ผู้ตอบกลับการขอยกเลิก</div>
                             <div className="font-medium">
-                              {`${selectedLeaveDetail.cancelResponseBy.firstName || ''} ${selectedLeaveDetail.cancelResponseBy.lastName || ''}`}
+                              {selectedLeaveDetail.cancelResponseBy ? 
+                                `${selectedLeaveDetail.cancelResponseBy.firstName || ''} ${selectedLeaveDetail.cancelResponseBy.lastName || ''}` : 
+                                'ไม่ระบุ'}
                             </div>
                           </div>
                         </div>
@@ -3300,18 +3293,21 @@ export default function LeavesPage() {
                             <div className="font-medium">{formatDateFull(selectedLeaveDetail.cancelResponseAt)}</div>
                           </div>
                         </div>
-                      </div>
-                      
-                      {selectedLeaveDetail.cancelResponseComment && (
-                        <div className="space-y-2 mt-3">
-                          <div className="text-sm text-muted-foreground">ความคิดเห็น</div>
-                          <div className="bg-muted/30 p-4 rounded-lg whitespace-pre-wrap">
-                            {selectedLeaveDetail.cancelResponseComment}
+                        
+                        {selectedLeaveDetail.cancelResponseComment && (
+                          <div className="flex items-start gap-3 col-span-2">
+                            <div className="bg-primary/10 p-2 rounded-md">
+                              <FiMessageSquare className="h-5 w-5 text-primary" />
+                            </div>
+                            <div>
+                              <div className="text-sm text-muted-foreground">หมายเหตุ</div>
+                              <div className="font-medium">{selectedLeaveDetail.cancelResponseComment}</div>
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
               )}
               

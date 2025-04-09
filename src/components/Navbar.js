@@ -48,6 +48,7 @@ export default function Navbar() {
     { href: '/overtime', label: 'ทำงานล่วงเวลา', icon: <FiClock className="w-5 h-5" /> },
     { href: '/reports', label: 'รายงาน', icon: <FiBarChart2 className="w-5 h-5" /> },
     { href: '/employee-calendar', label: 'ปฏิทินพนักงาน', icon: <FiCalendar className="w-5 h-5" /> },
+    { href: '/user-access', label: 'จัดการสิทธิ์', icon: <FiUsers className="w-5 h-5" /> },
   ];
 
   return (

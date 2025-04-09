@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FiHome, FiUsers, FiCalendar, FiClock, FiFileText, FiUser, FiLogOut, FiMenu, FiX } from 'react-icons/fi';
+import { FiHome, FiUsers, FiCalendar, FiClock, FiFileText, FiUser, FiLogOut, FiMenu, FiX, FiShield } from 'react-icons/fi';
 import ThemeToggle from './ThemeToggle';
 import Image from 'next/image';
 import { useTheme } from 'next-themes';
@@ -154,6 +154,16 @@ export default function Layout({ children }) {
                   </div>
                 </Link>
               </li>
+              {session?.user?.role === 'admin' && (
+                <li className="relative">
+                  <Link href="/user-access" className={`rounded-md px-4 py-3 flex items-center ${isActive('/user-access')}`}>
+                    <div className="flex items-center">
+                      <FiShield className={`h-5 w-5 mr-2 ${pathname === '/user-access' ? 'text-primary' : ''}`} />
+                      <span>จัดการสิทธิ์</span>
+                    </div>
+                  </Link>
+                </li>
+              )}
             </ul>
           </div>
           
@@ -266,6 +276,14 @@ export default function Layout({ children }) {
                 รายงาน
               </Link>
             </li>
+            {session?.user?.role === 'admin' && (
+              <li>
+                <Link href="/user-access" className={`${isActive('/user-access')} my-1`}>
+                  <FiShield className={`h-5 w-5 ${pathname === '/user-access' ? 'text-primary' : ''}`} />
+                  จัดการสิทธิ์
+                </Link>
+              </li>
+            )}
             <li>
               <Link href="/profile" className={`${isActive('/profile')} my-1`}>
                 <FiUser className={`h-5 w-5 ${pathname === '/profile' ? 'text-primary' : ''}`} />

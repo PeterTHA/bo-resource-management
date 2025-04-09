@@ -29,6 +29,7 @@ model employees {
   team_id                                              String?
   hire_date                                            DateTime
   role                                                 String                  @default("staff")
+  role_id                                              String?
   is_active                                            Boolean                 @default(true)
   image                                                String?
   created_at                                           DateTime                @default(now())
@@ -40,6 +41,7 @@ model employees {
   position_title                                       String?
   departments                                          departments?            @relation(fields: [department_id], references: [id])
   teams                                                teams?                  @relation(fields: [team_id], references: [id])
+  roles_relation                                       roles?                  @relation(fields: [role_id], references: [id])
   leave_approvals                                      leave_approvals[]
   leaves                                               leaves[]
   overtime_approvals                                   overtime_approvals[]
@@ -133,6 +135,20 @@ model positions {
   updated_at  DateTime
 }
 
+model roles {
+  id                String             @id
+  code              String             @unique
+  name              String             @unique
+  name_th           String             @unique
+  description       String?
+  permissions       String[]           @default([])
+  is_active         Boolean            @default(true)
+  created_at        DateTime           @default(now())
+  updated_at        DateTime
+  employees         employees[]
+  role_permissions  role_permissions[]
+}
+
 model project_activity_logs {
   id          String    @id
   project_id  String
@@ -214,4 +230,30 @@ model work_statuses {
   employees_work_statuses_employee_idToemployees   employees @relation("work_statuses_employee_idToemployees", fields: [employee_id], references: [id])
 
   @@unique([employee_id, date])
+}
+
+model permissions {
+  id                String             @id
+  code              String             @unique
+  name              String             @unique
+  name_th           String             @unique
+  description       String?
+  category          String             @default("general")
+  is_active         Boolean            @default(true)
+  created_at        DateTime           @default(now())
+  updated_at        DateTime
+  role_permissions  role_permissions[]
+}
+
+model role_permissions {
+  id           String      @id
+  role_id      String
+  permission_id String
+  is_active    Boolean     @default(true)
+  created_at   DateTime    @default(now())
+  updated_at   DateTime
+  roles        roles       @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  permissions  permissions @relation(fields: [permission_id], references: [id], onDelete: Cascade)
+
+  @@unique([role_id, permission_id])
 }
