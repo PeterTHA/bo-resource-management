@@ -27,7 +27,8 @@ export const authOptions = {
             where: { email: credentials.email },
             include: {
               departments: true,
-              teams: true
+              teams: true,
+              roles: true
             }
           });
           
@@ -37,7 +38,9 @@ export const authOptions = {
               id: user.id,
               email: user.email,
               is_active: user.is_active,
-              hasPassword: !!user.password
+              hasPassword: !!user.password,
+              role_id: user.role_id,
+              roles: user.roles
             });
           }
         } catch (error) {
@@ -76,7 +79,11 @@ export const authOptions = {
           email: user.email,
           first_name: user.first_name,
           last_name: user.last_name,
-          role: user.role,
+          role_id: user.role_id,
+          role: user.roles?.code || null,
+          roles: user.roles,
+          role_name: user.roles?.name || null,
+          role_name_th: user.roles?.name_th || null,
           employee_id: user.employee_id,
           team_id: user.team_id,
           department_id: user.department_id
@@ -92,7 +99,11 @@ export const authOptions = {
         token.email = user.email;
         token.first_name = user.first_name;
         token.last_name = user.last_name;
+        token.role_id = user.role_id;
         token.role = user.role;
+        token.roles = user.roles;
+        token.role_name = user.role_name || '';
+        token.role_name_th = user.role_name_th || '';
         token.employee_id = user.employee_id;
         token.department_id = user.department_id;
         token.departments = user.departments?.name || null;
@@ -126,7 +137,11 @@ export const authOptions = {
         session.user = session.user || {};
         session.user.id = token.id;
         session.user.email = token.email;
+        session.user.role_id = token.role_id;
         session.user.role = token.role;
+        session.user.roles = token.roles;
+        session.user.role_name = token.role_name || '';
+        session.user.role_name_th = token.role_name_th || '';
         session.user.first_name = token.first_name;
         session.user.last_name = token.last_name;
         session.user.employee_id = token.employee_id;
@@ -139,7 +154,7 @@ export const authOptions = {
         session.user.tokenVersion = token.tokenVersion;
         
         // เพิ่ม log เพื่อตรวจสอบว่า user.id ถูกกำหนดค่าหรือไม่
-        console.log(`Session created/updated for user ${session.user.email}, ID: ${session.user.id || 'undefined'}`);
+        console.log(`Session created/updated for user ${session.user.email}, ID: ${session.user.id || 'undefined'}, Role: ${session.user.roles?.code || session.user.role || 'undefined'}`);
       } else {
         console.warn('No token data available for session');
       }

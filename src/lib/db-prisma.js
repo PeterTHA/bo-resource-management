@@ -2930,6 +2930,7 @@ export async function createOrUpdateWorkStatus(data) {
 export async function hasPermission(userId, permissionCode) {
   try {
     if (!userId || !permissionCode) {
+      console.log(`Missing userId or permissionCode. UserId: ${userId}, PermissionCode: ${permissionCode}`);
       return false;
     }
 
@@ -2937,22 +2938,27 @@ export async function hasPermission(userId, permissionCode) {
     const employee = await prisma.employees.findUnique({
       where: { id: userId },
       include: {
-        roles_relation: true
+        roles: true // ใช้ความสัมพันธ์กับตาราง roles ตาม schema
       }
     });
 
     if (!employee || !employee.is_active) {
+      console.log(`Employee not found or inactive. UserId: ${userId}`);
       return false;
-    }
-
-    // ถ้าเป็น admin จะมีทุกสิทธิ์
-    if (employee.role === 'admin') {
-      return true;
     }
 
     // ถ้าไม่ได้เชื่อมโยงกับบทบาท
     if (!employee.role_id) {
+      console.log(`User ${userId} has no role_id. Permission denied.`);
       return false;
+    }
+
+    console.log(`Checking permission for user: ${userId}, role_id: ${employee.role_id}, permission: ${permissionCode}`);
+
+    // ถ้าเป็น admin (ตรวจสอบจาก code ในตาราง roles)
+    if (employee.roles && employee.roles.code && employee.roles.code.toUpperCase() === 'ADMIN') {
+      console.log(`User ${userId} has ADMIN role. Permission granted.`);
+      return true;
     }
 
     // ค้นหาสิทธิ์ที่เชื่อมโยงกับบทบาทของผู้ใช้
@@ -2970,6 +2976,7 @@ export async function hasPermission(userId, permissionCode) {
       }
     });
 
+    console.log(`Role permission check: ${rolePermission ? 'Found' : 'Not found'}`);
     return !!rolePermission;
   } catch (error) {
     console.error(`Error checking permission ${permissionCode} for user ${userId}:`, error);
@@ -2992,7 +2999,7 @@ export async function getUserPermissions(userId) {
     const employee = await prisma.employees.findUnique({
       where: { id: userId },
       include: {
-        roles_relation: true
+        roles: true
       }
     });
 
@@ -3000,19 +3007,20 @@ export async function getUserPermissions(userId) {
       return [];
     }
 
+    // ถ้าไม่ได้เชื่อมโยงกับบทบาท
+    if (!employee.role_id) {
+      console.log(`User ${userId} has no role_id. No permissions granted.`);
+      return [];
+    }
+
     // ถ้าเป็น admin จะดึงทุกสิทธิ์
-    if (employee.role === 'admin') {
+    if (employee.roles && employee.roles.code && employee.roles.code.toUpperCase() === 'ADMIN') {
       const allPermissions = await prisma.permissions.findMany({
         where: { is_active: true },
         select: { code: true }
       });
       
       return allPermissions.map(p => p.code);
-    }
-
-    // ถ้าไม่ได้เชื่อมโยงกับบทบาท
-    if (!employee.role_id) {
-      return [];
     }
 
     // ค้นหาสิทธิ์ที่เชื่อมโยงกับบทบาทของผู้ใช้

@@ -37,7 +37,7 @@ export default function UserAccessPage() {
   // เช็คสิทธิ์การเข้าถึงหน้านี้
   useEffect(() => {
     if (status === 'authenticated') {
-      if (session.user.role !== 'admin') {
+      if (session.user.role !== 'ADMIN' && session.user.role?.toUpperCase() !== 'ADMIN') {
         toast({
           variant: "destructive",
           title: "ไม่มีสิทธิ์เข้าถึง",
@@ -52,7 +52,7 @@ export default function UserAccessPage() {
 
   // โหลดข้อมูลเมื่อเข้าสู่หน้า
   useEffect(() => {
-    if (status === 'authenticated' && session.user.role === 'admin') {
+    if (status === 'authenticated' && (session.user.role === 'ADMIN' || session.user.role?.toUpperCase() === 'ADMIN')) {
       fetchRoles();
       fetchPermissions();
       fetchRolePermissions(false);

@@ -24,7 +24,7 @@ export async function POST(request) {
     const { email, employee_id } = data;
 
     // ตรวจสอบข้อมูลที่จำเป็น
-    if (!email || !employeeId) {
+    if (!email || !employee_id) {
       return NextResponse.json(
         { 
           success: false, 
@@ -39,6 +39,9 @@ export async function POST(request) {
       where: {
         email: email,
         employee_id: employee_id
+      },
+      include: {
+        roles: true
       }
     });
 
@@ -82,7 +85,7 @@ export async function POST(request) {
         last_name: employee.last_name,
         password: newPassword,
         employee_id: employee.employee_id,
-        role: employee.role,
+        role: employee.roles?.code || '',
         resetBy: 'ระบบลืมรหัสผ่าน'
       });
       

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db-prisma';
-import { generateUuid } from '@/lib/utils';
+import { generateUuid } from '@/lib/generate-uuid';
 
 // ดึงรายการทีมทั้งหมด
 export async function GET() {
@@ -27,15 +27,25 @@ export async function GET() {
             first_name: true,
             last_name: true,
             position: true,
-            role: true
+            role_id: true,
+            roles: true
           }
         }
       }
     });
 
+    // แปลงข้อมูลให้มี role จาก roles.code เพื่อรักษาความเข้ากันได้กับโค้ดเดิม
+    const transformedTeams = teams.map(team => ({
+      ...team,
+      employees: team.employees.map(employee => ({
+        ...employee,
+        role: employee.roles?.code || null
+      }))
+    }));
+
     return NextResponse.json({
       success: true,
-      data: teams,
+      data: transformedTeams,
     });
   } catch (error) {
     console.error('Error fetching teams:', error);

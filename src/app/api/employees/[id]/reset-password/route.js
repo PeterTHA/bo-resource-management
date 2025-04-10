@@ -31,8 +31,17 @@ async function handleResetPassword(request, { params }) {
       );
     }
     
-    // ตรวจสอบว่าผู้ใช้มีสิทธิ์ admin หรือไม่
-    if (session.user.role !== 'admin') {
+    // ตรวจสอบว่าผู้ใช้มีสิทธิ์ในการรีเซ็ตรหัสผ่าน
+    const hasAdminAccess = await prisma.employees.findFirst({
+      where: {
+        id: session.user.id,
+        roles: {
+          code: 'ADMIN'
+        }
+      }
+    });
+    
+    if (!hasAdminAccess) {
       return NextResponse.json(
         { error: 'คุณไม่มีสิทธิ์ในการรีเซ็ตรหัสผ่าน' },
         { status: 403 }
@@ -57,6 +66,9 @@ async function handleResetPassword(request, { params }) {
       where: {
         id: id,
       },
+      include: {
+        roles: true
+      }
     });
     
     if (!employee) {
@@ -93,7 +105,7 @@ async function handleResetPassword(request, { params }) {
         last_name: employee.last_name,
         password: newPassword,
         employee_id: employee.employee_id,
-        role: employee.role,
+        role: employee.roles?.code || '',
         resetBy: `${session.user.first_name} ${session.user.last_name} (${session.user.email})`
       });
       

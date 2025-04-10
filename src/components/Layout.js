@@ -154,7 +154,7 @@ export default function Layout({ children }) {
                   </div>
                 </Link>
               </li>
-              {session?.user?.role === 'admin' && (
+              {(session?.user?.role === 'ADMIN' || session?.user?.role?.toUpperCase() === 'ADMIN') && (
                 <li className="relative">
                   <Link href="/user-access" className={`rounded-md px-4 py-3 flex items-center ${isActive('/user-access')}`}>
                     <div className="flex items-center">
@@ -276,7 +276,7 @@ export default function Layout({ children }) {
                 รายงาน
               </Link>
             </li>
-            {session?.user?.role === 'admin' && (
+            {(session?.user?.role === 'ADMIN' || session?.user?.role?.toUpperCase() === 'ADMIN') && (
               <li>
                 <Link href="/user-access" className={`${isActive('/user-access')} my-1`}>
                   <FiShield className={`h-5 w-5 ${pathname === '/user-access' ? 'text-primary' : ''}`} />

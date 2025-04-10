@@ -149,7 +149,10 @@ export default function EmployeesPage() {
           teamId: employee.team_id,
           department: employee.departments,
           teamData: employee.teams,
-          role: employee.role,
+          roleId: employee.role_id,
+          role: employee.role, // จาก employee.roles?.code ที่แปลงมาจาก API แล้ว
+          roleName: employee.roleName || '', // จาก employee.roles?.name ที่แปลงมาจาก API แล้ว
+          roleNameTh: employee.roleNameTh || '', // จาก employee.roles?.name_th ที่แปลงมาจาก API แล้ว
           isActive: employee.is_active,
           birthDate: employee.birth_date,
           gender: employee.gender,
@@ -158,7 +161,28 @@ export default function EmployeesPage() {
         }));
         
         console.log('Transformed employees data:', transformedEmployees);
-        setEmployees(transformedEmployees);
+        
+        // เช็คว่าผู้ใช้เป็น admin หรือไม่ โดยเรียกใช้ฟังก์ชัน isUserAdmin
+        const adminAccess = isUserAdmin();
+        // เช็คว่าผู้ใช้เป็นหัวหน้าทีมหรือไม่
+        const supervisorAccess = hasRolePermission('employees.view.teams');
+        
+        let filteredEmployees = transformedEmployees;
+        
+        // ถ้าเป็นหัวหน้าทีมและไม่ใช่ admin ให้เห็นเฉพาะพนักงานในทีมตัวเอง
+        if (supervisorAccess && !adminAccess) {
+          filteredEmployees = transformedEmployees.filter(
+            emp => emp.teamId === session.user.teamId || emp.id === session.user.id
+          );
+        }
+        // ถ้าไม่มีสิทธิ์ดูทั้งหมดและไม่ใช่หัวหน้าทีม ให้ดูได้แค่ตัวเอง
+        else if (!adminAccess && !supervisorAccess) {
+          filteredEmployees = transformedEmployees.filter(
+            emp => emp.id === session.user.id
+          );
+        }
+        
+        setEmployees(filteredEmployees);
       } catch (error) {
         console.error('Error fetching employees:', error);
         setError('ไม่สามารถเชื่อมต่อกับฐานข้อมูลได้ กรุณาลองใหม่อีกครั้ง');
@@ -615,10 +639,8 @@ export default function EmployeesPage() {
                 (employee.teamData ? (typeof employee.teamData === 'object' ? employee.teamData.name : employee.teamData) : '-'),
       positionName: positions?.find(p => p.code === employee.position)?.name || employee.position || '-',
       positionLevelName: positionLevels?.find(l => l.code === employee.positionLevel)?.name || employee.positionLevel || '-',
-      roleName: employee.role === 'admin' ? 'ผู้ดูแลระบบ' : 
-                employee.role === 'supervisor' ? 'หัวหน้างาน' : 
-                employee.role === 'permanent' ? 'พนักงานประจำ' : 
-                employee.role === 'temporary' ? 'พนักงานชั่วคราว' : employee.role || '-'
+      roleName: roles.find(r => r.id === employee.roleId)?.name_th || 
+                roles.find(r => r.id === employee.roleId)?.name || '-'
     };
     
     console.log('Prepared employee data for view:', employeeData);
@@ -630,9 +652,19 @@ export default function EmployeesPage() {
   const openEditDialog = (employee) => {
     if (!session) return;
     
-    if (!hasPermission(session.user, 'employees.edit.all') && 
-        !(hasPermission(session.user, 'employees.edit.team') && 
-          session.user.teamId && employee.teamId && session.user.teamId === employee.teamId)) {
+    console.log('Opening edit dialog for employee:', employee);
+    console.log('Current user roleId:', session.user.role_id);
+    console.log('Current user ID:', session.user.id);
+    console.log('Employee ID to edit:', employee.id);
+    
+    // ตรวจสอบสิทธิ์ในการแก้ไขข้อมูล
+    const canEdit = 
+      isUserAdmin() || // Admin แก้ไขได้ทั้งหมด
+      (isTeamLead() && session.user.team_id === employee.teamId) || // แก้ไขในทีมตัวเอง
+      (session.user.id === employee.id); // แก้ไขข้อมูลตัวเอง
+    
+    if (!canEdit) {
+      console.log('User does not have permission to edit this employee.');
       toast({
         variant: "destructive",
         title: "ไม่มีสิทธิ์",
@@ -645,7 +677,7 @@ export default function EmployeesPage() {
     setSelectedEmployee(employee);
     
     // กำหนดข้อมูลในฟอร์ม
-    setFormData({
+    const formDataToSet = {
       employeeId: employee.employeeId || '',
       firstName: employee.firstName || '',
       lastName: employee.lastName || '',
@@ -657,20 +689,19 @@ export default function EmployeesPage() {
       teamId: employee.teamId || '',
       roleId: employee.roleId || '',
       role: employee.role || '',
+      roleName: employee.roleName || employee.roleNameTh || '',
       isActive: employee.isActive !== undefined ? employee.isActive : true,
       birthDate: employee.birthDate ? (typeof employee.birthDate === 'string' ? employee.birthDate.split('T')[0] : format(new Date(employee.birthDate), 'yyyy-MM-dd')) : '',
       gender: employee.gender || '',
       phoneNumber: employee.phoneNumber || '',
       image: employee.image || ''
-    });
+    };
     
-    // รีเซ็ตข้อความแสดงข้อผิดพลาด
+    console.log('Setting form data:', formDataToSet);
+    
+    setFormData(formDataToSet);
     setFormError('');
-    
-    // ตั้งค่ารูปภาพเดิมถ้ามี
     setImagePreview(employee.image || null);
-    
-    // เปิด Dialog
     setEditDialogOpen(true);
   };
   
@@ -678,31 +709,16 @@ export default function EmployeesPage() {
   const openPasswordDialog = (employee) => {
     if (!session) return;
     
-    if (session.user.role === 'supervisor') {
-      const isInSameTeam = session.user.teamId && employee.teamId && session.user.teamId === employee.teamId;
-      
-      if (!isInSameTeam) {
-        toast({
-          variant: "destructive",
-          title: "ไม่มีสิทธิ์",
-          description: "คุณไม่มีสิทธิ์ในการจัดการรหัสผ่านพนักงานนอกทีมของคุณ",
-        });
-        return;
-      }
-      
-      if (!hasPermission(session.user, 'employees.edit.team')) {
-        toast({
-          variant: "destructive",
-          title: "ไม่มีสิทธิ์",
-          description: "คุณไม่มีสิทธิ์ในการจัดการรหัสผ่านพนักงานในทีม",
-        });
-        return;
-      }
-    } else if (!hasPermission(session.user, 'employees.edit.all')) {
+    // ตรวจสอบว่ามีสิทธิ์ในการจัดการรหัสผ่าน
+    const canManagePassword = isUserAdmin() ||
+      (isTeamLead() && session.user.team_id === employee.team_id) || // แก้ไขในทีมตัวเอง
+      (session.user.id === employee.id); // แก้ไขข้อมูลตัวเอง
+    
+    if (!canManagePassword) {
       toast({
         variant: "destructive",
         title: "ไม่มีสิทธิ์",
-        description: "คุณไม่มีสิทธิ์ในการจัดการรหัสผ่านพนักงาน",
+        description: "คุณไม่มีสิทธิ์ในการจัดการรหัสผ่านพนักงานนี้",
       });
       return;
     }
@@ -720,26 +736,16 @@ export default function EmployeesPage() {
   const openDeleteDialog = (employee) => {
     if (!session) return;
     
-    if (!hasPermission(session.user, 'employees.delete')) {
+    // ตรวจสอบว่ามีสิทธิ์ลบข้อมูล
+    const canDelete = isUserAdmin();
+    
+    if (!canDelete) {
       toast({
         variant: "destructive",
         title: "ไม่มีสิทธิ์",
         description: "คุณไม่มีสิทธิ์ในการลบข้อมูลพนักงาน",
       });
       return;
-    }
-    
-    if (session.user.role === 'supervisor') {
-      const isInSameTeam = session.user.teamId && employee.teamId && session.user.teamId === employee.teamId;
-      
-      if (!isInSameTeam) {
-        toast({
-          variant: "destructive",
-          title: "ไม่มีสิทธิ์",
-          description: "คุณไม่มีสิทธิ์ในการลบข้อมูลพนักงานนอกทีมของคุณ",
-        });
-        return;
-      }
     }
     
     setSelectedEmployee(employee);
@@ -750,7 +756,8 @@ export default function EmployeesPage() {
   const openAddDialog = () => {
     if (!session) return;
     
-    if (!hasPermission(session.user, 'employees.create')) {
+    // ตรวจสอบว่ามีสิทธิ์เพิ่มพนักงาน
+    if (!isUserAdmin() && !isTeamLead()) {
       toast({
         variant: "destructive",
         title: "ไม่มีสิทธิ์",
@@ -770,8 +777,10 @@ export default function EmployeesPage() {
       positionLevel: '',
       positionTitle: '',
       departmentId: '',
-      teamId: session.user.role === 'supervisor' ? session.user.teamId : '',
+      teamId: isTeamLead() ? session.user.team_id : '',
       roleId: '',
+      role: '',
+      roleName: '',
       isActive: true,
       birthDate: '',
       gender: '',
@@ -826,6 +835,9 @@ export default function EmployeesPage() {
         imageUrl = await uploadImage();
       }
       
+      // ดึงข้อมูลบทบาทจาก roleId
+      const selectedRole = roles.find(r => r.id === formData.roleId);
+      
       // แปลง camelCase เป็น snake_case เพื่อให้ตรงกับ API
       const transformedData = {
         employee_id: formData.employeeId,
@@ -838,7 +850,6 @@ export default function EmployeesPage() {
         department_id: formData.departmentId,
         team_id: formData.teamId,
         role_id: formData.roleId,
-        role: formData.role,
         is_active: formData.isActive,
         birth_date: formData.birthDate,
         gender: formData.gender,
@@ -876,7 +887,10 @@ export default function EmployeesPage() {
         teamId: updatedEmployee.team_id || formData.teamId,
         department: updatedEmployee.departments || selectedEmployee.department,
         teamData: updatedEmployee.teams || selectedEmployee.teamData,
-        role: updatedEmployee.role || formData.role,
+        roleId: formData.roleId,
+        role: selectedRole?.code || updatedEmployee.role || selectedEmployee.role,
+        roleName: selectedRole?.name || updatedEmployee.role_name || selectedEmployee.roleName || '',
+        roleNameTh: selectedRole?.name_th || updatedEmployee.role_name_th || selectedEmployee.roleNameTh || '',
         isActive: updatedEmployee.is_active !== undefined ? updatedEmployee.is_active : formData.isActive,
         birthDate: updatedEmployee.birth_date || formData.birthDate,
         gender: updatedEmployee.gender || formData.gender,
@@ -927,6 +941,9 @@ export default function EmployeesPage() {
       // สร้างรหัสผ่านแบบสุ่ม
       const randomPassword = generateRandomPassword(10);
       
+      // ดึงข้อมูลบทบาทจาก roleId
+      const selectedRole = roles.find(r => r.id === formData.roleId);
+      
       // แปลง camelCase เป็น snake_case เพื่อให้ตรงกับ API
       const transformedData = {
         employee_id: formData.employeeId,
@@ -940,7 +957,6 @@ export default function EmployeesPage() {
         department_id: formData.departmentId,
         team_id: formData.teamId,
         role_id: formData.roleId,
-        role: formData.role,
         is_active: formData.isActive,
         birth_date: formData.birthDate,
         gender: formData.gender,
@@ -965,24 +981,27 @@ export default function EmployeesPage() {
       
       // แปลง snake_case กลับเป็น camelCase
       const transformedEmployee = {
-        id: data.id,
-        employeeId: data.employee_id,
-        firstName: data.first_name,
-        lastName: data.last_name,
-        email: data.email,
-        position: data.position,
-        positionLevel: data.position_level,
-        positionTitle: data.position_title,
-        departmentId: data.department_id,
-        teamId: data.team_id,
-        department: data.departments,
-        teamData: data.teams,
-        role: data.role,
-        isActive: data.is_active,
-        birthDate: data.birth_date,
-        gender: data.gender,
-        phoneNumber: data.phone_number,
-        image: data.image
+        id: data.data?.id,
+        employeeId: data.data?.employee_id || formData.employeeId,
+        firstName: data.data?.first_name || formData.firstName,
+        lastName: data.data?.last_name || formData.lastName,
+        email: data.data?.email || formData.email,
+        position: data.data?.position || formData.position,
+        positionLevel: data.data?.position_level || formData.positionLevel,
+        positionTitle: data.data?.position_title || formData.positionTitle,
+        departmentId: data.data?.department_id || formData.departmentId,
+        teamId: data.data?.team_id || formData.teamId,
+        department: data.data?.departments,
+        teamData: data.data?.teams,
+        roleId: formData.roleId,
+        role: selectedRole?.code || data.data?.role,
+        roleName: selectedRole?.name || data.data?.role_name || '',
+        roleNameTh: selectedRole?.name_th || data.data?.role_name_th || '',
+        isActive: data.data?.is_active !== undefined ? data.data.is_active : formData.isActive,
+        birthDate: data.data?.birth_date || formData.birthDate,
+        gender: data.data?.gender || formData.gender,
+        phoneNumber: data.data?.phone_number || formData.phoneNumber,
+        image: data.data?.image || imageUrl
       };
       
       // เพิ่มข้อมูลในรายการ
@@ -1096,6 +1115,35 @@ export default function EmployeesPage() {
     setImageViewerOpen(true);
   };
   
+  // ฟังก์ชันตรวจสอบว่าสามารถเรียกใช้ permission ได้หรือไม่
+  const hasRolePermission = (permission) => {
+    if (!session || !session.user) return false;
+    
+    return hasPermission(session.user, permission);
+  };
+  
+  // ฟังก์ชันตรวจสอบว่าเป็น admin หรือไม่
+  const isUserAdmin = () => {
+    if (!session || !session.user) return false;
+    
+    // ตรวจสอบจาก roles และ role โดยตรง
+    return (
+      session.user.roles?.code?.toUpperCase() === 'ADMIN' || 
+      session.user.role?.toUpperCase() === 'ADMIN'
+    );
+  };
+  
+  // ฟังก์ชันตรวจสอบว่าเป็นหัวหน้าทีมหรือไม่
+  const isTeamLead = () => {
+    if (!session || !session.user) return false;
+    
+    // ตรวจสอบจาก roles และ role โดยตรง
+    return (
+      session.user.roles?.code?.toUpperCase() === 'SUPERVISOR' || 
+      session.user.role?.toUpperCase() === 'SUPERVISOR'
+    );
+  };
+  
   if (status === 'loading' || isLoading) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -1207,11 +1255,12 @@ export default function EmployeesPage() {
                           'bg-gray-100 text-gray-800 hover:bg-gray-200'
                         }
                       >
-                        {employee.role === 'admin' ? 'ผู้ดูแลระบบ' : 
-                         employee.role === 'supervisor' ? 'หัวหน้างาน' : 
-                         employee.role === 'permanent' ? 'พนักงานประจำ' : 
-                         employee.role === 'temporary' ? 'พนักงานชั่วคราว' : 
-                         employee ? employee.role : ''}
+                        {employee.roleNameTh || employee.roleName || 
+                         (employee.role === 'admin' ? 'ผู้ดูแลระบบ' : 
+                          employee.role === 'supervisor' ? 'หัวหน้างาน' : 
+                          employee.role === 'permanent' ? 'พนักงานประจำ' : 
+                          employee.role === 'temporary' ? 'พนักงานชั่วคราว' : 
+                          employee.role || '')}
                       </Badge>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
@@ -1582,18 +1631,18 @@ export default function EmployeesPage() {
                     <Select
                       value={formData.roleId || ''}
                       onValueChange={(value) => {
-                        // หา role name จาก roleId
-                        const selectedRole = roles.find(r => r.id === value);
+                        // เลือก role จาก id (ไม่ต้องกำหนด role และ roleName แล้ว)
                         setFormData({
                           ...formData, 
-                          roleId: value,
-                          role: selectedRole ? selectedRole.name : formData.role
+                          roleId: value
                         });
                       }}
                     >
                       <SelectTrigger className="h-9">
                         <SelectValue placeholder="เลือกบทบาท">
-                          {formData.roleId ? roles.find(r => r.id === formData.roleId)?.name_th || '' : formData.role}
+                          {formData.roleId ? 
+                            (roles.find(r => r.id === formData.roleId)?.name_th || roles.find(r => r.id === formData.roleId)?.name || '') : 
+                            ''}
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
@@ -1812,7 +1861,7 @@ export default function EmployeesPage() {
             
             <div className="flex justify-end mt-4 border-t pt-4">
               <Button 
-                key="cancel-button" 
+                key="edit-cancel-button" 
                 type="button" 
                 variant="outline" 
                 onClick={() => setEditDialogOpen(false)}
@@ -1821,7 +1870,7 @@ export default function EmployeesPage() {
                 ยกเลิก
               </Button>
               <Button 
-                key="save-button" 
+                key="edit-save-button" 
                 type="submit"
                 className="bg-blue-600 hover:bg-blue-700 text-white h-9" 
                 disabled={formLoading}
@@ -1886,7 +1935,7 @@ export default function EmployeesPage() {
             
             <DialogFooter>
               <Button 
-                key="cancel-button" 
+                key="password-cancel-button" 
                 type="button" 
                 variant="outline" 
                 onClick={() => setPasswordDialogOpen(false)}
@@ -1894,7 +1943,7 @@ export default function EmployeesPage() {
                 ยกเลิก
               </Button>
               <Button 
-                key="save-button"
+                key="password-save-button"
                 type="submit"
                 className="bg-foreground hover:bg-foreground/90 text-background" 
                 disabled={formLoading}
@@ -1928,7 +1977,7 @@ export default function EmployeesPage() {
           
           <DialogFooter>
             <Button 
-              key="cancel-button"
+              key="delete-cancel-button"
               type="button" 
               variant="outline" 
               onClick={() => setDeleteDialogOpen(false)}
@@ -1936,7 +1985,7 @@ export default function EmployeesPage() {
               ยกเลิก
             </Button>
             <Button 
-              key="delete-button"
+              key="delete-confirm-button"
               type="button" 
               variant="destructive" 
               onClick={() => handleDelete(selectedEmployee?.id)}
@@ -2058,18 +2107,21 @@ export default function EmployeesPage() {
                   <Select
                     value={formData.roleId || ''}
                     onValueChange={(value) => {
-                      // หา role name จาก roleId
+                      // หา role code และ name จาก roleId
                       const selectedRole = roles.find(r => r.id === value);
                       setFormData({
                         ...formData, 
                         roleId: value,
-                        role: selectedRole ? selectedRole.name : formData.role
+                        role: selectedRole ? selectedRole.code : formData.role, // ใช้ code ของ role
+                        roleName: selectedRole ? selectedRole.name : formData.roleName // ใช้ name ของ role
                       });
                     }}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="เลือกบทบาท">
-                        {formData.roleId ? roles.find(r => r.id === formData.roleId)?.name_th || '' : formData.role}
+                        {formData.roleId ? 
+                          (roles.find(r => r.id === formData.roleId)?.name_th || roles.find(r => r.id === formData.roleId)?.name || '') : 
+                          (formData.roleName || formData.role || '')}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>

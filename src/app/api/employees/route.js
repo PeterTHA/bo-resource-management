@@ -39,17 +39,28 @@ export async function GET(req) {
     
     // ถ้าไม่ใช่ admin จะเห็นเฉพาะพนักงานในทีมเดียวกัน หรือตัวเอง
     // เว้นแต่จะมีการระบุ includeAll=true
-    if (session.user.role !== 'admin' && !includeAll) {
-      // ทุกคนที่ไม่ใช่ admin จะไม่เห็นข้อมูลของ admin
-      where.role = { not: 'admin' };
+    if (!includeAll) {
+      // เช็คว่าผู้ใช้เป็น admin หรือไม่
+      const isAdmin = session.user.roles?.code?.toUpperCase() === 'ADMIN' || 
+                     session.user.role?.toUpperCase() === 'ADMIN' ||
+                     hasPermission(session.user, 'employees.view.all');
       
-      // ถ้าเป็น lead หรือ supervisor ให้ดูเฉพาะทีมตัวเอง
-      if ((session.user.role === 'lead' || session.user.role === 'supervisor') && hasPermission(session.user, 'employees.view.teams')) {
-        where.team_id = session.user.team_id;
-      } 
-      // ถ้าเป็น staff หรือ outsource ที่ไม่มีสิทธิ์ดูทีม ให้ดูแค่ตัวเอง
-      else if (!hasPermission(session.user, 'employees.view.teams')) {
-        where.id = session.user.id;
+      if (!isAdmin) {
+        // ทุกคนที่ไม่ใช่ admin จะไม่เห็นข้อมูลของ admin
+        where.roles = {
+          code: {
+            not: 'ADMIN'
+          }
+        };
+        
+        // ถ้าเป็น lead หรือ supervisor ให้ดูเฉพาะทีมตัวเอง
+        if (hasPermission(session.user, 'employees.view.teams')) {
+          where.team_id = session.user.team_id;
+        } 
+        // ถ้าเป็น staff หรือ outsource ที่ไม่มีสิทธิ์ดูทีม ให้ดูแค่ตัวเอง
+        else if (!hasPermission(session.user, 'employees.view.teams')) {
+          where.id = session.user.id;
+        }
       }
     }
     // หมายเหตุ: กรณีเป็น admin จะไม่มีเงื่อนไข where พิเศษ ทำให้สามารถดูข้อมูลทั้งหมดได้ (รวมถึงข้อมูลของ admin เอง)
@@ -72,7 +83,8 @@ export async function GET(req) {
         teams: true,
         team_id: true,
         hire_date: true,
-        role: true,
+        role_id: true,
+        roles: true,
         is_active: true,
         image: true,
         created_at: true,
@@ -83,9 +95,17 @@ export async function GET(req) {
       },
     });
 
+    // แปลงข้อมูลให้เข้ากับรูปแบบเดิมที่ client ใช้
+    const transformedEmployees = employees.map(employee => ({
+      ...employee,
+      role: employee.roles?.code || null,
+      roleName: employee.roles?.name || null,
+      roleNameTh: employee.roles?.name_th || null,
+    }));
+
     // ส่งข้อมูลกลับในรูปแบบ { data: [...] } เพื่อให้สอดคล้องกับการใช้งานใน client-side
     return NextResponse.json({
-      data: employees,
+      data: transformedEmployees,
       message: 'ดึงข้อมูลพนักงานสำเร็จ',
     });
   } catch (error) {
@@ -178,7 +198,7 @@ export async function POST(req) {
         position_title: employeeData.position_title || null,
         department_id: departmentId,
         team_id: employeeData.team_id || null,
-        role: employeeData.role || 'staff',
+        role_id: employeeData.role_id || null,
         hire_date: employeeData.hire_date ? new Date(employeeData.hire_date) : new Date(),
         is_active: true,
         created_at: new Date(),
@@ -205,7 +225,7 @@ export async function POST(req) {
       departments: newEmployee.departments?.name,
       teams: newEmployee.teams?.name,
       password: randomPassword,
-      role: newEmployee.role,
+      role: newEmployee.role_id,
     });
 
     // ส่งข้อมูลกลับในรูปแบบ { data: [...] } เพื่อให้สอดคล้องกับการใช้งานใน client-side

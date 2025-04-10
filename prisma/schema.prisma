@@ -28,7 +28,6 @@ model employees {
   department_id                                        String?
   team_id                                              String?
   hire_date                                            DateTime
-  role                                                 String                  @default("staff")
   role_id                                              String?
   is_active                                            Boolean                 @default(true)
   image                                                String?
@@ -41,7 +40,7 @@ model employees {
   position_title                                       String?
   departments                                          departments?            @relation(fields: [department_id], references: [id])
   teams                                                teams?                  @relation(fields: [team_id], references: [id])
-  roles_relation                                       roles?                  @relation(fields: [role_id], references: [id])
+  roles                                                roles?                  @relation(fields: [role_id], references: [id])
   leave_approvals                                      leave_approvals[]
   leaves                                               leaves[]
   overtime_approvals                                   overtime_approvals[]
