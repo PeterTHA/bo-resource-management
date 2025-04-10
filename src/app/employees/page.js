@@ -639,8 +639,16 @@ export default function EmployeesPage() {
                 (employee.teamData ? (typeof employee.teamData === 'object' ? employee.teamData.name : employee.teamData) : '-'),
       positionName: positions?.find(p => p.code === employee.position)?.name || employee.position || '-',
       positionLevelName: positionLevels?.find(l => l.code === employee.positionLevel)?.name || employee.positionLevel || '-',
-      roleName: roles.find(r => r.id === employee.roleId)?.name_th || 
-                roles.find(r => r.id === employee.roleId)?.name || '-'
+      // ใช้ roleNameTh หรือ roleName ที่มีอยู่ในพนักงานก่อน ถ้าไม่มีจึงค้นหาจาก roles
+      roleName: employee.roleNameTh || employee.roleName || 
+                roles.find(r => r.id === employee.roleId)?.name_th || 
+                roles.find(r => r.id === employee.roleId)?.name || 
+                // ชื่อไทยตามค่า role
+                (employee.role === 'admin' ? 'ผู้ดูแลระบบ' : 
+                 employee.role === 'supervisor' ? 'หัวหน้างาน' : 
+                 employee.role === 'permanent' ? 'พนักงานประจำ' : 
+                 employee.role === 'temporary' ? 'พนักงานชั่วคราว' : 
+                 employee.role || '-')
     };
     
     console.log('Prepared employee data for view:', employeeData);
@@ -1394,9 +1402,14 @@ export default function EmployeesPage() {
                   clickable={true}
                   onClick={() => selectedEmployee.image && handleImagePreview(selectedEmployee.image)}
                 />
-                <h3 className="text-xl font-semibold text-center">
-                  {selectedEmployee.firstName} {selectedEmployee.lastName}
-                </h3>
+                <div className="flex flex-col items-center">
+                  <h3 className="text-xl font-semibold text-center">
+                    {selectedEmployee.firstName}
+                  </h3>
+                  <h3 className="text-xl font-semibold text-center">
+                    {selectedEmployee.lastName}
+                  </h3>
+                </div>
                 <div className="text-center text-muted-foreground">
                   {selectedEmployee.employeeId}
                 </div>
@@ -1422,10 +1435,17 @@ export default function EmployeesPage() {
                       className={
                         selectedEmployee.role === 'admin' ? 'bg-red-50 text-red-800 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800' : 
                         selectedEmployee.role === 'supervisor' ? 'bg-yellow-50 text-yellow-800 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400 dark:border-yellow-800' :
+                        selectedEmployee.role === 'permanent' ? 'bg-green-50 text-green-800 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800' :
+                        selectedEmployee.role === 'temporary' ? 'bg-orange-50 text-orange-800 border-orange-200 dark:bg-orange-900/20 dark:text-orange-400 dark:border-orange-800' :
                         'bg-gray-50 text-gray-800 border-gray-200 dark:bg-gray-900/20 dark:text-gray-400 dark:border-gray-800'
                       }
                     >
-                      {selectedEmployee.roleName}
+                      {selectedEmployee.roleName || 
+                       (selectedEmployee.role === 'admin' ? 'ผู้ดูแลระบบ' : 
+                        selectedEmployee.role === 'supervisor' ? 'หัวหน้างาน' : 
+                        selectedEmployee.role === 'permanent' ? 'พนักงานประจำ' : 
+                        selectedEmployee.role === 'temporary' ? 'พนักงานชั่วคราว' : 
+                        selectedEmployee.role || '')}
                     </Badge>
                   </div>
                 </div>
@@ -1482,7 +1502,7 @@ export default function EmployeesPage() {
                         "bg-green-50 text-green-800 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800" : 
                         "bg-red-50 text-red-800 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800"}
                     >
-                      {selectedEmployee.isActive ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}
+                      {selectedEmployee.isActive ? 'ใช้งาน' : 'ปิดใช้งาน'}
                     </Badge>
                   </div>
                 </div>
@@ -1845,7 +1865,7 @@ export default function EmployeesPage() {
                 </div>
 
                 <div className="space-y-1 h-[70px]">
-                  <Label>สถานะพนักงาน</Label>
+                  <Label>สถานะ</Label>
                   <div className="flex items-center h-9 space-x-2">
                     <Switch 
                       id="isActive" 
@@ -1853,7 +1873,7 @@ export default function EmployeesPage() {
                       checked={formData.isActive}
                       onCheckedChange={(checked) => setFormData({...formData, isActive: checked})}
                     />
-                    <Label htmlFor="isActive" className="font-normal">Active</Label>
+                    <Label htmlFor="isActive" className="font-normal">ใช้งาน</Label>
                   </div>
                 </div>
               </div>
@@ -2359,7 +2379,7 @@ export default function EmployeesPage() {
                     checked={formData.isActive}
                     onCheckedChange={(checked) => setFormData({...formData, isActive: checked})}
                   />
-                  <Label htmlFor="isActive">เปิดใช้งาน</Label>
+                  <Label htmlFor="isActive">ใช้งาน</Label>
                 </div>
               </div>
             </div>
