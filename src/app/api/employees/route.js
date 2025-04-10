@@ -176,7 +176,7 @@ export async function POST(req) {
         position: employeeData.position,
         position_level: employeeData.position_level || null,
         position_title: employeeData.position_title || null,
-        department_id: department_id,
+        department_id: departmentId,
         team_id: employeeData.team_id || null,
         role: employeeData.role || 'staff',
         hire_date: employeeData.hire_date ? new Date(employeeData.hire_date) : new Date(),

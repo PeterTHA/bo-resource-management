@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db-prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { v4 as uuidv4 } from 'uuid';
 
 // GET: ดึงข้อมูลระดับตำแหน่งทั้งหมด
 export async function GET(req) {
@@ -36,11 +37,13 @@ export async function GET(req) {
       if (!adminLevelExists) {
         await prisma.position_levels.create({
           data: {
+            id: uuidv4(),
             code: 'ADMIN',
             name: 'Admin',
             level: 8, // ระดับสูงสุด (สูงกว่า Director)
             description: 'ระดับผู้ดูแลระบบ (สำหรับ Admin เท่านั้น)',
-            is_active: true
+            is_active: true,
+            updated_at: new Date()
           }
         });
       }

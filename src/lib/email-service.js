@@ -256,10 +256,10 @@ export async function sendWelcomeEmail(options) {
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
       <h2 style="color: #6d28d9;">ยินดีต้อนรับสู่ระบบจัดการทรัพยากรบุคคล</h2>
-      <p>สวัสดี ${firstName || name || to},</p>
+      <p>สวัสดี ${first_name || name || to},</p>
       <p>บัญชีของคุณได้ถูกสร้างเรียบร้อยแล้ว โปรดใช้ข้อมูลต่อไปนี้ในการเข้าสู่ระบบ:</p>
       <div style="background-color: #f3f4f6; padding: 15px; border-radius: 5px; margin: 15px 0;">
-        <p style="margin: 5px 0;"><strong>รหัสพนักงาน:</strong> ${employeeId || 'ไม่ระบุ'}</p>
+        <p style="margin: 5px 0;"><strong>รหัสพนักงาน:</strong> ${employee_id || 'ไม่ระบุ'}</p>
         <p style="margin: 5px 0;"><strong>อีเมล:</strong> ${to}</p>
         <p style="margin: 5px 0;"><strong>รหัสผ่าน:</strong> ${password}</p>
         <p style="margin: 5px 0;"><strong>บทบาท:</strong> ${role === 'admin' ? 'ผู้ดูแลระบบ' : 
@@ -297,7 +297,7 @@ export async function sendPasswordResetEmail(options) {
       <p>สวัสดี ${first_name} ${last_name},</p>
       <p>รหัสผ่านของคุณได้ถูกรีเซ็ตแล้วโดย ${resetBy}</p>
       <div style="background-color: #f3f4f6; padding: 15px; border-radius: 5px; margin: 15px 0;">
-        <p style="margin: 5px 0;"><strong>รหัสพนักงาน:</strong> ${employeeId || 'ไม่ระบุ'}</p>
+        <p style="margin: 5px 0;"><strong>รหัสพนักงาน:</strong> ${employee_id || 'ไม่ระบุ'}</p>
         <p style="margin: 5px 0;"><strong>อีเมล:</strong> ${email}</p>
         <p style="margin: 5px 0;"><strong>รหัสผ่านใหม่:</strong> ${password}</p>
       </div>

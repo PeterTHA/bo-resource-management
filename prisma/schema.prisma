@@ -18,7 +18,7 @@ model departments {
 }
 
 model employees {
-  id                                                   String                  @id
+  id                                                   String                  @id @default(uuid())
   employee_id                                          String                  @unique
   first_name                                           String
   last_name                                            String

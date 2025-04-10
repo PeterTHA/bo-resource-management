@@ -150,9 +150,9 @@ async function simulateUpload(file, uuid, type = 'profile') {
   }
 }
 
-export async function deleteProfileImage(employeeId {
+export async function deleteProfileImage(employeeId) {
   try {
-    await del(`profile-images/${employee_id}.jpg`);
+    await del(`profile-images/${employeeId}.jpg`);
     return { success: true };
   } catch (error) {
     console.error('Error deleting image:', error);
