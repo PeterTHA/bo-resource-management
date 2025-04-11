@@ -129,7 +129,8 @@ export async function POST(req) {
         created_by_id: session.user.id,
         jira_url: jira_url || null,
         confluence_url: confluence_url || null,
-        attachments: attachments || []
+        attachments: attachments || [],
+        updated_at: new Date()
       },
       include: {
         employees: {
