@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useToast } from '@/components/ui/use-toast';
+import { encryptData } from '../utils/encryptionUtils';
 
 export function useEmployeeForm(initialData = {}) {
   const { toast } = useToast();
@@ -31,6 +32,7 @@ export function useEmployeeForm(initialData = {}) {
   
   const [formData, setFormData] = useState({ ...defaultFormData, ...initialData });
   const [passwordFormData, setPasswordFormData] = useState({
+    currentPassword: '',
     password: '',
     confirmPassword: ''
   });
@@ -355,12 +357,23 @@ export function useEmployeeForm(initialData = {}) {
         return false;
       }
       
-      const res = await fetch(`/api/employees/${employeeId}/password`, {
+      // เข้ารหัสข้อมูลรหัสผ่านก่อนส่งไปยัง API
+      const encryptedCurrentPassword = passwordFormData.currentPassword 
+        ? await encryptData(passwordFormData.currentPassword)
+        : '';
+      
+      const encryptedNewPassword = await encryptData(passwordFormData.password);
+      
+      const res = await fetch(`/api/employees/${employeeId}/change-password`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ password: passwordFormData.password }),
+        body: JSON.stringify({ 
+          currentPassword: encryptedCurrentPassword,
+          newPassword: encryptedNewPassword,
+          isEncrypted: true
+        }),
       });
       
       const data = await res.json();
@@ -372,6 +385,7 @@ export function useEmployeeForm(initialData = {}) {
       
       // รีเซ็ตข้อมูลฟอร์ม
       setPasswordFormData({
+        currentPassword: '',
         password: '',
         confirmPassword: ''
       });
