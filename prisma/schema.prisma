@@ -24,11 +24,11 @@ model employees {
   last_name                                            String
   email                                                String                  @unique
   password                                             String
-  position                                             String
+  position_id                                          String?
+  position_level_id                                    String?
   department_id                                        String?
   team_id                                              String?
   hire_date                                            DateTime
-  role_id                                              String?
   is_active                                            Boolean                 @default(true)
   image                                                String?
   created_at                                           DateTime                @default(now())
@@ -36,11 +36,13 @@ model employees {
   birth_date                                           DateTime?
   gender                                               String?
   phone_number                                         String?
-  position_level                                       String?
   position_title                                       String?
+  role_id                                              String?
   departments                                          departments?            @relation(fields: [department_id], references: [id])
-  teams                                                teams?                  @relation(fields: [team_id], references: [id])
   roles                                                roles?                  @relation(fields: [role_id], references: [id])
+  teams                                                teams?                  @relation(fields: [team_id], references: [id])
+  positions                                            positions?              @relation(fields: [position_id], references: [id])
+  position_levels                                      position_levels?        @relation(fields: [position_level_id], references: [id])
   leave_approvals                                      leave_approvals[]
   leaves                                               leaves[]
   overtime_approvals                                   overtime_approvals[]
@@ -113,39 +115,41 @@ model overtimes {
 }
 
 model position_levels {
-  id          String   @id
-  code        String   @unique
-  name        String   @unique
+  id          String      @id
+  code        String      @unique
+  name        String      @unique
   level       Int
   description String?
-  is_active   Boolean  @default(true)
-  created_at  DateTime @default(now())
+  is_active   Boolean     @default(true)
+  created_at  DateTime    @default(now())
   updated_at  DateTime
+  employees   employees[]
 }
 
 model positions {
-  id          String   @id
-  code        String   @unique
-  name        String   @unique
+  id          String      @id
+  code        String      @unique
+  name        String      @unique
   category    String
   description String?
-  is_active   Boolean  @default(true)
-  created_at  DateTime @default(now())
+  is_active   Boolean     @default(true)
+  created_at  DateTime    @default(now())
   updated_at  DateTime
+  employees   employees[]
 }
 
 model roles {
-  id                String             @id
-  code              String             @unique
-  name              String             @unique
-  name_th           String             @unique
-  description       String?
-  permissions       String[]           @default([])
-  is_active         Boolean            @default(true)
-  created_at        DateTime           @default(now())
-  updated_at        DateTime
-  employees         employees[]
-  role_permissions  role_permissions[]
+  id               String             @id
+  code             String             @unique
+  name             String             @unique
+  name_th          String             @unique
+  description      String?
+  permissions      String[]           @default([])
+  is_active        Boolean            @default(true)
+  created_at       DateTime           @default(now())
+  updated_at       DateTime
+  employees        employees[]
+  role_permissions role_permissions[]
 }
 
 model project_activity_logs {
@@ -232,27 +236,27 @@ model work_statuses {
 }
 
 model permissions {
-  id                String             @id
-  code              String             @unique
-  name              String             @unique
-  name_th           String             @unique
-  description       String?
-  category          String             @default("general")
-  is_active         Boolean            @default(true)
-  created_at        DateTime           @default(now())
-  updated_at        DateTime
-  role_permissions  role_permissions[]
+  id               String             @id
+  code             String             @unique
+  name             String             @unique
+  name_th          String             @unique
+  description      String?
+  category         String             @default("general")
+  is_active        Boolean            @default(true)
+  created_at       DateTime           @default(now())
+  updated_at       DateTime
+  role_permissions role_permissions[]
 }
 
 model role_permissions {
-  id           String      @id
-  role_id      String
+  id            String      @id
+  role_id       String
   permission_id String
-  is_active    Boolean     @default(true)
-  created_at   DateTime    @default(now())
-  updated_at   DateTime
-  roles        roles       @relation(fields: [role_id], references: [id], onDelete: Cascade)
-  permissions  permissions @relation(fields: [permission_id], references: [id], onDelete: Cascade)
+  is_active     Boolean     @default(true)
+  created_at    DateTime    @default(now())
+  updated_at    DateTime
+  permissions   permissions @relation(fields: [permission_id], references: [id], onDelete: Cascade)
+  roles         roles       @relation(fields: [role_id], references: [id], onDelete: Cascade)
 
   @@unique([role_id, permission_id])
 }

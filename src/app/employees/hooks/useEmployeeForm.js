@@ -17,7 +17,9 @@ export function useEmployeeForm(initialData = {}) {
     roleId: '',
     roleName: '',
     position: '',
+    positionId: '',
     positionLevel: '',
+    positionLevelId: '',
     positionTitle: '',
     departmentId: '',
     teamId: '',
@@ -182,8 +184,8 @@ export function useEmployeeForm(initialData = {}) {
         last_name: formData.lastName,
         email: formData.email,
         password: randomPassword,
-        position: formData.position,
-        position_level: formData.positionLevel,
+        position_id: formData.positionId,
+        position_level_id: formData.positionLevelId,
         position_title: formData.positionTitle,
         department_id: formData.departmentId,
         team_id: formData.teamId,
@@ -272,8 +274,8 @@ export function useEmployeeForm(initialData = {}) {
         first_name: formData.firstName,
         last_name: formData.lastName,
         email: formData.email,
-        position: formData.position,
-        position_level: formData.positionLevel,
+        position_id: formData.positionId,
+        position_level_id: formData.positionLevelId,
         position_title: formData.positionTitle,
         department_id: formData.departmentId,
         team_id: formData.teamId,
@@ -395,6 +397,15 @@ export function useEmployeeForm(initialData = {}) {
   const setEmployeeToForm = (employee) => {
     if (!employee) return;
     
+    console.log('Setting employee data to form:', employee);
+    
+    // ตรวจสอบข้อมูล roleId ก่อนกำหนดค่า
+    if (employee.roleId) {
+      console.log('Using existing roleId:', employee.roleId);
+    } else if (employee.role) {
+      console.log('Need to find roleId for role code:', employee.role);
+    }
+    
     setFormData({
       employeeId: employee.employeeId || '',
       firstName: employee.firstName || '',
@@ -406,7 +417,9 @@ export function useEmployeeForm(initialData = {}) {
       roleName: employee.roleName || '',
       roleNameTh: employee.roleNameTh || '',
       position: employee.position || '',
+      positionId: employee.positionId || '',
       positionLevel: employee.positionLevel || '',
+      positionLevelId: employee.positionLevelId || '',
       positionTitle: employee.positionTitle || '',
       departmentId: employee.departmentId || '',
       teamId: employee.teamId || '',

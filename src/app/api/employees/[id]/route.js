@@ -39,8 +39,8 @@ export async function GET(req, { params }) {
         first_name: true,
         last_name: true,
         email: true,
-        position: true,
-        position_level: true,
+        position_id: true,
+        position_level_id: true,
         position_title: true,
         departments: true,
         department_id: true,
@@ -49,6 +49,8 @@ export async function GET(req, { params }) {
         hire_date: true,
         role_id: true,
         roles: true,
+        positions: true,
+        position_levels: true,
         is_active: true,
         image: true,
         created_at: true,
@@ -182,8 +184,8 @@ export async function PUT(req, { params }) {
     const isSupervisor = hasPermission(session.user, 'employees.edit.teams');
     if ((isSupervisor || isAdmin) && 
         (employee.team_id === session.user.team_id || isAdmin)) {
-      if (data.position !== undefined) dataToUpdate.position = data.position;
-      if (data.position_level !== undefined) dataToUpdate.position_level = data.position_level;
+      if (data.position_id !== undefined) dataToUpdate.position_id = data.position_id;
+      if (data.position_level_id !== undefined) dataToUpdate.position_level_id = data.position_level_id;
       if (data.position_title !== undefined) dataToUpdate.position_title = data.position_title;
       
       // แต่ไม่สามารถแก้ไขบทบาทได้ (เฉพาะ admin)
@@ -214,8 +216,8 @@ export async function PUT(req, { params }) {
           if (key === 'birth_date' || key === 'hire_date') {
             dataToUpdate[key] = data[key] ? new Date(data[key]) : null;
           } 
-          // ตัด role และ role_name ออกเพราะไม่มีในฐานข้อมูลแล้ว
-          else if (key !== 'role' && key !== 'role_name') {
+          // ตัดฟิลด์ที่ไม่มีในฐานข้อมูลออก
+          else if (!['role', 'role_name', 'position', 'position_level'].includes(key)) {
             dataToUpdate[key] = data[key];
           }
         }
@@ -272,7 +274,9 @@ export async function PUT(req, { params }) {
         first_name: true,
         last_name: true,
         email: true,
-        position: true,
+        position_id: true,
+        position_level_id: true,
+        position_title: true,
         departments: true,
         department_id: true,
         teams: true,

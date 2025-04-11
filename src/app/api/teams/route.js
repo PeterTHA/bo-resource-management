@@ -26,19 +26,21 @@ export async function GET() {
             id: true,
             first_name: true,
             last_name: true,
-            position: true,
+            position_id: true,
+            positions: true,
             role_id: true,
-            roles: true
+            roles: true,
           }
         }
       }
     });
 
-    // แปลงข้อมูลให้มี role จาก roles.code เพื่อรักษาความเข้ากันได้กับโค้ดเดิม
+    // แปลงข้อมูลให้อยู่ในรูปแบบที่เหมาะสม
     const transformedTeams = teams.map(team => ({
       ...team,
       employees: team.employees.map(employee => ({
         ...employee,
+        position: employee.positions?.code || null,
         role: employee.roles?.code || null
       }))
     }));

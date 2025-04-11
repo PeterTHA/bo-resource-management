@@ -75,8 +75,8 @@ export async function GET(req) {
         first_name: true,
         last_name: true,
         email: true,
-        position: true,
-        position_level: true,
+        position_id: true,
+        position_level_id: true,
         position_title: true,
         departments: true,
         department_id: true,
@@ -92,12 +92,16 @@ export async function GET(req) {
         gender: true,
         birth_date: true,
         phone_number: true,
+        positions: true,
+        position_levels: true,
       },
     });
 
     // แปลงข้อมูลให้เข้ากับรูปแบบเดิมที่ client ใช้
     const transformedEmployees = employees.map(employee => ({
       ...employee,
+      position: employee.positions?.code || null,
+      position_level: employee.position_levels?.code || null,
       role: employee.roles?.code || null,
       roleName: employee.roles?.name || null,
       roleNameTh: employee.roles?.name_th || null,
@@ -139,7 +143,7 @@ export async function POST(req) {
     const employeeData = await req.json();
     
     // ตรวจสอบข้อมูลที่จำเป็น
-    if (!employeeData.employee_id || !employeeData.first_name || !employeeData.last_name || !employeeData.email || !employeeData.position) {
+    if (!employeeData.employee_id || !employeeData.first_name || !employeeData.last_name || !employeeData.email) {
       return NextResponse.json(
         { error: 'กรุณากรอกข้อมูลให้ครบถ้วน' },
         { status: 400 }
@@ -188,29 +192,32 @@ export async function POST(req) {
     // สร้างพนักงานใหม่
     const newEmployee = await prisma.employees.create({
       data: {
+        id: generateUuid(),
         employee_id: employeeData.employee_id,
         first_name: employeeData.first_name,
         last_name: employeeData.last_name,
         email: employeeData.email,
         password: hashedPassword,
-        position: employeeData.position,
-        position_level: employeeData.position_level || null,
-        position_title: employeeData.position_title || null,
+        position_id: employeeData.position_id,
+        position_level_id: employeeData.position_level_id,
+        position_title: employeeData.position_title,
         department_id: departmentId,
         team_id: employeeData.team_id || null,
         role_id: employeeData.role_id || null,
         hire_date: employeeData.hire_date ? new Date(employeeData.hire_date) : new Date(),
-        is_active: true,
-        created_at: new Date(),
-        updated_at: new Date(),
+        is_active: employeeData.is_active !== undefined ? employeeData.is_active : true,
         image: employeeData.image || null,
         gender: employeeData.gender || 'male',
         birth_date: employeeData.birth_date ? new Date(employeeData.birth_date) : null,
         phone_number: employeeData.phone_number || null,
+        updated_at: new Date(),
       },
       include: {
         departments: true,
         teams: true,
+        roles: true,
+        positions: true,
+        position_levels: true,
       },
     });
 
@@ -221,7 +228,7 @@ export async function POST(req) {
       first_name: newEmployee.first_name,
       last_name: newEmployee.last_name,
       employee_id: newEmployee.employee_id,
-      position: newEmployee.position,
+      position: newEmployee.position_title,
       departments: newEmployee.departments?.name,
       teams: newEmployee.teams?.name,
       password: randomPassword,

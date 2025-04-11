@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FiPlus, FiUser, FiX, FiUpload } from 'react-icons/fi';
 import {
   Dialog,
@@ -41,6 +41,30 @@ export default function AddEmployeeDialog({
   handleImageChange,
   handleRemoveImage,
 }) {
+  const [debugValues, setDebugValues] = useState(false);
+
+  useEffect(() => {
+    console.log('Form Data in AddEmployeeDialog:', formData);
+    console.log('Positions in AddEmployeeDialog:', positions);
+    console.log('Position Levels in AddEmployeeDialog:', positionLevels);
+    console.log('Roles in AddEmployeeDialog:', roles);
+    
+    // ตรวจสอบการแสดงผลของ dropdown
+    console.log('Position dropdown shows:', positions.find(p => String(p.id) === String(formData.positionId))?.name_th || 
+                positions.find(p => String(p.id) === String(formData.positionId))?.name || '');
+                
+    console.log('Position Level dropdown shows:', positionLevels.find(l => String(l.id) === String(formData.positionLevelId))?.name_th || 
+                positionLevels.find(l => String(l.id) === String(formData.positionLevelId))?.name || '');
+                
+    console.log('Role dropdown shows:', roles.find(r => r.id === formData.roleId)?.name_th || 
+                roles.find(r => r.id === formData.roleId)?.name || '');
+                
+    // ตรวจสอบข้อมูลแบบละเอียด
+    console.log('All positions codes:', positions.map(p => p.code).join(', '));
+    console.log('All position levels codes:', positionLevels.map(p => p.code).join(', '));
+    console.log('All roles codes:', roles.map(r => r.code).join(', '));
+  }, [formData, departments, teams, positions, positionLevels, roles]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
@@ -119,17 +143,26 @@ export default function AddEmployeeDialog({
                 <div className="space-y-1">
                   <Label htmlFor="departmentId">แผนก</Label>
                   <Select
-                    value={formData.departmentId || ''}
+                    value={formData.departmentId ? String(formData.departmentId) : ''}
                     onValueChange={(value) => handleFormChange({
-                      target: { name: 'departmentId', value, type: 'select' }
+                      target: { 
+                        name: 'departmentId', 
+                        value, 
+                        type: 'select',
+                        additionalData: {
+                          department: departments.find(d => String(d.id) === String(value))?.code || ''
+                        }
+                      }
                     })}
                   >
                     <SelectTrigger className="h-9">
-                      <SelectValue placeholder="เลือกแผนก" />
+                      <SelectValue placeholder="เลือกแผนก">
+                        {departments.find(d => String(d.id) === String(formData.departmentId))?.name || ''}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {departments.map((dept) => (
-                        <SelectItem key={dept.id} value={dept.id}>
+                        <SelectItem key={dept.id} value={String(dept.id)}>
                           {dept.name}
                         </SelectItem>
                       ))}
@@ -140,17 +173,26 @@ export default function AddEmployeeDialog({
                 <div className="space-y-1">
                   <Label htmlFor="teamId">ทีม</Label>
                   <Select
-                    value={formData.teamId || ''}
+                    value={formData.teamId ? String(formData.teamId) : ''}
                     onValueChange={(value) => handleFormChange({
-                      target: { name: 'teamId', value, type: 'select' }
+                      target: { 
+                        name: 'teamId', 
+                        value, 
+                        type: 'select',
+                        additionalData: {
+                          team: teams.find(t => String(t.id) === String(value))?.code || ''
+                        }
+                      }
                     })}
                   >
                     <SelectTrigger className="h-9">
-                      <SelectValue placeholder="เลือกทีม" />
+                      <SelectValue placeholder="เลือกทีม">
+                        {teams.find(t => String(t.id) === String(formData.teamId))?.name || ''}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {teams.map((team) => (
-                        <SelectItem key={team.id} value={team.id}>
+                        <SelectItem key={team.id} value={String(team.id)}>
                           {team.name}
                         </SelectItem>
                       ))}
@@ -189,12 +231,12 @@ export default function AddEmployeeDialog({
                     value={formData.roleId || ''}
                     onValueChange={(value) => {
                       const selectedRole = roles.find(r => r.id === value);
+                      console.log('Selected role:', selectedRole);
                       handleFormChange({
                         target: { 
                           name: 'roleId', 
                           value, 
                           type: 'select',
-                          // ส่งข้อมูลเพิ่มเติมสำหรับให้ handler จัดการ
                           additionalData: {
                             role: selectedRole ? selectedRole.code : formData.role,
                             roleName: selectedRole ? selectedRole.name : formData.roleName
@@ -205,17 +247,20 @@ export default function AddEmployeeDialog({
                   >
                     <SelectTrigger className="h-9">
                       <SelectValue placeholder="เลือกบทบาท">
-                        {formData.roleId ? 
-                          (roles.find(r => r.id === formData.roleId)?.name_th || roles.find(r => r.id === formData.roleId)?.name || '') : 
-                          (formData.roleName || formData.role || '')}
+                        {roles.find(r => r.id === formData.roleId)?.name_th || 
+                         roles.find(r => r.id === formData.roleId)?.name || ''}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      {roles.map((role) => (
-                        <SelectItem key={role.id} value={role.id}>
-                          {role.name_th} ({role.name})
-                        </SelectItem>
-                      ))}
+                      {Array.isArray(roles) && roles.length > 0 ? (
+                        roles.map((role) => (
+                          <SelectItem key={role.id} value={role.id}>
+                            {role.name_th || role.name || role.code}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="" disabled>ไม่มีบทบาทให้เลือก</SelectItem>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -303,20 +348,38 @@ export default function AddEmployeeDialog({
                 <div className="space-y-1">
                   <Label htmlFor="positionId">ตำแหน่ง</Label>
                   <Select
-                    value={formData.positionId || ''}
-                    onValueChange={(value) => handleFormChange({
-                      target: { name: 'positionId', value, type: 'select' }
-                    })}
+                    value={formData.positionId ? String(formData.positionId) : ''}
+                    onValueChange={(value) => {
+                      const selectedPosition = positions.find(p => String(p.id) === String(value));
+                      console.log('Selected position:', selectedPosition);
+                      handleFormChange({
+                        target: { 
+                          name: 'positionId', 
+                          value, 
+                          type: 'select',
+                          additionalData: {
+                            position: selectedPosition ? selectedPosition.code : formData.position
+                          }
+                        }
+                      });
+                    }}
                   >
                     <SelectTrigger className="h-9">
-                      <SelectValue placeholder="เลือกตำแหน่ง" />
+                      <SelectValue placeholder="เลือกตำแหน่ง">
+                        {positions.find(p => String(p.id) === String(formData.positionId))?.name_th || 
+                         positions.find(p => String(p.id) === String(formData.positionId))?.name || ''}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      {positions.map((position) => (
-                        <SelectItem key={position.id} value={position.id}>
-                          {position.name_th || position.name}
-                        </SelectItem>
-                      ))}
+                      {Array.isArray(positions) && positions.length > 0 ? (
+                        positions.map((position) => (
+                          <SelectItem key={position.id} value={String(position.id)}>
+                            {position.name_th || position.name}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="" disabled>ไม่มีตำแหน่งให้เลือก</SelectItem>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -324,20 +387,38 @@ export default function AddEmployeeDialog({
                 <div className="space-y-1">
                   <Label htmlFor="positionLevelId">ระดับตำแหน่ง</Label>
                   <Select
-                    value={formData.positionLevelId || ''}
-                    onValueChange={(value) => handleFormChange({
-                      target: { name: 'positionLevelId', value, type: 'select' }
-                    })}
+                    value={formData.positionLevelId ? String(formData.positionLevelId) : ''}
+                    onValueChange={(value) => {
+                      const selectedLevel = positionLevels.find(l => String(l.id) === String(value));
+                      console.log('Selected position level:', selectedLevel);
+                      handleFormChange({
+                        target: { 
+                          name: 'positionLevelId', 
+                          value, 
+                          type: 'select',
+                          additionalData: {
+                            positionLevel: selectedLevel ? selectedLevel.code : formData.positionLevel
+                          }
+                        }
+                      });
+                    }}
                   >
                     <SelectTrigger className="h-9">
-                      <SelectValue placeholder="เลือกระดับตำแหน่ง" />
+                      <SelectValue placeholder="เลือกระดับตำแหน่ง">
+                        {positionLevels.find(l => String(l.id) === String(formData.positionLevelId))?.name_th || 
+                         positionLevels.find(l => String(l.id) === String(formData.positionLevelId))?.name || ''}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      {positionLevels.map((level) => (
-                        <SelectItem key={level.id} value={level.id}>
-                          {level.name_th || level.name}
-                        </SelectItem>
-                      ))}
+                      {Array.isArray(positionLevels) && positionLevels.length > 0 ? (
+                        positionLevels.map((level) => (
+                          <SelectItem key={level.id} value={String(level.id)}>
+                            {level.name_th || level.name}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="" disabled>ไม่มีระดับตำแหน่งให้เลือก</SelectItem>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>

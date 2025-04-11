@@ -13,7 +13,7 @@ export async function GET(request) {
 
     if (!session) {
       return NextResponse.json(
-        { message: 'กรุณาเข้าสู่ระบบก่อนใช้งาน' },
+        { success: false, message: 'กรุณาเข้าสู่ระบบก่อนใช้งาน' },
         { status: 401 }
       );
     }
@@ -23,11 +23,18 @@ export async function GET(request) {
       orderBy: { code: 'asc' },
     });
 
-    return NextResponse.json(roles);
+    return NextResponse.json({
+      success: true,
+      data: roles
+    });
   } catch (error) {
     console.error('Error fetching roles:', error);
     return NextResponse.json(
-      { message: 'เกิดข้อผิดพลาดในการดึงข้อมูลบทบาท', error: error.message },
+      { 
+        success: false,
+        message: 'เกิดข้อผิดพลาดในการดึงข้อมูลบทบาท', 
+        error: error.message 
+      },
       { status: 500 }
     );
   }

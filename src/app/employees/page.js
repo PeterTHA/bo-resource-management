@@ -94,30 +94,58 @@ export default function EmployeesPage() {
       fetchReferenceData();
     }
   }, [session]);
-  
+
   // ฟังก์ชันดึงข้อมูลอ้างอิง
   const fetchReferenceData = async () => {
     try {
       // ดึงข้อมูลตำแหน่ง
       const positionsRes = await employeeService.fetchPositions();
+      console.log('Positions API response:', positionsRes);
+      console.log('Position data structure:', positionsRes.data ? positionsRes.data.length + ' items' : 'No data');
+      if (positionsRes.data) {
+        console.log('First position item:', positionsRes.data[0]);
+      }
       setPositions(positionsRes.data || []);
       
       // ดึงข้อมูลระดับตำแหน่ง
       const positionLevelsRes = await employeeService.fetchPositionLevels();
+      console.log('Position Levels API response:', positionLevelsRes);
+      console.log('Position Levels data structure:', positionLevelsRes.data ? positionLevelsRes.data.length + ' items' : 'No data');
+      if (positionLevelsRes.data) {
+        console.log('First position level item:', positionLevelsRes.data[0]);
+      }
       setPositionLevels(positionLevelsRes.data || []);
       
       // ดึงข้อมูลแผนก
       const departmentsRes = await employeeService.fetchDepartments();
+      console.log('Departments API response:', departmentsRes);
       setDepartments(departmentsRes.data || []);
       
       // ดึงข้อมูลทีม
       const teamsRes = await employeeService.fetchTeams();
+      console.log('Teams API response:', teamsRes);
       setTeams(teamsRes.data || []);
       
       // ดึงข้อมูลบทบาท
       const rolesRes = await employeeService.fetchRoles();
+      console.log('Roles API response:', rolesRes);
+      console.log('Roles data structure:', rolesRes.data ? rolesRes.data.length + ' items' : 'No data');
+      if (rolesRes.data) {
+        console.log('First role item:', rolesRes.data[0]);
+      }
       setRoles(rolesRes.data || []);
-    } catch (error) {
+      
+      // ทดสอบค้นหาข้อมูล WEBMASTER และ ADMIN
+      if (positionsRes.data && positionsRes.data.length > 0) {
+        const webmaster = positionsRes.data.find(p => p.code === 'WEBMASTER');
+        console.log('Found WEBMASTER position:', webmaster || 'Not found');
+      }
+      
+      if (positionLevelsRes.data && positionLevelsRes.data.length > 0) {
+        const adminLevel = positionLevelsRes.data.find(p => p.code === 'ADMIN');
+        console.log('Found ADMIN position level:', adminLevel || 'Not found');
+      }
+      } catch (error) {
       console.error('Error fetching reference data:', error);
       toast({
         variant: "destructive",
@@ -130,6 +158,48 @@ export default function EmployeesPage() {
   // ฟังก์ชันจัดการการเปิด/ปิด Dialog
   const openDialog = (dialog, employee = null) => {
     if (employee) {
+      console.log(`Opening ${dialog} dialog with employee:`, employee);
+      console.log('Available positions:', positions);
+      console.log('Available position levels:', positionLevels);
+      console.log('Available roles:', roles);
+      
+      // ตรวจสอบและปรับปรุงข้อมูลตำแหน่งและระดับตำแหน่ง (กรณีที่ข้อมูลเดิมไม่มี positionId และ positionLevelId)
+      if (dialog === 'edit' || dialog === 'password') {
+        // หา position_id จาก code ถ้ายังไม่มี
+        if (employee.position && !employee.positionId) {
+          const foundPosition = positions.find(p => p.code === employee.position);
+          if (foundPosition) {
+            console.log(`Found position for code ${employee.position}:`, foundPosition);
+            employee = { ...employee, positionId: foundPosition.id };
+          } else {
+            console.warn(`Could not find position for code ${employee.position}`);
+          }
+        }
+        
+        // หา position_level_id จาก code ถ้ายังไม่มี
+        if (employee.positionLevel && !employee.positionLevelId) {
+          const foundPositionLevel = positionLevels.find(p => p.code === employee.positionLevel);
+          if (foundPositionLevel) {
+            console.log(`Found position level for code ${employee.positionLevel}:`, foundPositionLevel);
+            employee = { ...employee, positionLevelId: foundPositionLevel.id };
+          } else {
+            console.warn(`Could not find position level for code ${employee.positionLevel}`);
+          }
+        }
+        
+        // หา role_id จาก code ถ้ายังไม่มี
+        if (employee.role && !employee.roleId) {
+          const foundRole = roles.find(r => r.code === employee.role);
+          if (foundRole) {
+            console.log(`Found role for code ${employee.role}:`, foundRole);
+            employee = { ...employee, roleId: foundRole.id };
+          } else {
+            console.warn(`Could not find role for code ${employee.role}`);
+          }
+        }
+      }
+      
+      console.log(`Updated employee data for ${dialog} dialog:`, employee);
       setSelectedEmployee(employee);
       
       if (dialog === 'edit' || dialog === 'password') {
@@ -161,13 +231,32 @@ export default function EmployeesPage() {
   const handleAddEmployee = async (e) => {
     e.preventDefault();
     
+    const transformedData = {
+      employee_id: formData.employeeId,
+      first_name: formData.firstName,
+      last_name: formData.lastName,
+      email: formData.email,
+      password: randomPassword,
+      position_id: formData.positionId,
+      position_level_id: formData.positionLevelId,
+      position_title: formData.positionTitle,
+      department_id: formData.departmentId,
+      team_id: formData.teamId,
+      role_id: formData.roleId,
+      is_active: formData.isActive,
+      birth_date: formData.birthDate,
+      gender: formData.gender,
+      phone_number: formData.phoneNumber,
+      image: imageUrl
+    };
+    
     const newEmployee = await addEmployee();
     
     if (newEmployee) {
       addEmployeeToList(newEmployee);
       closeDialog('add');
       
-      toast({
+        toast({
         title: "เพิ่มพนักงานสำเร็จ",
         description: `เพิ่ม ${newEmployee.firstName} ${newEmployee.lastName} เข้าระบบเรียบร้อยแล้ว`,
       });
@@ -181,12 +270,41 @@ export default function EmployeesPage() {
     const updatedEmployee = await updateEmployee(selectedEmployee.id);
     
     if (updatedEmployee) {
-      updateEmployeeInList(updatedEmployee);
+      // หาข้อมูลบทบาทจาก roleId
+      const selectedRole = roles.find(r => r.id === formData.roleId);
+      
+      const transformedEmployee = {
+        id: updatedEmployee.id || selectedEmployee.id,
+        employeeId: updatedEmployee.employee_id || formData.employeeId,
+        firstName: updatedEmployee.first_name || formData.firstName,
+        lastName: updatedEmployee.last_name || formData.lastName,
+        email: updatedEmployee.email || formData.email,
+        position: updatedEmployee.positions?.code || formData.position,
+        positionLevel: updatedEmployee.position_levels?.code || formData.positionLevel,
+        positionId: updatedEmployee.position_id || formData.positionId,
+        positionLevelId: updatedEmployee.position_level_id || formData.positionLevelId,
+        positionTitle: updatedEmployee.position_title || formData.positionTitle,
+        departmentId: updatedEmployee.department_id || formData.departmentId,
+        teamId: updatedEmployee.team_id || formData.teamId,
+        department: updatedEmployee.departments || selectedEmployee.department,
+        teamData: updatedEmployee.teams || selectedEmployee.teamData,
+        roleId: formData.roleId,
+        role: selectedRole?.code || updatedEmployee.role || selectedEmployee.role,
+        roleName: selectedRole?.name || updatedEmployee.role_name || selectedEmployee.roleName || '',
+        roleNameTh: selectedRole?.name_th || updatedEmployee.role_name_th || selectedEmployee.roleNameTh || '',
+        isActive: updatedEmployee.is_active !== undefined ? updatedEmployee.is_active : formData.isActive,
+        birthDate: updatedEmployee.birth_date || formData.birthDate,
+        gender: updatedEmployee.gender || formData.gender,
+        phoneNumber: updatedEmployee.phone_number || formData.phoneNumber,
+        image: updatedEmployee.image || imageUrl
+      };
+      
+      updateEmployeeInList(transformedEmployee);
       closeDialog('edit');
       
       toast({
         title: "อัปเดตข้อมูลสำเร็จ",
-        description: `อัปเดตข้อมูล ${updatedEmployee.firstName} ${updatedEmployee.lastName} เรียบร้อยแล้ว`,
+        description: `อัปเดตข้อมูล ${transformedEmployee.firstName} ${transformedEmployee.lastName} เรียบร้อยแล้ว`,
       });
     }
   };
@@ -234,7 +352,7 @@ export default function EmployeesPage() {
   if (status === 'loading') {
     return null;
   }
-  
+
   return (
     <div className="container mx-auto p-4">
       {/* รายการพนักงาน */}
@@ -262,11 +380,11 @@ export default function EmployeesPage() {
         formData={formData}
         formError={formError}
         formLoading={formLoading}
-        positions={positions}
-        positionLevels={positionLevels}
-        departments={departments}
-        teams={teams}
-        roles={roles}
+        positions={positions || []}
+        positionLevels={positionLevels || []}
+        departments={departments || []}
+        teams={teams || []}
+        roles={roles || []}
         handleFormChange={handleFormChange}
         handleAddEmployee={handleAddEmployee}
         imagePreview={imagePreview}
@@ -281,11 +399,11 @@ export default function EmployeesPage() {
         formData={formData}
         formError={formError}
         formLoading={formLoading}
-        positions={positions}
-        positionLevels={positionLevels}
-        departments={departments}
-        teams={teams}
-        roles={roles}
+        positions={positions || []}
+        positionLevels={positionLevels || []}
+        departments={departments || []}
+        teams={teams || []}
+        roles={roles || []}
         handleFormChange={handleFormChange}
         handleUpdateEmployee={handleUpdateEmployee}
         imagePreview={imagePreview}
@@ -312,7 +430,7 @@ export default function EmployeesPage() {
           openDialog('password', employee);
         }}
       />
-      
+
       {/* Dialog เปลี่ยนรหัสผ่าน */}
       <PasswordDialog 
         open={dialogState.password}
@@ -336,4 +454,4 @@ export default function EmployeesPage() {
       />
     </div>
   );
-}
+} 
