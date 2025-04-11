@@ -38,6 +38,20 @@ export default function PasswordDialog({
         <form onSubmit={handleUpdatePassword}>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
+              <Label htmlFor="currentPassword">รหัสผ่านปัจจุบัน<span className="text-red-500">*</span></Label>
+              <Input
+                id="currentPassword"
+                name="currentPassword"
+                type="password"
+                placeholder="รหัสผ่านปัจจุบัน"
+                value={passwordFormData.currentPassword}
+                onChange={handlePasswordFormChange}
+                required
+                className="h-9"
+              />
+            </div>
+            
+            <div className="space-y-2">
               <Label htmlFor="password">รหัสผ่านใหม่<span className="text-red-500">*</span></Label>
               <Input
                 id="password"
@@ -63,6 +77,10 @@ export default function PasswordDialog({
                 required
                 className="h-9"
               />
+            </div>
+            
+            <div className="text-xs text-gray-500 bg-blue-50 dark:bg-blue-950 p-2 rounded border border-blue-200 dark:border-blue-800">
+              <p>ข้อมูลรหัสผ่านของคุณจะถูกเข้ารหัสก่อนส่งไปยังเซิร์ฟเวอร์เพื่อความปลอดภัยสูงสุด</p>
             </div>
             
             {formError && (
