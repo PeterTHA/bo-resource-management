@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { authOptions } from '@/lib/auth';
 import { getEmployeeById, updateEmployeePassword } from '../../../../../lib/db-prisma';
+import { decryptData } from '@/app/employees/utils/encryptionUtils';
 
 // PUT - เปลี่ยนรหัสผ่าน
 export async function PUT(request, { params }) {
@@ -38,7 +39,24 @@ export async function PUT(request, { params }) {
       );
     }
     
-    const { currentPassword, newPassword } = await request.json();
+    const requestData = await request.json();
+    let { currentPassword, newPassword, isEncrypted } = requestData;
+    
+    // ถอดรหัสข้อมูลหากมีการส่งข้อมูลแบบเข้ารหัส
+    if (isEncrypted) {
+      try {
+        if (currentPassword) {
+          currentPassword = await decryptData(currentPassword);
+        }
+        newPassword = await decryptData(newPassword);
+      } catch (decryptError) {
+        console.error('Error decrypting password data:', decryptError);
+        return NextResponse.json(
+          { success: false, message: 'เกิดข้อผิดพลาดในการประมวลผลข้อมูลรหัสผ่าน' },
+          { status: 400 }
+        );
+      }
+    }
     
     // ตรวจสอบว่ามีการส่งรหัสผ่านมาหรือไม่
     if (!newPassword) {

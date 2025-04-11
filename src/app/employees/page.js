@@ -320,7 +320,7 @@ export default function EmployeesPage() {
       
       toast({
         title: "เปลี่ยนรหัสผ่านสำเร็จ",
-        description: `เปลี่ยนรหัสผ่านของ ${selectedEmployee.firstName} ${selectedEmployee.lastName} เรียบร้อยแล้ว`,
+        description: `เปลี่ยนรหัสผ่านของ ${selectedEmployee.firstName} ${selectedEmployee.lastName} เรียบร้อยแล้ว (ข้อมูลถูกเข้ารหัสอย่างปลอดภัย)`,
       });
     }
   };
