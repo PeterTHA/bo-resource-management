@@ -20,11 +20,11 @@ export async function GET() {
     const endOfYear = new Date(currentYear, 11, 31, 23, 59, 59);
 
     // ดึงข้อมูลประเภทการลา
-    const leaveTypes = await prisma.leave.groupBy({
-      by: ['leaveType'],
+    const leaveTypes = await prisma.leaves.groupBy({
+      by: ['leave_type'],
       where: {
-        employeeId: session.user.id,
-        createdAt: {
+        employee_id: session.user.id,
+        created_at: {
           gte: startOfYear,
           lte: endOfYear
         },
@@ -36,15 +36,15 @@ export async function GET() {
     });
 
     // สร้าง Promise สำหรับดึงข้อมูลแต่ละประเภทการลาพร้อมกัน
-    const leavePromises = leaveTypes.map(async ({ leaveType }) => {
+    const leavePromises = leaveTypes.map(async ({ leave_type }) => {
       const [approved, waiting, leaveData] = await Promise.all([
         // จำนวนวันลาที่อนุมัติแล้ว
-        prisma.leave.aggregate({
+        prisma.leaves.aggregate({
           where: {
-            employeeId: session.user.id,
-            leaveType,
+            employee_id: session.user.id,
+            leave_type,
             status: 'approved',
-            createdAt: {
+            created_at: {
               gte: startOfYear,
               lte: endOfYear
             }
@@ -53,17 +53,17 @@ export async function GET() {
             id: true
           },
           _sum: {
-            totalDays: true
+            total_days: true
           }
         }),
         
         // จำนวนวันลาที่รออนุมัติ
-        prisma.leave.aggregate({
+        prisma.leaves.aggregate({
           where: {
-            employeeId: session.user.id,
-            leaveType,
+            employee_id: session.user.id,
+            leave_type,
             status: 'waiting_for_approve',
-            createdAt: {
+            created_at: {
               gte: startOfYear,
               lte: endOfYear
             }
@@ -72,40 +72,40 @@ export async function GET() {
             id: true
           },
           _sum: {
-            totalDays: true
+            total_days: true
           }
         }),
         
         // ข้อมูลการลาอนุมัติแล้วเพื่อใช้ในการคำนวณรายเดือน
-        prisma.leave.findMany({
+        prisma.leaves.findMany({
           where: {
-            employeeId: session.user.id,
-            leaveType,
+            employee_id: session.user.id,
+            leave_type,
             status: 'approved',
-            createdAt: {
+            created_at: {
               gte: startOfYear,
               lte: endOfYear
             }
           },
           select: {
-            startDate: true,
-            totalDays: true
+            start_date: true,
+            total_days: true
           }
         })
       ]);
 
       return {
-        type: leaveType || 'ไม่ระบุ',
+        type: leave_type || 'ไม่ระบุ',
         total: approved._count.id + waiting._count.id,
-        totalDays: (approved._sum.totalDays || 0) + (waiting._sum.totalDays || 0),
+        total_days: (approved._sum.total_days || 0) + (waiting._sum.total_days || 0),
         approved: {
           count: approved._count.id,
-          days: approved._sum.totalDays || 0,
+          days: approved._sum.total_days || 0,
           data: leaveData
         },
         waiting_for_approve: {
           count: waiting._count.id,
-          days: waiting._sum.totalDays || 0
+          days: waiting._sum.total_days || 0
         }
       };
     });
@@ -135,12 +135,12 @@ export async function GET() {
     // เพิ่มข้อมูลจริงจาก approved leaves
     leavesByType.forEach(leaveType => {
       leaveType.approved.data.forEach(leave => {
-        const startDate = new Date(leave.startDate);
+        const startDate = new Date(leave.start_date);
         const month = startDate.getMonth();
         const key = `${currentYear}-${month}`;
         
         if (monthStats[key]) {
-          monthStats[key].days += leave.totalDays || 0;
+          monthStats[key].days += leave.total_days || 0;
           monthStats[key].count += 1;
         }
       });
@@ -152,7 +152,7 @@ export async function GET() {
     
     // คำนวณจำนวนรวมของวันลาทั้งหมด (อนุมัติ + รออนุมัติ)
     const totalLeaveDays = leavesByType.reduce((total, data) => 
-      total + data.totalDays, 0);
+      total + data.total_days, 0);
 
     // เรียงลำดับเดือน
     const monthlyStats = Object.values(monthStats);

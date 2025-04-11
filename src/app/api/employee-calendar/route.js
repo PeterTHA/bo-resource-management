@@ -16,8 +16,8 @@ export async function GET(request) {
 
     // รับพารามิเตอร์จาก URL
     const { searchParams } = new URL(request.url);
-    const startDate = searchParams.get('startDate') || new Date().toISOString();
-    const endDate = searchParams.get('endDate') || new Date().toISOString();
+    const startDate = searchParams.get('start_date') || new Date().toISOString();
+    const endDate = searchParams.get('end_date') || new Date().toISOString();
 
     // ดึงข้อมูลปฏิทินพนักงาน
     const result = await getEmployeeCalendarData(startDate, endDate);

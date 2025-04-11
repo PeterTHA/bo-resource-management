@@ -28,12 +28,12 @@ describe('Auth Options', () => {
     mockUser = {
       id: '1',
       email: 'test@example.com',
-      firstName: 'Test',
-      lastName: 'User',
+      first_name: 'Test',
+      last_name: 'User',
       password: 'hashed_password',
       role: 'admin',
-      employeeId: 'EMP001',
-      department: 'IT',
+      employee_id: 'EMP001',
+      departments: 'IT',
       position: 'Developer',
       image: 'profile.jpg',
     };
@@ -61,11 +61,11 @@ describe('Auth Options', () => {
         id: '1',
         email: 'test@example.com',
         name: 'Test User',
-        firstName: 'Test',
-        lastName: 'User',
+        first_name: 'Test',
+        last_name: 'User',
         role: 'admin',
-        employeeId: 'EMP001',
-        department: 'IT',
+        employee_id: 'EMP001',
+        departments: 'IT',
         position: 'Developer',
         image: 'profile.jpg',
       });
@@ -138,10 +138,10 @@ describe('Auth Options', () => {
       const user = {
         id: '1',
         role: 'admin',
-        firstName: 'Test',
-        lastName: 'User',
-        employeeId: 'EMP001',
-        department: 'IT',
+        first_name: 'Test',
+        last_name: 'User',
+        employee_id: 'EMP001',
+        departments: 'IT',
         position: 'Developer',
       };
       
@@ -150,10 +150,10 @@ describe('Auth Options', () => {
       expect(result).toEqual({
         id: '1',
         role: 'admin',
-        firstName: 'Test',
-        lastName: 'User',
-        employeeId: 'EMP001',
-        department: 'IT',
+        first_name: 'Test',
+        last_name: 'User',
+        employee_id: 'EMP001',
+        departments: 'IT',
         position: 'Developer',
       });
     });
@@ -171,10 +171,10 @@ describe('Auth Options', () => {
       const token = {
         id: '1',
         role: 'admin',
-        firstName: 'Test',
-        lastName: 'User',
-        employeeId: 'EMP001',
-        department: 'IT',
+        first_name: 'Test',
+        last_name: 'User',
+        employee_id: 'EMP001',
+        departments: 'IT',
         position: 'Developer',
       };
       
@@ -184,10 +184,10 @@ describe('Auth Options', () => {
         user: {
           id: '1',
           role: 'admin',
-          firstName: 'Test',
-          lastName: 'User',
-          employeeId: 'EMP001',
-          department: 'IT',
+          first_name: 'Test',
+          last_name: 'User',
+          employee_id: 'EMP001',
+          departments: 'IT',
           position: 'Developer',
         },
       });

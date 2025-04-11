@@ -34,7 +34,7 @@ export default function WorkStatusModal({ isOpen, onClose, employee, date, onSav
   const [status, setStatus] = useState(existingStatus ? existingStatus.status : 'OFFICE');
   const [note, setNote] = useState(existingStatus ? existingStatus.note : '');
   const [loading, setLoading] = useState(false);
-  const [endDate, setEndDate] = useState(date ? date : null);
+  const [end_date, setEndDate] = useState(date ? date : null);
   
   // ตรวจสอบว่าเป็นการเปิดในโหมดดูอย่างเดียวหรือไม่
   const isViewOnly = isOpen && typeof isOpen === 'object' && isOpen.viewOnly === true;
@@ -46,7 +46,7 @@ export default function WorkStatusModal({ isOpen, onClose, employee, date, onSav
   
   // เตรียมข้อมูลวันที่สำหรับแสดงผลและส่งไปยัง API
   const startDateObj = date ? new Date(date) : new Date();
-  const endDateObj = endDate ? new Date(endDate) : startDateObj;
+  const endDateObj = endDate ? new Date(end_date: startDateObj;
   
   // ฟอร์แมตวันที่เป็น ISO string สำหรับใช้กับ input type="date"
   const formatDateForInput = (dateObj) => {
@@ -72,8 +72,8 @@ export default function WorkStatusModal({ isOpen, onClose, employee, date, onSav
   
   // แก้ไขการตรวจสอบทีม โดยเปรียบเทียบว่าหัวหน้าทีมและสมาชิกอยู่ทีมเดียวกันหรือไม่
   // ตรวจสอบทั้งกรณีที่ teamId เป็น string และกรณีที่เป็น object ที่มี id
-  const currentUserTeamId = currentUser?.teamId || (currentUser?.team?.id || null);
-  const employeeTeamId = employee?.teamId || (employee?.team?.id || null);
+  const currentUserTeamId = currentUser?.team_id || (currentUser?.teams?.id || null);
+  const employeeTeamId = employee?.team_id || (employee?.teams?.id || null);
   const isInSameTeam = isTeamLead && currentUserTeamId && employeeTeamId && currentUserTeamId === employeeTeamId;
   
   const canEdit = isAdmin || isSameUser || isInSameTeam;
@@ -90,9 +90,9 @@ export default function WorkStatusModal({ isOpen, onClose, employee, date, onSav
     setLoading(true);
     
     try {
-      if (endDate) {
+      if (endDate {
         // สร้าง Date object ที่เป็น UTC เวลา 12:00 น. เพื่อป้องกันปัญหา timezone
-        const inputDate = new Date(endDate);
+        const inputDate = new Date(endDate;
         const year = inputDate.getFullYear();
         const month = inputDate.getMonth();
         const day = inputDate.getDate();
@@ -112,7 +112,7 @@ export default function WorkStatusModal({ isOpen, onClose, employee, date, onSav
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            employeeId: employee.id,
+            employee_id: employee.id,
             date: utcDate.toISOString(),
             status,
             note,
@@ -233,19 +233,19 @@ export default function WorkStatusModal({ isOpen, onClose, employee, date, onSav
           <div className="flex items-center">
             <ProfileImage 
               src={employee?.image}
-              alt={`${employee?.firstName || ''} ${employee?.lastName || ''}`}
+              alt={`${employee?.first_name || ''} ${employee?.last_name || ''}`}
               size="md"
-              fallbackText={`${employee?.firstName || ''} ${employee?.lastName || ''}`}
+              fallbackText={`${employee?.first_name || ''} ${employee?.last_name || ''}`}
             />
             <div className="ml-4">
               <h3 className="text-lg font-medium">
-                {employee?.firstName} {employee?.lastName}
+                {employee?.first_name} {employee?.last_name}
               </h3>
               <div className="text-gray-600 dark:text-gray-300">
                 {employee?.position}
               </div>
               <div className="text-gray-500 dark:text-gray-400">
-                {employee?.department}
+                {employee?.departments}
               </div>
             </div>
           </div>
@@ -257,7 +257,7 @@ export default function WorkStatusModal({ isOpen, onClose, employee, date, onSav
             <div className="grid grid-cols-2 gap-4">
               <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                 <div className="text-sm text-gray-500 dark:text-gray-400">ประเภทการลา</div>
-                <div className="font-medium mt-1">{leaveData.leaveType}</div>
+                <div className="font-medium mt-1">{leaveData.leave_type}</div>
               </div>
               <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                 <div className="text-sm text-gray-500 dark:text-gray-400">สถานะ</div>
@@ -275,9 +275,9 @@ export default function WorkStatusModal({ isOpen, onClose, employee, date, onSav
             <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
               <div className="text-sm text-gray-500 dark:text-gray-400">ระยะเวลา</div>
               <div className="font-medium mt-1">
-                {formatDate(new Date(leaveData.startDate))} - {formatDate(new Date(leaveData.endDate))}
+                {formatDate(new Date(leaveData.start_date))} - {formatDate(new Date(leaveData.end_date))}
                 <span className="text-sm text-gray-500 dark:text-gray-400 ml-2">
-                  ({leaveData.totalDays} วัน)
+                  ({leaveData.total_days} วัน)
                 </span>
               </div>
             </div>
@@ -302,7 +302,7 @@ export default function WorkStatusModal({ isOpen, onClose, employee, date, onSav
               <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                 <div className="text-sm text-gray-500 dark:text-gray-400">จำนวนชั่วโมงทำงานล่วงเวลา</div>
                 <div className="font-medium mt-1">
-                  {overtimeData.hours || overtimeData.totalHours || 0} ชั่วโมง
+                  {overtimeData.hours || overtimeData.total_hours || 0} ชั่วโมง
                 </div>
               </div>
               <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
@@ -318,7 +318,7 @@ export default function WorkStatusModal({ isOpen, onClose, employee, date, onSav
               </div>
             </div>
 
-            {(overtimeData.startTime && overtimeData.endTime) ? (
+            {(overtimeData.start_time && overtimeData.end_time) ? (
               <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                 <div className="text-sm text-gray-500 dark:text-gray-400">เวลาทำงาน</div>
                 <div className="font-medium mt-1 flex items-center">
@@ -327,8 +327,8 @@ export default function WorkStatusModal({ isOpen, onClose, employee, date, onSav
                     try {
                       console.log('======== OT TIME DEBUG ========');
                       console.log('Overtime data:', overtimeData);
-                      console.log('Start time:', overtimeData.startTime);
-                      console.log('End time:', overtimeData.endTime);
+                      console.log('Start time:', overtimeData.start_time);
+                      console.log('End time:', overtimeData.end_time);
                       
                       // ตรวจสอบรูปแบบของเวลา
                       const isTimeString = (time) => {
@@ -336,14 +336,14 @@ export default function WorkStatusModal({ isOpen, onClose, employee, date, onSav
                       };
                       
                       // ถ้าเป็น string เวลาโดยตรงเช่น "18:00" ให้ใช้ตรงๆ
-                      if (isTimeString(overtimeData.startTime) && isTimeString(overtimeData.endTime)) {
+                      if (isTimeString(overtimeData.start_time) && isTimeString(overtimeData.end_time)) {
                         console.log('Using time strings directly');
-                        return `${overtimeData.startTime} - ${overtimeData.endTime} น.`;
+                        return `${overtimeData.start_time} - ${overtimeData.end_time} น.`;
                       }
                       
                       // ตรวจสอบว่าวันที่ถูกต้องหรือไม่ (Date object หรือ ISO string)
-                      const startTimeObj = new Date(overtimeData.startTime);
-                      const endTimeObj = new Date(overtimeData.endTime);
+                      const startTimeObj = new Date(overtimeData.start_time);
+                      const endTimeObj = new Date(overtimeData.end_time);
                       
                       if (isNaN(startTimeObj.getTime()) || isNaN(endTimeObj.getTime())) {
                         throw new Error('Invalid date format');
@@ -370,7 +370,7 @@ export default function WorkStatusModal({ isOpen, onClose, employee, date, onSav
                       console.error('Error formatting overtime time:', error, overtimeData);
                       
                       // ดึงจำนวนชั่วโมงที่ทำ OT
-                      const hours = overtimeData.hours || overtimeData.totalHours || 0;
+                      const hours = overtimeData.hours || overtimeData.total_hours || 0;
                       return `จำนวน ${hours} ชั่วโมง (ไม่ระบุเวลาแน่ชัด)`;
                     }
                   })()}
@@ -380,8 +380,8 @@ export default function WorkStatusModal({ isOpen, onClose, employee, date, onSav
               <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                 <div className="text-sm text-gray-500 dark:text-gray-400">เวลาทำงาน</div>
                 <div className="font-medium mt-1 text-gray-500 italic">
-                  {overtimeData.hours || overtimeData.totalHours ? 
-                    `จำนวน ${overtimeData.hours || overtimeData.totalHours} ชั่วโมง (ไม่ระบุเวลาแน่ชัด)` : 
+                  {overtimeData.hours || overtimeData.total_hours ? 
+                    `จำนวน ${overtimeData.hours || overtimeData.total_hours} ชั่วโมง (ไม่ระบุเวลาแน่ชัด)` : 
                     'ไม่ระบุเวลาทำงาน'}
                 </div>
               </div>
@@ -429,7 +429,7 @@ export default function WorkStatusModal({ isOpen, onClose, employee, date, onSav
                     <input
                       type="date"
                       id="endDate"
-                      value={endDate ? formatDateForInput(new Date(endDate)) : ''}
+                      value={endDate ? formatDateForInput(new Date(end_date: ''}
                       onChange={e => setEndDate(e.target.value)}
                       className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                     />

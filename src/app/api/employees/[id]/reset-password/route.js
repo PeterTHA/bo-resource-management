@@ -31,8 +31,17 @@ async function handleResetPassword(request, { params }) {
       );
     }
     
-    // ตรวจสอบว่าผู้ใช้มีสิทธิ์ admin หรือไม่
-    if (session.user.role !== 'admin') {
+    // ตรวจสอบว่าผู้ใช้มีสิทธิ์ในการรีเซ็ตรหัสผ่าน
+    const hasAdminAccess = await prisma.employees.findFirst({
+      where: {
+        id: session.user.id,
+        roles: {
+          code: 'ADMIN'
+        }
+      }
+    });
+    
+    if (!hasAdminAccess) {
       return NextResponse.json(
         { error: 'คุณไม่มีสิทธิ์ในการรีเซ็ตรหัสผ่าน' },
         { status: 403 }
@@ -53,10 +62,13 @@ async function handleResetPassword(request, { params }) {
     console.log(`กำลังรีเซ็ตรหัสผ่านสำหรับพนักงาน ID: ${id}`);
     
     // ค้นหาพนักงานในฐานข้อมูล
-    const employee = await prisma.employee.findUnique({
+    const employee = await prisma.employees.findUnique({
       where: {
         id: id,
       },
+      include: {
+        roles: true
+      }
     });
     
     if (!employee) {
@@ -73,7 +85,7 @@ async function handleResetPassword(request, { params }) {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     
     // อัปเดตรหัสผ่านใหม่ในฐานข้อมูล
-    await prisma.employee.update({
+    await prisma.employees.update({
       where: {
         id: id,
       },
@@ -83,18 +95,18 @@ async function handleResetPassword(request, { params }) {
     });
     
     // เก็บรหัสผ่านใหม่ไว้ในส่วนของ debug log (ไม่แสดงกลับไปที่ผู้ใช้)
-    console.log(`[PASSWORD RESET] New password for employee ${employee.email} (${employee.employeeId}): ${newPassword}`);
+    console.log(`[PASSWORD RESET] New password for employee ${employee.email} (${employee.employee_id}): ${newPassword}`);
     
     // ส่งอีเมลแจ้งรหัสผ่านใหม่ไปให้พนักงาน
     try {
       const emailResult = await sendPasswordResetEmail({
         email: employee.email,
-        firstName: employee.firstName,
-        lastName: employee.lastName,
+        first_name: employee.first_name,
+        last_name: employee.last_name,
         password: newPassword,
-        employeeId: employee.employeeId,
-        role: employee.role,
-        resetBy: `${session.user.firstName} ${session.user.lastName} (${session.user.email})`
+        employee_id: employee.employee_id,
+        role: employee.roles?.code || '',
+        resetBy: `${session.user.first_name} ${session.user.last_name} (${session.user.email})`
       });
       
       if (emailResult.success) {

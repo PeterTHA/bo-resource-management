@@ -19,15 +19,15 @@ export async function GET(req, { params }) {
     const resolvedParams = await params;
     const id = resolvedParams.id;
     
-    const team = await prisma.team.findUnique({
+    const team = await prisma.teams.findUnique({
       where: { id },
       include: {
         employees: {
           select: {
             id: true,
-            employeeId: true,
-            firstName: true,
-            lastName: true,
+            employee_id: true,
+            first_name: true,
+            last_name: true,
             email: true,
             position: true,
             role: true,
@@ -82,7 +82,7 @@ export async function PUT(req, { params }) {
     }
 
     // ตรวจสอบว่ามีทีมที่ต้องการแก้ไขหรือไม่
-    const existingTeam = await prisma.team.findUnique({
+    const existingTeam = await prisma.teams.findUnique({
       where: { id }
     });
 
@@ -94,7 +94,7 @@ export async function PUT(req, { params }) {
     }
 
     // ตรวจสอบว่ามีรหัสทีมหรือชื่อทีมซ้ำกับรายการอื่นหรือไม่
-    const duplicateTeam = await prisma.team.findFirst({
+    const duplicateTeam = await prisma.teams.findFirst({
       where: { 
         OR: [
           { code },
@@ -112,7 +112,7 @@ export async function PUT(req, { params }) {
     }
 
     // อัปเดตข้อมูลทีม
-    const updatedTeam = await prisma.team.update({
+    const updatedTeam = await prisma.teams.update({
       where: { id },
       data: {
         code,
@@ -151,7 +151,7 @@ export async function DELETE(req, { params }) {
     const id = resolvedParams.id;
 
     // ตรวจสอบว่ามีทีมที่ต้องการลบหรือไม่
-    const existingTeam = await prisma.team.findUnique({
+    const existingTeam = await prisma.teams.findUnique({
       where: { id },
       include: { employees: true }
     });
@@ -172,7 +172,7 @@ export async function DELETE(req, { params }) {
     }
 
     // ลบทีม
-    await prisma.team.delete({
+    await prisma.teams.delete({
       where: { id }
     });
 

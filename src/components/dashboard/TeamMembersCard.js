@@ -79,14 +79,14 @@ export function TeamMembersCard() {
             if (calendarData.data.workStatuses && isMounted) {
               // จัดกลุ่มข้อมูลสถานะการทำงานตาม employeeId
               const workStatusByEmployee = calendarData.data.workStatuses.reduce((acc, status) => {
-                if (!acc[status.employeeId]) {
-                  acc[status.employeeId] = [];
+                if (!acc[status.employee_id]) {
+                  acc[status.employee_id] = [];
                 }
-                acc[status.employeeId].push(status);
+                acc[status.employee_id].push(status);
                 return acc;
               }, {});
               
-              console.log('Work status by employee:', workStatusByEmployee);
+              console.log('Work status by employees:', workStatusByEmployee);
               
               // อัพเดทข้อมูลสมาชิกทีมด้วยข้อมูลสถานะการทำงาน
               if (membersData.data && membersData.data.length > 0) {
@@ -144,8 +144,8 @@ export function TeamMembersCard() {
     if (!teamLeaves || teamLeaves.length === 0) return null;
     
     return teamLeaves.find(leave => {
-      return String(leave.employeeId) === String(employeeId) ||
-             (leave.employee && String(leave.employee.id) === String(employeeId));
+      return String(leave.employee_id) === String(employeeId) ||
+             (leave.employees && String(leave.employees.id) === String(employeeId));
     });
   };
 
@@ -309,13 +309,13 @@ export function TeamMembersCard() {
                     {member.image ? (
                       <img
                         src={member.image}
-                        alt={`${member.firstName} ${member.lastName}`}
+                        alt={`${member.first_name} ${member.last_name}`}
                         className="h-10 w-10 rounded-full object-cover"
                       />
                     ) : (
                       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/20">
                         <span className="text-sm font-medium text-primary">
-                          {member.firstName?.[0] || ''}{member.lastName?.[0] || ''}
+                          {member.first_name?.[0] || ''}{member.last_name?.[0] || ''}
                         </span>
                       </div>
                     )}
@@ -323,7 +323,7 @@ export function TeamMembersCard() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <h3 className="truncate text-sm font-medium">
-                        {member.firstName} {member.lastName}
+                        {member.first_name} {member.last_name}
                       </h3>
                       <Badge className={`border ${colorClass} min-w-[70px] justify-center px-2 py-0.5 text-xs flex items-center gap-1 font-normal`}>
                         {getStatusIcon(status)}
@@ -332,7 +332,7 @@ export function TeamMembersCard() {
                     </div>
                     <div className="mt-1">
                       <p className="truncate text-xs text-muted-foreground">
-                        {member.positionTitle || ''}
+                        {member.position_title || ''}
                       </p>
                     </div>
                   </div>

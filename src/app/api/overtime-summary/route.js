@@ -22,9 +22,9 @@ export async function GET() {
     // คำนวณสถิติสรุปโดยใช้ Prisma aggregate
     const [approved, pending, totalStats] = await Promise.all([
       // จำนวนและชั่วโมงรวมของรายการที่อนุมัติแล้ว
-      prisma.overtime.aggregate({
+      prisma.overtimes.aggregate({
         where: {
-          employeeId: session.user.id,
+          employee_id: session.user.id,
           OR: [
             { status: 'APPROVED' },
             { status: 'approved' },
@@ -39,14 +39,14 @@ export async function GET() {
           id: true
         },
         _sum: {
-          totalHours: true
+          total_hours: true
         }
       }),
       
       // จำนวนรายการที่รออนุมัติ
-      prisma.overtime.count({
+      prisma.overtimes.count({
         where: {
-          employeeId: session.user.id,
+          employee_id: session.user.id,
           OR: [
             { status: 'PENDING' },
             { status: 'pending' },
@@ -60,9 +60,9 @@ export async function GET() {
       }),
       
       // จำนวนรวมทั้งหมด
-      prisma.overtime.count({
+      prisma.overtimes.count({
         where: {
-          employeeId: session.user.id,
+          employee_id: session.user.id,
           date: {
             gte: startOfYear,
             lte: endOfYear
@@ -72,9 +72,9 @@ export async function GET() {
     ]);
 
     // ดึงข้อมูลรายเดือนสำหรับปีปัจจุบัน - เฉพาะรายการที่อนุมัติแล้ว
-    const approvedOvertimes = await prisma.overtime.findMany({
+    const approvedOvertimes = await prisma.overtimes.findMany({
       where: {
-        employeeId: session.user.id,
+        employee_id: session.user.id,
         OR: [
           { status: 'APPROVED' },
           { status: 'approved' },
@@ -87,7 +87,7 @@ export async function GET() {
       },
       select: {
         date: true,
-        totalHours: true
+        total_hours: true
       }
     });
 
@@ -117,7 +117,7 @@ export async function GET() {
       const key = `${currentYear}-${month}`;
       
       if (monthStats[key]) {
-        monthStats[key].hours += parseFloat(ot.totalHours) || 0;
+        monthStats[key].hours += parseFloat(ot.total_hours) || 0;
         monthStats[key].count += 1;
       }
     });
@@ -132,7 +132,7 @@ export async function GET() {
       rejected: 0, // ไม่จำเป็นต้องดึงข้อมูลนี้ตอนแสดง Dashboard
       cancelled: 0, // ไม่จำเป็นต้องดึงข้อมูลนี้ตอนแสดง Dashboard
       total: totalStats,
-      approvedHours: approved._sum.totalHours || 0
+      approvedHours: approved._sum.total_hours || 0
     };
 
     return NextResponse.json({

@@ -262,7 +262,7 @@ export default function ProjectPage() {
     };
     return roleMap[abbreviation] || abbreviation;
   };
-
+  
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-6">จัดการโปรเจค</h1>
@@ -273,7 +273,7 @@ export default function ProjectPage() {
         <Button onClick={() => setIsAddProjectDialogOpen(true)}>
           <FiPlus className="mr-2" />
           เพิ่มโปรเจค
-        </Button>
+          </Button>
       </div>
 
       {/* Error message */}
@@ -320,7 +320,7 @@ export default function ProjectPage() {
           </TabsList>
         </Tabs>
       </div>
-
+      
       {/* Search field */}
       <div className="relative mb-6">
         <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />

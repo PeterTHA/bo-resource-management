@@ -18,33 +18,33 @@ export async function GET(request) {
     }
 
     // ตรวจสอบว่ามี workStatus model หรือไม่
-    const hasWorkStatusModel = typeof prisma.workStatus !== 'undefined';
+    const hasWorkStatusModel = typeof prisma.work_statuses !== 'undefined';
     const hasWorkStatusesModel = typeof prisma.work_statuses !== 'undefined';
 
     if (!hasWorkStatusModel && !hasWorkStatusesModel) {
       return NextResponse.json({
         success: false,
         message: 'โมเดลข้อมูลสถานะการทำงานยังไม่พร้อมใช้งาน กรุณาตรวจสอบการติดตั้งฐานข้อมูล',
-        data: []
+        data: null
       }, { status: 404 });
     }
     
     // ใช้โมเดลที่มีอยู่ (work_statuses หรือ workStatus)
-    const model = hasWorkStatusesModel ? prisma.work_statuses : prisma.workStatus;
+    const model = prisma.work_statuses;
     
     const searchParams = request.nextUrl.searchParams;
     
     // ตรวจสอบพารามิเตอร์ที่ส่งมา
-    const employeeId = searchParams.get('employeeId');
+    const employeeId = searchParams.get('employee_id');
     let date = searchParams.get('date');
-    const startDate = searchParams.get('startDate');
-    const endDate = searchParams.get('endDate');
+    const startDate = searchParams.get('start_date');
+    const endDate = searchParams.get('end_date');
     
     const whereClause = {};
     
     // ถ้ามีการระบุ employeeId ให้เพิ่มเงื่อนไขใน where
     if (employeeId) {
-      whereClause.employeeId = employeeId;
+      whereClause.employee_id = employeeId;
     }
     
     // จัดการเงื่อนไขเกี่ยวกับวันที่
@@ -68,20 +68,37 @@ export async function GET(request) {
       };
     } else if (startDate && endDate) {
       // ถ้ามีการระบุช่วงวันที่ (startDate และ endDate)
-      const startDateObj = parseISO(startDate);
-      const endDateObj = parseISO(endDate);
-      
-      // สร้าง Date object สำหรับ startDate โดยตั้งเวลาเป็น 00:00:00
-      const formattedStartDate = new Date(Date.UTC(startDateObj.getFullYear(), startDateObj.getMonth(), startDateObj.getDate(), 0, 0, 0));
-      
-      // สร้าง Date object สำหรับ endDate โดยตั้งเวลาเป็น 23:59:59
-      const formattedEndDate = new Date(Date.UTC(endDateObj.getFullYear(), endDateObj.getMonth(), endDateObj.getDate(), 23, 59, 59));
-      
-      // ตั้งเงื่อนไขการค้นหาตามช่วงวันที่
-      whereClause.date = {
-        gte: formattedStartDate,
-        lte: formattedEndDate,
-      };
+      if (
+        employeeId && 
+        new Date(startDate) && 
+        new Date(endDate)
+      ) {
+        const existingWorkStatus = await model.findFirst({
+          where: {
+            employee_id: employeeId,
+            OR: [
+              {
+                AND: [
+                  { start_date: { lte: parseISO(startDate) } },
+                  { end_date: { gte: parseISO(startDate) } }
+                ]
+              },
+              {
+                AND: [
+                  { start_date: { lte: parseISO(endDate) } },
+                  { end_date: { gte: parseISO(endDate) } }
+                ]
+              },
+              {
+                AND: [
+                  { start_date: { gte: parseISO(startDate) } },
+                  { end_date: { lte: parseISO(endDate) } }
+                ]
+              }
+            ]
+          }
+        });
+      }
     }
     
     console.log('Fetching work statuses with where clause:', whereClause);
@@ -94,21 +111,21 @@ export async function GET(request) {
       workStatuses = await model.findMany({
         where: whereClause,
         include: {
-          employees_work_statuses_employee_idToemployees: {
+          employees: {
             select: {
               id: true,
-              firstName: true,
-              lastName: true,
+              first_name: true,
+              last_name: true,
               position: true,
-              departmentId: true,
+              departments: true,
               image: true,
             },
           },
-          employees_work_statuses_created_by_idToemployees: {
+          created_by: {
             select: {
               id: true,
-              firstName: true,
-              lastName: true,
+              first_name: true,
+              last_name: true,
             },
           },
         },
@@ -120,25 +137,25 @@ export async function GET(request) {
       // แปลงชื่อ field ให้เป็นรูปแบบ camelCase เหมือนเดิม
       workStatuses = workStatuses.map(item => ({
         id: item.id,
-        employeeId: item.employee_id,
+        employee_id: item.employee_id,
         date: item.date,
         status: item.status,
         note: item.note,
-        createdById: item.created_by_id,
-        createdAt: item.created_at,
-        updatedAt: item.updated_at,
-        employee: item.employees_work_statuses_employee_idToemployees ? {
-          id: item.employees_work_statuses_employee_idToemployees.id,
-          firstName: item.employees_work_statuses_employee_idToemployees.firstName,
-          lastName: item.employees_work_statuses_employee_idToemployees.lastName,
-          position: item.employees_work_statuses_employee_idToemployees.position,
-          departmentId: item.employees_work_statuses_employee_idToemployees.departmentId,
-          image: item.employees_work_statuses_employee_idToemployees.image,
+        created_by_id: item.created_by_id,
+        created_at: item.created_at,
+        updated_at: item.updated_at,
+        employees: item.employees_work_statuses_employee_id_to_employees ? {
+          id: item.employees_work_statuses_employee_id_to_employees.id,
+          first_name: item.employees_work_statuses_employee_id_to_employees.first_name,
+          last_name: item.employees_work_statuses_employee_id_to_employees.last_name,
+          position: item.employees_work_statuses_employee_id_to_employees.position,
+          department_id: item.employees_work_statuses_employee_id_to_employees.department_id,
+          image: item.employees_work_statuses_employee_id_to_employees.image,
         } : null,
-        createdBy: item.employees_work_statuses_created_by_idToemployees ? {
-          id: item.employees_work_statuses_created_by_idToemployees.id,
-          firstName: item.employees_work_statuses_created_by_idToemployees.firstName,
-          lastName: item.employees_work_statuses_created_by_idToemployees.lastName,
+        employees: item.created_by ? {
+          id: item.created_by.id,
+          first_name: item.created_by.first_name,
+          last_name: item.created_by.last_name,
         } : null,
       }));
     } else {
@@ -146,21 +163,21 @@ export async function GET(request) {
       workStatuses = await model.findMany({
         where: whereClause,
         include: {
-          employee: {
+          employees: {
             select: {
               id: true,
-              firstName: true,
-              lastName: true,
+              first_name: true,
+              last_name: true,
               position: true,
-              department: true,
+              departments: true,
               image: true,
             },
           },
-          createdBy: {
+          created_by: {
             select: {
               id: true,
-              firstName: true,
-              lastName: true,
+              first_name: true,
+              last_name: true,
             },
           },
         },
@@ -196,13 +213,13 @@ export async function POST(req) {
       }, { status: 401 });
     }
 
-    const { employeeId, date, status, note } = await req.json();
+    const { employee_id, date, status, note } = await req.json();
     
     // ตรวจสอบข้อมูลที่จำเป็น
-    if (!employeeId || !date || !status) {
+    if (!employee_id || !date || !status) {
       return NextResponse.json({ 
         error: true, 
-        message: 'ข้อมูลไม่ครบถ้วน กรุณาระบุ employeeId, date และ status' 
+        message: 'ข้อมูลไม่ครบถ้วน กรุณาระบุ employee_id, date และ status' 
       }, { status: 400 });
     }
     
@@ -221,7 +238,7 @@ export async function POST(req) {
     console.log(`Normalized date to save: ${normalizedDate.toISOString()}`);
 
     // ตรวจสอบว่ามีโมเดล workStatus หรือไม่
-    const hasWorkStatusModel = typeof prisma.workStatus !== 'undefined';
+    const hasWorkStatusModel = typeof prisma.work_statuses !== 'undefined';
     const hasWorkStatusesModel = typeof prisma.work_statuses !== 'undefined';
 
     if (!hasWorkStatusModel && !hasWorkStatusesModel) {
@@ -239,7 +256,7 @@ export async function POST(req) {
       // ใช้โมเดล work_statuses
       const existingRecord = await prisma.work_statuses.findFirst({
         where: {
-          employee_id: employeeId,
+          employee_id: employee_id,
           date: {
             gte: new Date(Date.UTC(
               dateObj.getFullYear(),
@@ -268,21 +285,21 @@ export async function POST(req) {
             updated_at: new Date(), // เพิ่ม updated_at เป็นเวลาปัจจุบัน
           },
           include: {
-            employees_work_statuses_employee_idToemployees: {
+            employees_work_statuses_employee_id_to_employees: {
               select: {
                 id: true,
-                firstName: true,
-                lastName: true,
+                first_name: true,
+                last_name: true,
                 position: true,
-                departmentId: true,
+                department_id: true,
                 image: true,
               },
             },
-            employees_work_statuses_created_by_idToemployees: {
+            created_by: {
               select: {
                 id: true,
-                firstName: true,
-                lastName: true,
+                first_name: true,
+                last_name: true,
               },
             },
           },
@@ -291,25 +308,25 @@ export async function POST(req) {
         // แปลงชื่อ field ให้เป็นรูปแบบ camelCase
         result = {
           id: result.id,
-          employeeId: result.employee_id,
+          employee_id: result.employee_id,
           date: result.date,
           status: result.status,
           note: result.note,
-          createdById: result.created_by_id,
-          createdAt: result.created_at,
-          updatedAt: result.updated_at,
-          employee: result.employees_work_statuses_employee_idToemployees ? {
-            id: result.employees_work_statuses_employee_idToemployees.id,
-            firstName: result.employees_work_statuses_employee_idToemployees.firstName,
-            lastName: result.employees_work_statuses_employee_idToemployees.lastName,
-            position: result.employees_work_statuses_employee_idToemployees.position,
-            departmentId: result.employees_work_statuses_employee_idToemployees.departmentId,
-            image: result.employees_work_statuses_employee_idToemployees.image,
+          created_by_id: result.created_by_id,
+          created_at: result.created_at,
+          updated_at: result.updated_at,
+          employees: result.employees_work_statuses_employee_id_to_employees ? {
+            id: result.employees_work_statuses_employee_id_to_employees.id,
+            first_name: result.employees_work_statuses_employee_id_to_employees.first_name,
+            last_name: result.employees_work_statuses_employee_id_to_employees.last_name,
+            position: result.employees_work_statuses_employee_id_to_employees.position,
+            department_id: result.employees_work_statuses_employee_id_to_employees.department_id,
+            image: result.employees_work_statuses_employee_id_to_employees.image,
           } : null,
-          createdBy: result.employees_work_statuses_created_by_idToemployees ? {
-            id: result.employees_work_statuses_created_by_idToemployees.id,
-            firstName: result.employees_work_statuses_created_by_idToemployees.firstName,
-            lastName: result.employees_work_statuses_created_by_idToemployees.lastName,
+          employees: result.created_by ? {
+            id: result.created_by.id,
+            first_name: result.created_by.first_name,
+            last_name: result.created_by.last_name,
           } : null
         };
         
@@ -323,7 +340,7 @@ export async function POST(req) {
         result = await prisma.work_statuses.create({
           data: {
             id: crypto.randomUUID(),
-            employee_id: employeeId,
+            employee_id: employee_id,
             date: normalizedDate,
             status,
             note,
@@ -331,21 +348,21 @@ export async function POST(req) {
             updated_at: new Date(), // เพิ่ม updated_at เป็นเวลาปัจจุบัน
           },
           include: {
-            employees_work_statuses_employee_idToemployees: {
+            employees_work_statuses_employee_id_to_employees: {
               select: {
                 id: true,
-                firstName: true,
-                lastName: true,
+                first_name: true,
+                last_name: true,
                 position: true,
-                departmentId: true,
+                department_id: true,
                 image: true,
               },
             },
-            employees_work_statuses_created_by_idToemployees: {
+            created_by: {
               select: {
                 id: true,
-                firstName: true,
-                lastName: true,
+                first_name: true,
+                last_name: true,
               },
             },
           },
@@ -354,25 +371,25 @@ export async function POST(req) {
         // แปลงชื่อ field ให้เป็นรูปแบบ camelCase
         result = {
           id: result.id,
-          employeeId: result.employee_id,
+          employee_id: result.employee_id,
           date: result.date,
           status: result.status,
           note: result.note,
-          createdById: result.created_by_id,
-          createdAt: result.created_at,
-          updatedAt: result.updated_at,
-          employee: result.employees_work_statuses_employee_idToemployees ? {
-            id: result.employees_work_statuses_employee_idToemployees.id,
-            firstName: result.employees_work_statuses_employee_idToemployees.firstName,
-            lastName: result.employees_work_statuses_employee_idToemployees.lastName,
-            position: result.employees_work_statuses_employee_idToemployees.position,
-            departmentId: result.employees_work_statuses_employee_idToemployees.departmentId,
-            image: result.employees_work_statuses_employee_idToemployees.image,
+          created_by_id: result.created_by_id,
+          created_at: result.created_at,
+          updated_at: result.updated_at,
+          employees: result.employees_work_statuses_employee_id_to_employees ? {
+            id: result.employees_work_statuses_employee_id_to_employees.id,
+            first_name: result.employees_work_statuses_employee_id_to_employees.first_name,
+            last_name: result.employees_work_statuses_employee_id_to_employees.last_name,
+            position: result.employees_work_statuses_employee_id_to_employees.position,
+            department_id: result.employees_work_statuses_employee_id_to_employees.department_id,
+            image: result.employees_work_statuses_employee_id_to_employees.image,
           } : null,
-          createdBy: result.employees_work_statuses_created_by_idToemployees ? {
-            id: result.employees_work_statuses_created_by_idToemployees.id,
-            firstName: result.employees_work_statuses_created_by_idToemployees.firstName,
-            lastName: result.employees_work_statuses_created_by_idToemployees.lastName,
+          employees: result.created_by ? {
+            id: result.created_by.id,
+            first_name: result.created_by.first_name,
+            last_name: result.created_by.last_name,
           } : null
         };
         
@@ -385,71 +402,71 @@ export async function POST(req) {
     } else {
       // ใช้โมเดล workStatus
       // ตรวจสอบว่ามีข้อมูลอยู่แล้วหรือไม่
-      const existingWorkStatus = await prisma.workStatus.findFirst({
+      const existingWorkStatus = await prisma.work_statuses.findFirst({
         where: {
-          employeeId,
+          employee_id,
           date: normalizedDate
         }
       });
       
       if (existingWorkStatus) {
         // ถ้ามีข้อมูลอยู่แล้ว ให้อัปเดตข้อมูลเดิม
-        result = await prisma.workStatus.update({
+        result = await prisma.work_statuses.update({
           where: { id: existingWorkStatus.id },
           data: {
             status,
             note,
-            createdById: session.user.id, // อัปเดต createdById เป็นคนล่าสุดที่แก้ไขข้อมูล
+            created_by_id: session.user.id, // อัปเดต createdById เป็นคนล่าสุดที่แก้ไขข้อมูล
             updated_at: new Date(), // เพิ่ม updated_at เป็นเวลาปัจจุบัน
           },
           include: {
-            employee: {
+            employees: {
               select: {
                 id: true,
-                firstName: true,
-                lastName: true,
+                first_name: true,
+                last_name: true,
                 position: true,
-                department: true,
+                departments: true,
                 image: true,
               },
             },
-            createdBy: {
+            created_by: {
               select: {
                 id: true,
-                firstName: true,
-                lastName: true,
+                first_name: true,
+                last_name: true,
               },
             },
           },
         });
       } else {
         // ถ้าไม่มีข้อมูลอยู่ ให้สร้างข้อมูลใหม่
-        result = await prisma.workStatus.create({
+        result = await prisma.work_statuses.create({
           data: {
             id: crypto.randomUUID(),
-            employeeId,
+            employee_id,
             date: normalizedDate,
             status,
             note,
-            createdById: session.user.id,
+            created_by_id: session.user.id,
             updated_at: new Date(), // เพิ่ม updated_at เป็นเวลาปัจจุบัน
           },
           include: {
-            employee: {
+            employees: {
               select: {
                 id: true,
-                firstName: true,
-                lastName: true,
+                first_name: true,
+                last_name: true,
                 position: true,
-                department: true,
+                departments: true,
                 image: true,
               },
             },
-            createdBy: {
+            created_by: {
               select: {
                 id: true,
-                firstName: true,
-                lastName: true,
+                first_name: true,
+                last_name: true,
               },
             },
           },
@@ -496,7 +513,7 @@ export async function DELETE(req) {
     }
 
     // ตรวจสอบว่ามี workStatus model หรือไม่
-    const hasWorkStatusModel = typeof prisma.workStatus !== 'undefined';
+    const hasWorkStatusModel = typeof prisma.work_statuses !== 'undefined';
     const hasWorkStatusesModel = typeof prisma.work_statuses !== 'undefined';
 
     if (!hasWorkStatusModel && !hasWorkStatusesModel) {
@@ -508,7 +525,7 @@ export async function DELETE(req) {
     }
     
     // ใช้โมเดลที่มีอยู่ (work_statuses หรือ workStatus)
-    const model = hasWorkStatusesModel ? prisma.work_statuses : prisma.workStatus;
+    const model = prisma.work_statuses;
     
     // ตรวจสอบว่ามีข้อมูลนี้อยู่หรือไม่
     const workStatus = await model.findUnique({
@@ -529,11 +546,11 @@ export async function DELETE(req) {
     // ตรวจสอบว่าเป็นเจ้าของข้อมูลหรือไม่ (ต้องปรับตามชื่อฟิลด์ของโมเดล)
     const isSameUser = hasWorkStatusesModel 
       ? session.user.id === workStatus.employee_id
-      : session.user.id === workStatus.employeeId;
+      : session.user.id === workStatus.employee_id;
       
     const isCreator = hasWorkStatusesModel
       ? session.user.id === workStatus.created_by_id
-      : session.user.id === workStatus.createdById;
+      : session.user.id === workStatus.created_by_id;
 
     // ถ้าไม่ใช่ admin, team lead, เจ้าของบัญชี หรือผู้สร้างข้อมูล
     if (!isAdmin && !isTeamLead && !isSameUser && !isCreator) {

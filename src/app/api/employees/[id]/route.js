@@ -17,34 +17,47 @@ export async function GET(req, { params }) {
       }, { status: 401 });
     }
 
+    // รอให้ params พร้อมก่อนใช้งาน
     const resolvedParams = await params;
+    
+    // ตรวจสอบว่า params มีค่าหรือไม่
+    if (!resolvedParams?.id) {
+      return NextResponse.json({ 
+        error: true,
+        message: 'ไม่ระบุรหัสพนักงาน' 
+      }, { status: 400 });
+    }
+
     const id = resolvedParams.id;
 
     // ดึงข้อมูลพนักงาน
-    const employee = await prisma.employee.findUnique({
+    const employee = await prisma.employees.findUnique({
       where: { id },
       select: {
         id: true,
-        employeeId: true,
-        firstName: true,
-        lastName: true,
+        employee_id: true,
+        first_name: true,
+        last_name: true,
         email: true,
-        position: true,
-        positionLevel: true,
-        positionTitle: true,
-        department: true,
-        departmentId: true,
-        teamData: true,
-        teamId: true,
-        hireDate: true,
-        role: true,
-        isActive: true,
+        position_id: true,
+        position_level_id: true,
+        position_title: true,
+        departments: true,
+        department_id: true,
+        teams: true,
+        team_id: true,
+        hire_date: true,
+        role_id: true,
+        roles: true,
+        positions: true,
+        position_levels: true,
+        is_active: true,
         image: true,
-        createdAt: true,
-        updatedAt: true,
+        created_at: true,
+        updated_at: true,
         gender: true,
-        birthDate: true,
-        phoneNumber: true,
+        birth_date: true,
+        phone_number: true,
       },
     });
 
@@ -55,8 +68,19 @@ export async function GET(req, { params }) {
       }, { status: 404 });
     }
 
+    // เพิ่มฟิลด์ role เพื่อความเข้ากันได้กับโค้ดเดิม
+    const transformedEmployee = {
+      ...employee,
+      role: employee.roles?.code || null,
+      roleName: employee.roles?.name || null,
+      roleNameTh: employee.roles?.name_th || null
+    };
+
     // ถ้าผู้ใช้ไม่ใช่ admin และพยายามเข้าถึงข้อมูลของ admin
-    if (session.user.role !== 'admin' && employee.role === 'admin') {
+    const isUserAdmin = session.user.roles?.code?.toUpperCase() === 'ADMIN' || session.user.role?.toUpperCase() === 'ADMIN';
+    const isEmployeeAdmin = employee.roles?.code?.toUpperCase() === 'ADMIN';
+
+    if (!isUserAdmin && isEmployeeAdmin) {
       return NextResponse.json({ 
         error: true,
         message: 'คุณไม่มีสิทธิ์ดูข้อมูลของผู้ดูแลระบบ' 
@@ -65,8 +89,9 @@ export async function GET(req, { params }) {
 
     // ตรวจสอบสิทธิ์ในการดูข้อมูลพนักงาน
     const canView = 
-      hasPermission(session.user, 'employees.view.all') || // Admin ดูได้ทั้งหมด
-      (hasPermission(session.user, 'employees.view.team') && employee.teamId === session.user.teamId) || // ดูได้ถ้าอยู่ทีมเดียวกัน
+      isUserAdmin || // Admin ดูได้ทั้งหมด
+      hasPermission(session.user, 'employees.view.all') || 
+      (hasPermission(session.user, 'employees.view.teams') && employee.team_id === session.user.team_id) || // ดูได้ถ้าอยู่ทีมเดียวกัน
       employee.id === session.user.id; // ดูข้อมูลตัวเองได้เสมอ
 
     if (!canView) {
@@ -78,11 +103,12 @@ export async function GET(req, { params }) {
 
     return NextResponse.json({
       success: true,
-      data: employee,
+      data: transformedEmployee,
       message: 'ดึงข้อมูลพนักงานสำเร็จ'
     });
   } catch (error) {
-    console.error(`Error in GET /api/employees/${params?.id}:`, error);
+    // ในบล็อก catch เราไม่สามารถเข้าถึง resolvedParams ได้เพราะอาจเกิด error ก่อนที่จะ resolve params
+    console.error(`Error in GET /api/employees/${params?.id || 'unknown'}:`, error);
     return NextResponse.json({ 
       error: true,
       message: 'เกิดข้อผิดพลาดในการดึงข้อมูลพนักงาน',
@@ -108,8 +134,11 @@ export async function PUT(req, { params }) {
     const data = await req.json();
 
     // ตรวจสอบว่ามีพนักงานที่ต้องการอัปเดตหรือไม่
-    const employee = await prisma.employee.findUnique({
+    const employee = await prisma.employees.findUnique({
       where: { id },
+      include: {
+        roles: true
+      }
     });
 
     if (!employee) {
@@ -120,9 +149,11 @@ export async function PUT(req, { params }) {
     }
 
     // ตรวจสอบสิทธิ์ในการแก้ไขข้อมูลพนักงาน
+    const isAdmin = session.user.roles?.code?.toUpperCase() === 'ADMIN' || session.user.role?.toUpperCase() === 'ADMIN';
     const canEdit = 
-      hasPermission(session.user, 'employees.edit.all') || // Admin แก้ไขได้ทั้งหมด
-      (hasPermission(session.user, 'employees.edit.team') && employee.teamId === session.user.teamId) || // แก้ไขได้ถ้าอยู่ทีมเดียวกัน
+      isAdmin || // Admin แก้ไขได้ทั้งหมด
+      hasPermission(session.user, 'employees.edit.all') || 
+      (hasPermission(session.user, 'employees.edit.teams') && employee.team_id === session.user.team_id) || // แก้ไขได้ถ้าอยู่ทีมเดียวกัน
       (hasPermission(session.user, 'employees.edit.own') && employee.id === session.user.id); // แก้ไขข้อมูลตัวเองได้
 
     if (!canEdit) {
@@ -138,8 +169,8 @@ export async function PUT(req, { params }) {
     // ผู้ใช้ทั่วไปแก้ไขข้อมูลส่วนตัวของตัวเองได้
     if (employee.id === session.user.id) {
       // สามารถแก้ไขได้เฉพาะฟิลด์บางอย่าง
-      if (data.firstName !== undefined) dataToUpdate.firstName = data.firstName;
-      if (data.lastName !== undefined) dataToUpdate.lastName = data.lastName;
+      if (data.first_name !== undefined) dataToUpdate.first_name = data.first_name;
+      if (data.last_name !== undefined) dataToUpdate.last_name = data.last_name;
       if (data.email !== undefined) dataToUpdate.email = data.email;
       
       // อัปเดตรูปภาพทุกครั้งที่มีการส่งมา (รวมถึงกรณีเป็น null เพื่อลบรูป)
@@ -150,23 +181,24 @@ export async function PUT(req, { params }) {
     }
 
     // หัวหน้าทีมสามารถแก้ไขข้อมูลของพนักงานในทีมได้
-    if ((session.user.role === 'lead' || session.user.role === 'admin') && 
-        (employee.teamId === session.user.teamId || session.user.role === 'admin')) {
-      if (data.position !== undefined) dataToUpdate.position = data.position;
-      if (data.positionLevel !== undefined) dataToUpdate.positionLevel = data.positionLevel;
-      if (data.positionTitle !== undefined) dataToUpdate.positionTitle = data.positionTitle;
+    const isSupervisor = hasPermission(session.user, 'employees.edit.teams');
+    if ((isSupervisor || isAdmin) && 
+        (employee.team_id === session.user.team_id || isAdmin)) {
+      if (data.position_id !== undefined) dataToUpdate.position_id = data.position_id;
+      if (data.position_level_id !== undefined) dataToUpdate.position_level_id = data.position_level_id;
+      if (data.position_title !== undefined) dataToUpdate.position_title = data.position_title;
       
       // แต่ไม่สามารถแก้ไขบทบาทได้ (เฉพาะ admin)
-      if (session.user.role === 'admin') {
-        if (data.role !== undefined) dataToUpdate.role = data.role;
-        if (data.isActive !== undefined) dataToUpdate.isActive = data.isActive;
-        if (data.departmentId !== undefined) dataToUpdate.departmentId = data.departmentId;
-        if (data.teamId !== undefined) dataToUpdate.teamId = data.teamId;
-        if (data.employeeId !== undefined) dataToUpdate.employeeId = data.employeeId;
-        if (data.hireDate !== undefined) dataToUpdate.hireDate = new Date(data.hireDate);
+      if (isAdmin) {
+        if (data.role_id !== undefined) dataToUpdate.role_id = data.role_id;
+        if (data.is_active !== undefined) dataToUpdate.is_active = data.is_active;
+        if (data.department_id !== undefined) dataToUpdate.department_id = data.department_id;
+        if (data.team_id !== undefined) dataToUpdate.team_id = data.team_id;
+        if (data.employee_id !== undefined) dataToUpdate.employee_id = data.employee_id;
+        if (data.hire_date !== undefined) dataToUpdate.hire_date = new Date(data.hire_date);
         if (data.gender !== undefined) dataToUpdate.gender = data.gender;
-        if (data.birthDate !== undefined) dataToUpdate.birthDate = data.birthDate ? new Date(data.birthDate) : null;
-        if (data.phoneNumber !== undefined) dataToUpdate.phoneNumber = data.phoneNumber;
+        if (data.birth_date !== undefined) dataToUpdate.birth_date = data.birth_date ? new Date(data.birth_date) : null;
+        if (data.phone_number !== undefined) dataToUpdate.phone_number = data.phone_number;
         
         // Admin สามารถอัปเดตรูปภาพได้
         if (data.image !== undefined) {
@@ -175,10 +207,26 @@ export async function PUT(req, { params }) {
         }
       }
     }
+    
+    // ถ้าเป็น admin อนุญาตให้แก้ไขทุกฟิลด์ได้
+    if (isAdmin) {
+      Object.keys(data).forEach(key => {
+        if (key !== 'id' && data[key] !== undefined) {
+          // แปลงวันที่ในรูปแบบที่ถูกต้อง
+          if (key === 'birth_date' || key === 'hire_date') {
+            dataToUpdate[key] = data[key] ? new Date(data[key]) : null;
+          } 
+          // ตัดฟิลด์ที่ไม่มีในฐานข้อมูลออก
+          else if (!['role', 'role_name', 'position', 'position_level'].includes(key)) {
+            dataToUpdate[key] = data[key];
+          }
+        }
+      });
+    }
 
     // ตรวจสอบอีเมลซ้ำ
     if (dataToUpdate.email && dataToUpdate.email !== employee.email) {
-      const existingEmail = await prisma.employee.findFirst({
+      const existingEmail = await prisma.employees.findFirst({
         where: {
           email: dataToUpdate.email,
           NOT: { id },
@@ -194,10 +242,10 @@ export async function PUT(req, { params }) {
     }
 
     // ตรวจสอบรหัสพนักงานซ้ำ
-    if (dataToUpdate.employeeId && dataToUpdate.employeeId !== employee.employeeId) {
-      const existingEmployeeId = await prisma.employee.findFirst({
+    if (dataToUpdate.employee_id && dataToUpdate.employee_id !== employee.employee_id) {
+      const existingEmployeeId = await prisma.employees.findFirst({
         where: {
-          employeeId: dataToUpdate.employeeId,
+          employee_id: dataToUpdate.employee_id,
           NOT: { id },
         },
       });
@@ -217,26 +265,29 @@ export async function PUT(req, { params }) {
       });
     }
 
-    const updatedEmployee = await prisma.employee.update({
+    const updatedEmployee = await prisma.employees.update({
       where: { id },
       data: dataToUpdate,
       select: {
         id: true,
-        employeeId: true,
-        firstName: true,
-        lastName: true,
+        employee_id: true,
+        first_name: true,
+        last_name: true,
         email: true,
-        position: true,
-        department: true,
-        departmentId: true,
-        teamData: true,
-        teamId: true,
-        hireDate: true,
-        role: true,
-        isActive: true,
+        position_id: true,
+        position_level_id: true,
+        position_title: true,
+        departments: true,
+        department_id: true,
+        teams: true,
+        team_id: true,
+        hire_date: true,
+        role_id: true,
+        roles: true,
+        is_active: true,
         image: true,
-        createdAt: true,
-        updatedAt: true,
+        created_at: true,
+        updated_at: true,
       },
     });
 
@@ -246,7 +297,7 @@ export async function PUT(req, { params }) {
       message: 'อัปเดตข้อมูลพนักงานสำเร็จ'
     });
   } catch (error) {
-    console.error(`Error in PUT /api/employees/${params?.id}:`, error);
+    console.error(`Error in PUT /api/employees/${params?.id || 'unknown'}:`, error);
     return NextResponse.json({ 
       error: true,
       message: 'เกิดข้อผิดพลาดในการอัปเดตข้อมูลพนักงาน',
@@ -267,20 +318,23 @@ export async function DELETE(req, { params }) {
       }, { status: 401 });
     }
 
-    // เฉพาะ admin ที่สามารถลบพนักงานได้
-    if (!hasPermission(session.user, 'employees.delete')) {
-      return NextResponse.json({ 
-        error: true,
-        message: 'คุณไม่มีสิทธิ์ลบพนักงาน' 
-      }, { status: 403 });
-    }
-
     const resolvedParams = await params;
     const id = resolvedParams.id;
 
+    // ตรวจสอบว่าผู้ใช้มีสิทธิ์ในการลบข้อมูล
+    if (!hasPermission(session.user, 'employees.delete')) {
+      return NextResponse.json({ 
+        error: true, 
+        message: 'คุณไม่มีสิทธิ์ในการลบข้อมูลพนักงาน' 
+      }, { status: 403 });
+    }
+
     // ตรวจสอบว่ามีพนักงานที่ต้องการลบหรือไม่
-    const employee = await prisma.employee.findUnique({
+    const employee = await prisma.employees.findUnique({
       where: { id },
+      include: {
+        roles: true
+      }
     });
 
     if (!employee) {
@@ -290,42 +344,58 @@ export async function DELETE(req, { params }) {
       }, { status: 404 });
     }
 
-    // ตรวจสอบว่ามีข้อมูลการลาหรือการทำงานล่วงเวลาที่เกี่ยวข้องหรือไม่
-    const relatedRecords = await prisma.$transaction([
-      prisma.leave.count({ where: { OR: [{ employeeId: id }, { approvedById: id }] } }),
-      prisma.overtime.count({ where: { OR: [{ employeeId: id }, { approvedById: id }] } }),
-    ]);
-
-    const hasRelatedRecords = relatedRecords[0] > 0 || relatedRecords[1] > 0;
-
-    if (hasRelatedRecords) {
-      // ถ้ามีข้อมูลที่เกี่ยวข้อง ให้ทำ soft delete โดยการอัปเดตสถานะเป็นไม่ใช้งาน
-      await prisma.employee.update({
-        where: { id },
-        data: { isActive: false },
-      });
-
-      return NextResponse.json({
-        success: true,
-        message: 'อัปเดตสถานะพนักงานเป็นไม่ใช้งานเรียบร้อยแล้ว'
-      });
+    // ห้ามลบข้อมูลตัวเอง
+    if (employee.id === session.user.id) {
+      return NextResponse.json({ 
+        error: true,
+        message: 'ไม่สามารถลบบัญชีของตัวเองได้' 
+      }, { status: 403 });
     }
 
-    // ถ้าไม่มีข้อมูลที่เกี่ยวข้อง ให้ลบพนักงานออกจากระบบ
-    await prisma.employee.delete({
+    // ผู้ใช้ที่ไม่ใช่ admin หรือไม่มีสิทธิ์ employees.delete.all จะลบได้เฉพาะพนักงานในทีมตัวเองเท่านั้น
+    const isAdmin = await prisma.employees.findFirst({
+      where: {
+        id: session.user.id,
+        roles: {
+          code: 'ADMIN'
+        }
+      }
+    });
+    
+    if (!isAdmin && !hasPermission(session.user, 'employees.delete.all')) {
+      // ผู้ใช้ที่ไม่ใช่ admin ห้ามลบ admin
+      if (employee.roles?.code?.toUpperCase() === 'ADMIN') {
+        return NextResponse.json({ 
+          error: true,
+          message: 'คุณไม่มีสิทธิ์ในการลบข้อมูลของผู้ดูแลระบบ' 
+        }, { status: 403 });
+      }
+
+      // ถ้าไม่ใช่ admin และพยายามลบคนนอกทีม
+      if (hasPermission(session.user, 'employees.delete.teams') && 
+          session.user.teamId !== employee.team_id) {
+        return NextResponse.json({ 
+          error: true,
+          message: 'คุณไม่มีสิทธิ์ในการลบข้อมูลพนักงานนอกทีมของคุณ' 
+        }, { status: 403 });
+      }
+    }
+
+    // ลบข้อมูลพนักงาน
+    await prisma.employees.delete({
       where: { id },
     });
 
     return NextResponse.json({
       success: true,
-      message: 'ลบพนักงานเรียบร้อยแล้ว'
+      message: 'ลบข้อมูลพนักงานสำเร็จ'
     });
   } catch (error) {
-    console.error(`Error in DELETE /api/employees/${params?.id}:`, error);
+    console.error(`Error in DELETE /api/employees/${params?.id || 'unknown'}:`, error);
     return NextResponse.json({ 
       error: true,
-      message: 'เกิดข้อผิดพลาดในการลบพนักงาน',
-      details: error.message
+      message: 'เกิดข้อผิดพลาดในการลบข้อมูลพนักงาน',
+      details: error.message 
     }, { status: 500 });
   }
 } 

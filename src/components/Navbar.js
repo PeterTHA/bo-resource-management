@@ -48,6 +48,7 @@ export default function Navbar() {
     { href: '/overtime', label: 'ทำงานล่วงเวลา', icon: <FiClock className="w-5 h-5" /> },
     { href: '/reports', label: 'รายงาน', icon: <FiBarChart2 className="w-5 h-5" /> },
     { href: '/employee-calendar', label: 'ปฏิทินพนักงาน', icon: <FiCalendar className="w-5 h-5" /> },
+    { href: '/user-access', label: 'จัดการสิทธิ์', icon: <FiUsers className="w-5 h-5" /> },
   ];
 
   return (
@@ -89,7 +90,7 @@ export default function Navbar() {
                 >
                   <span className="sr-only">เปิดเมนูผู้ใช้</span>
                   <div className="h-8 w-8 rounded-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center text-primary-600 dark:text-primary-300">
-                    {session?.user?.firstName?.charAt(0) || session?.user?.name?.charAt(0) || <FiUser />}
+                    {session?.user?.first_name?.charAt(0) || session?.user?.name?.charAt(0) || <FiUser />}
                   </div>
                 </button>
 
@@ -98,7 +99,7 @@ export default function Navbar() {
                     <div className="py-1">
                       <div className="px-4 py-2">
                         <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                          {session.user.firstName} {session.user.lastName}
+                          {session.user.first_name} {session.user.last_name}
                         </p>
                         <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                           {session.user.email}

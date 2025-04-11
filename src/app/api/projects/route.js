@@ -15,24 +15,24 @@ export async function GET(req) {
     }
 
     // ดึงข้อมูลโปรเจคพร้อม creator และ members
-    const projects = await prisma.project.findMany({
+    const projects = await prisma.projects.findMany({
       include: {
-        creator: {
+        employees: {
           select: {
             id: true,
-            firstName: true,
-            lastName: true,
+            first_name: true,
+            last_name: true,
             position: true,
             image: true
           }
         },
         members: {
           include: {
-            employee: {
+            employees: {
               select: {
                 id: true,
-                firstName: true,
-                lastName: true,
+                first_name: true,
+                last_name: true,
                 position: true,
                 image: true
               }
@@ -42,7 +42,7 @@ export async function GET(req) {
         }
       },
       orderBy: {
-        createdAt: 'desc'
+        created_at: 'desc'
       }
     });
 
@@ -71,7 +71,7 @@ export async function POST(req) {
     }
 
     const body = await req.json();
-    const { name, code, description, startDate, endDate, status, priority } = body;
+    const { name, code, description, start_date, end_date, status, priority } = body;
 
     // ตรวจสอบว่าข้อมูลครบถ้วนหรือไม่
     if (!name || !code) {
@@ -82,7 +82,7 @@ export async function POST(req) {
     }
 
     // ตรวจสอบว่ามีรหัสโปรเจคซ้ำหรือไม่
-    const existingProject = await prisma.project.findFirst({
+    const existingProject = await prisma.projects.findFirst({
       where: {
         code
       }
@@ -96,25 +96,23 @@ export async function POST(req) {
     }
 
     // สร้างโปรเจคใหม่
-    const project = await prisma.project.create({
+    const project = await prisma.projects.create({
       data: {
         name,
         code,
         description,
-        startDate: startDate ? new Date(startDate) : null,
-        endDate: endDate ? new Date(endDate) : null,
+        start_date: start_date ? new Date(start_date) : null,
+        end_date: end_date ? new Date(end_date) : null,
         status: status || 'active',
         priority: priority || 'medium',
-        creator: {
-          connect: { id: session.user.id }
-        }
+        created_by_id: session.user.id
       },
       include: {
-        creator: {
+        employees: {
           select: {
             id: true,
-            firstName: true,
-            lastName: true,
+            first_name: true,
+            last_name: true,
             position: true,
             image: true
           }
@@ -123,10 +121,10 @@ export async function POST(req) {
     });
 
     // บันทึก activity log
-    await prisma.projectActivityLog.create({
+    await prisma.project_activity_logs.create({
       data: {
-        projectId: project.id,
-        employeeId: session.user.id,
+        project_id: project.id,
+        employee_id: session.user.id,
         action: 'create_project',
         details: {
           projectName: project.name,
@@ -140,7 +138,7 @@ export async function POST(req) {
       data: project
     });
   } catch (error) {
-    console.error('Error creating project:', error);
+    console.error('Error creating projects:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to create project' },
       { status: 500 }

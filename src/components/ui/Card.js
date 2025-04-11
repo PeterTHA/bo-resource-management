@@ -16,6 +16,14 @@ export function CardTitle({ children, className = "" }) {
   );
 }
 
+export function CardDescription({ children, className = "" }) {
+  return (
+    <p className={`text-sm text-muted-foreground ${className}`}>
+      {children}
+    </p>
+  );
+}
+
 export function CardHeader({ children, title, subtitle, icon, className = "" }) {
   return (
     <div 

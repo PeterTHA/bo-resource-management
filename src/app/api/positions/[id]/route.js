@@ -29,10 +29,10 @@ export async function PUT(request, { params }) {
     }
 
     // ตรวจสอบว่ามีรหัสซ้ำหรือไม่ (ยกเว้นตัวเอง)
-    const existingPosition = await prisma.position.findFirst({
+    const existingPosition = await prisma.positions.findFirst({
       where: {
         code,
-        isActive: true,
+        is_active: true,
         id: { not: id }
       }
     });
@@ -44,7 +44,7 @@ export async function PUT(request, { params }) {
       );
     }
 
-    const position = await prisma.position.update({
+    const position = await prisma.positions.update({
       where: { id },
       data: {
         name,
@@ -78,9 +78,9 @@ export async function DELETE(request, { params }) {
 
     const id = params.id;
 
-    const position = await prisma.position.update({
+    const position = await prisma.positions.update({
       where: { id },
-      data: { isActive: false }
+      data: { is_active: false }
     });
 
     return NextResponse.json({ success: true, data: position });

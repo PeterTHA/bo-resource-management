@@ -16,7 +16,7 @@ export async function GET() {
       }, { status: 401 });
     }
 
-    const departments = await prisma.department.findMany({
+    const departments = await prisma.departments.findMany({
       orderBy: { code: 'asc' },
     });
 
@@ -58,7 +58,7 @@ export async function POST(req) {
     }
 
     // ตรวจสอบว่ามีรหัสแผนกซ้ำหรือไม่
-    const existingDepartment = await prisma.department.findFirst({
+    const existingDepartment = await prisma.departments.findFirst({
       where: { 
         OR: [
           { code },
@@ -75,7 +75,7 @@ export async function POST(req) {
     }
 
     // สร้างแผนกใหม่
-    const newDepartment = await prisma.department.create({
+    const newDepartment = await prisma.departments.create({
       data: {
         code,
         name,

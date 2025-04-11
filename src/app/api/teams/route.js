@@ -1,36 +1,60 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db-prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/db-prisma';
+import { generateUuid } from '@/lib/generate-uuid';
 
-// GET - ดึงข้อมูลทีมทั้งหมด
+// ดึงรายการทีมทั้งหมด
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
-    
-    // ตรวจสอบว่ามีสิทธิ์ในการดูข้อมูลหรือไม่
     if (!session) {
-      return NextResponse.json({ 
-        error: true, 
-        message: 'ไม่ได้รับอนุญาต' 
-      }, { status: 401 });
+      return NextResponse.json(
+        { success: false, message: 'Unauthorized' },
+        { status: 401 }
+      );
     }
 
-    const teams = await prisma.team.findMany({
-      orderBy: { code: 'asc' },
+    // ดึงข้อมูลทีม
+    const teams = await prisma.teams.findMany({
+      orderBy: {
+        name: 'asc'
+      },
+      include: {
+        employees: {
+          select: {
+            id: true,
+            first_name: true,
+            last_name: true,
+            position_id: true,
+            positions: true,
+            role_id: true,
+            roles: true,
+          }
+        }
+      }
     });
+
+    // แปลงข้อมูลให้อยู่ในรูปแบบที่เหมาะสม
+    const transformedTeams = teams.map(team => ({
+      ...team,
+      employees: team.employees.map(employee => ({
+        ...employee,
+        position: employee.positions?.code || null,
+        role: employee.roles?.code || null
+      }))
+    }));
 
     return NextResponse.json({
       success: true,
-      data: teams,
-      message: 'ดึงข้อมูลทีมสำเร็จ'
+      data: transformedTeams,
     });
   } catch (error) {
-    console.error('GET /api/teams error:', error);
-    return NextResponse.json({ 
-      error: true, 
-      message: 'เกิดข้อผิดพลาดในการดึงข้อมูลทีม' 
-    }, { status: 500 });
+    console.error('Error fetching teams:', error);
+    return NextResponse.json(
+      { success: false, message: error.message },
+      { status: 500 }
+    );
   }
 }
 
@@ -38,60 +62,61 @@ export async function GET() {
 export async function POST(req) {
   try {
     const session = await getServerSession(authOptions);
-    
-    // ตรวจสอบว่ามีสิทธิ์ admin หรือไม่
-    if (!session || session.user.role !== 'admin') {
-      return NextResponse.json({ 
-        error: true, 
-        message: 'ไม่ได้รับอนุญาต - เฉพาะ admin เท่านั้น' 
-      }, { status: 403 });
+    if (!session) {
+      return NextResponse.json(
+        { success: false, message: 'Unauthorized' },
+        { status: 401 }
+      );
     }
 
-    const { code, name, description } = await req.json();
+    const { name, code, description } = await req.json();
 
-    // ตรวจสอบข้อมูลที่จำเป็น
-    if (!code || !name) {
-      return NextResponse.json({ 
-        error: true, 
-        message: 'กรุณาระบุรหัสทีมและชื่อทีม' 
-      }, { status: 400 });
+    // ตรวจสอบข้อมูล
+    if (!name || !code) {
+      return NextResponse.json(
+        { success: false, message: 'Name and code are required' },
+        { status: 400 }
+      );
     }
 
-    // ตรวจสอบว่ามีรหัสทีมซ้ำหรือไม่
-    const existingTeam = await prisma.team.findFirst({
-      where: { 
+    // ตรวจสอบการซ้ำ
+    const existingTeam = await prisma.teams.findFirst({
+      where: {
         OR: [
-          { code },
-          { name }
+          { name: { equals: name, mode: 'insensitive' } },
+          { code: { equals: code, mode: 'insensitive' } }
         ]
       }
     });
 
     if (existingTeam) {
-      return NextResponse.json({ 
-        error: true, 
-        message: 'รหัสทีมหรือชื่อทีมนี้มีอยู่ในระบบแล้ว' 
-      }, { status: 409 });
+      return NextResponse.json(
+        { success: false, message: 'Team with this name or code already exists' },
+        { status: 409 }
+      );
     }
 
     // สร้างทีมใหม่
-    const newTeam = await prisma.team.create({
+    const newTeam = await prisma.teams.create({
       data: {
-        code,
+        id: generateUuid(),
         name,
+        code,
         description,
-      },
+        created_at: new Date(),
+        updated_at: new Date()
+      }
     });
 
     return NextResponse.json({
+      success: true,
       data: newTeam,
-      message: 'สร้างทีมใหม่สำเร็จ'
-    }, { status: 201 });
+    });
   } catch (error) {
-    console.error('POST /api/teams error:', error);
-    return NextResponse.json({ 
-      error: true, 
-      message: 'เกิดข้อผิดพลาดในการสร้างทีม' 
-    }, { status: 500 });
+    console.error('Error creating teams:', error);
+    return NextResponse.json(
+      { success: false, message: error.message },
+      { status: 500 }
+    );
   }
 } 

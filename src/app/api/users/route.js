@@ -14,39 +14,39 @@ export async function GET(request) {
     const role = searchParams.get('role');
 
     const where = {
-      isActive: true,
+      is_active: true,
       ...(role && { role })
     };
 
-    const users = await prisma.employee.findMany({
+    const users = await prisma.employees.findMany({
       where,
       select: {
         id: true,
-        employeeId: true,
-        firstName: true,
-        lastName: true,
+        employee_id: true,
+        first_name: true,
+        last_name: true,
         email: true,
         role: true,
         position: true,
-        positionLevel: true,
-        departmentId: true,
-        teamId: true,
+        position_level: true,
+        department_id: true,
+        team_id: true,
       },
       orderBy: {
-        firstName: 'asc'
+        first_name: 'asc'
       }
     });
 
     // แปลงข้อมูลให้เหมาะสมกับการแสดงผล
     const formattedUsers = users.map(user => ({
       id: user.id,
-      name: `${user.firstName} ${user.lastName}`,
+      name: `${user.first_name} ${user.last_name}`,
       email: user.email,
       role: user.role,
       position: user.position,
-      positionLevel: user.positionLevel,
-      departmentId: user.departmentId,
-      teamId: user.teamId,
+      position_level: user.position_level,
+      department_id: user.department_id,
+      team_id: user.team_id,
     }));
 
     return NextResponse.json(formattedUsers);

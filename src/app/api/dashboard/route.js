@@ -30,7 +30,7 @@ export async function GET(req) {
         todayOvertimes: todayOvertimes || [],
         user: {
           id: session.user.id,
-          name: `${session.user.firstName} ${session.user.lastName}`,
+          name: `${session.user.first_name} ${session.user.last_name}`,
           role: session.user.role
         }
       }

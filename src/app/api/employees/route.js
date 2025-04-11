@@ -34,58 +34,82 @@ export async function GET(req) {
     // สร้างเงื่อนไขการค้นหา
     const where = {};
     if (!includeInactive) {
-      where.isActive = true;
+      where.is_active = true;
     }
     
     // ถ้าไม่ใช่ admin จะเห็นเฉพาะพนักงานในทีมเดียวกัน หรือตัวเอง
     // เว้นแต่จะมีการระบุ includeAll=true
-    if (session.user.role !== 'admin' && !includeAll) {
-      // ทุกคนที่ไม่ใช่ admin จะไม่เห็นข้อมูลของ admin
-      where.role = { not: 'admin' };
+    if (!includeAll) {
+      // เช็คว่าผู้ใช้เป็น admin หรือไม่
+      const isAdmin = session.user.roles?.code?.toUpperCase() === 'ADMIN' || 
+                     session.user.role?.toUpperCase() === 'ADMIN' ||
+                     hasPermission(session.user, 'employees.view.all');
       
-      // ถ้าเป็น lead หรือ supervisor ให้ดูเฉพาะทีมตัวเอง
-      if ((session.user.role === 'lead' || session.user.role === 'supervisor') && hasPermission(session.user, 'employees.view.team')) {
-        where.teamId = session.user.teamId;
-      } 
-      // ถ้าเป็น staff หรือ outsource ที่ไม่มีสิทธิ์ดูทีม ให้ดูแค่ตัวเอง
-      else if (!hasPermission(session.user, 'employees.view.team')) {
-        where.id = session.user.id;
+      if (!isAdmin) {
+        // ทุกคนที่ไม่ใช่ admin จะไม่เห็นข้อมูลของ admin
+        where.roles = {
+          code: {
+            not: 'ADMIN'
+          }
+        };
+        
+        // ถ้าเป็น lead หรือ supervisor ให้ดูเฉพาะทีมตัวเอง
+        if (hasPermission(session.user, 'employees.view.teams')) {
+          where.team_id = session.user.team_id;
+        } 
+        // ถ้าเป็น staff หรือ outsource ที่ไม่มีสิทธิ์ดูทีม ให้ดูแค่ตัวเอง
+        else if (!hasPermission(session.user, 'employees.view.teams')) {
+          where.id = session.user.id;
+        }
       }
     }
     // หมายเหตุ: กรณีเป็น admin จะไม่มีเงื่อนไข where พิเศษ ทำให้สามารถดูข้อมูลทั้งหมดได้ (รวมถึงข้อมูลของ admin เอง)
 
     // ดึงข้อมูลพนักงาน
-    const employees = await prisma.employee.findMany({
+    const employees = await prisma.employees.findMany({
       where,
-      orderBy: { employeeId: 'asc' },
+      orderBy: { employee_id: 'asc' },
       select: {
         id: true,
-        employeeId: true,
-        firstName: true,
-        lastName: true,
+        employee_id: true,
+        first_name: true,
+        last_name: true,
         email: true,
-        position: true,
-        positionLevel: true,
-        positionTitle: true,
-        department: true,
-        departmentId: true,
-        teamData: true,
-        teamId: true,
-        hireDate: true,
-        role: true,
-        isActive: true,
+        position_id: true,
+        position_level_id: true,
+        position_title: true,
+        departments: true,
+        department_id: true,
+        teams: true,
+        team_id: true,
+        hire_date: true,
+        role_id: true,
+        roles: true,
+        is_active: true,
         image: true,
-        createdAt: true,
-        updatedAt: true,
+        created_at: true,
+        updated_at: true,
         gender: true,
-        birthDate: true,
-        phoneNumber: true,
+        birth_date: true,
+        phone_number: true,
+        positions: true,
+        position_levels: true,
       },
     });
 
+    // แปลงข้อมูลให้เข้ากับรูปแบบเดิมที่ client ใช้
+    const transformedEmployees = employees.map(employee => ({
+      ...employee,
+      position: employee.positions?.code || null,
+      position_level: employee.position_levels?.code || null,
+      role: employee.roles?.code || null,
+      roleName: employee.roles?.name || null,
+      roleNameTh: employee.roles?.name_th || null,
+    }));
+
     // ส่งข้อมูลกลับในรูปแบบ { data: [...] } เพื่อให้สอดคล้องกับการใช้งานใน client-side
     return NextResponse.json({
-      data: employees,
+      data: transformedEmployees,
       message: 'ดึงข้อมูลพนักงานสำเร็จ',
     });
   } catch (error) {
@@ -119,7 +143,7 @@ export async function POST(req) {
     const employeeData = await req.json();
     
     // ตรวจสอบข้อมูลที่จำเป็น
-    if (!employeeData.employeeId || !employeeData.firstName || !employeeData.lastName || !employeeData.email || !employeeData.position) {
+    if (!employeeData.employee_id || !employeeData.first_name || !employeeData.last_name || !employeeData.email) {
       return NextResponse.json(
         { error: 'กรุณากรอกข้อมูลให้ครบถ้วน' },
         { status: 400 }
@@ -127,7 +151,7 @@ export async function POST(req) {
     }
 
     // ตรวจสอบอีเมลซ้ำ
-    const existingEmail = await prisma.employee.findUnique({
+    const existingEmail = await prisma.employees.findUnique({
       where: { email: employeeData.email },
     });
 
@@ -142,15 +166,15 @@ export async function POST(req) {
     }
     
     // ตรวจสอบรหัสพนักงานซ้ำ
-    const existingEmployeeId = await prisma.employee.findUnique({
-      where: { employeeId: employeeData.employeeId },
+    const existingEmployeeId = await prisma.employees.findUnique({
+      where: { employee_id: employeeData.employee_id },
     });
 
     if (existingEmployeeId) {
       return NextResponse.json(
         {
           error: true,
-          message: `รหัสพนักงาน ${employeeData.employeeId} มีอยู่ในระบบแล้ว`,
+          message: `รหัสพนักงาน ${employeeData.employee_id} มีอยู่ในระบบแล้ว`,
         },
         { status: 400 }
       );
@@ -163,49 +187,52 @@ export async function POST(req) {
     const hashedPassword = await hash(randomPassword, 10);
     
     // ตรวจสอบว่ามี departmentId หรือไม่ 
-    const departmentId = employeeData.departmentId || null;
+    const departmentId = employeeData.department_id || null;
 
     // สร้างพนักงานใหม่
-    const newEmployee = await prisma.employee.create({
+    const newEmployee = await prisma.employees.create({
       data: {
-        employeeId: employeeData.employeeId,
-        firstName: employeeData.firstName,
-        lastName: employeeData.lastName,
+        id: generateUuid(),
+        employee_id: employeeData.employee_id,
+        first_name: employeeData.first_name,
+        last_name: employeeData.last_name,
         email: employeeData.email,
         password: hashedPassword,
-        position: employeeData.position,
-        positionLevel: employeeData.positionLevel || null,
-        positionTitle: employeeData.positionTitle || null,
-        departmentId: departmentId,
-        teamId: employeeData.teamId || null,
-        role: employeeData.role || 'staff',
-        hireDate: employeeData.hireDate ? new Date(employeeData.hireDate) : new Date(),
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        position_id: employeeData.position_id,
+        position_level_id: employeeData.position_level_id,
+        position_title: employeeData.position_title,
+        department_id: departmentId,
+        team_id: employeeData.team_id || null,
+        role_id: employeeData.role_id || null,
+        hire_date: employeeData.hire_date ? new Date(employeeData.hire_date) : new Date(),
+        is_active: employeeData.is_active !== undefined ? employeeData.is_active : true,
         image: employeeData.image || null,
         gender: employeeData.gender || 'male',
-        birthDate: employeeData.birthDate ? new Date(employeeData.birthDate) : null,
-        phoneNumber: employeeData.phoneNumber || null,
+        birth_date: employeeData.birth_date ? new Date(employeeData.birth_date) : null,
+        phone_number: employeeData.phone_number || null,
+        updated_at: new Date(),
       },
       include: {
-        department: true,
-        teamData: true,
+        departments: true,
+        teams: true,
+        roles: true,
+        positions: true,
+        position_levels: true,
       },
     });
 
     // ส่งอีเมลแจ้งรหัสผ่านให้พนักงานใหม่
     const emailResult = await sendWelcomeEmail({
       to: newEmployee.email,
-      name: `${newEmployee.firstName} ${newEmployee.lastName}`,
-      firstName: newEmployee.firstName,
-      lastName: newEmployee.lastName,
-      employeeId: newEmployee.employeeId,
-      position: newEmployee.position,
-      department: newEmployee.department?.name,
-      team: newEmployee.teamData?.name,
+      name: `${newEmployee.first_name} ${newEmployee.last_name}`,
+      first_name: newEmployee.first_name,
+      last_name: newEmployee.last_name,
+      employee_id: newEmployee.employee_id,
+      position: newEmployee.position_title,
+      departments: newEmployee.departments?.name,
+      teams: newEmployee.teams?.name,
       password: randomPassword,
-      role: newEmployee.role,
+      role: newEmployee.role_id,
     });
 
     // ส่งข้อมูลกลับในรูปแบบ { data: [...] } เพื่อให้สอดคล้องกับการใช้งานใน client-side

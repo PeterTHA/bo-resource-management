@@ -115,7 +115,7 @@ export async function PUT(request, { params }) {
     } else if (data.action === 'request_cancel') {
       // ข้อมูลสำหรับการขอยกเลิก
       const cancelData = {
-        employeeId: session.user.id,
+        employee_id: session.user.id,
         reason: data.reason || null,
       };
       
@@ -192,7 +192,7 @@ export async function PUT(request, { params }) {
       );
     }
   } catch (error) {
-    console.error('Error updating overtime:', error);
+    console.error('Error updating overtimes:', error);
     return NextResponse.json(
       { success: false, message: error.message },
       { status: 500 }
@@ -226,7 +226,7 @@ export async function DELETE(request, { params }) {
     // ตรวจสอบสิทธิ์การเข้าถึง
     // - พนักงานสามารถลบข้อมูลการทำงานล่วงเวลาของตัวเองได้เฉพาะเมื่อสถานะเป็น "รออนุมัติ"
     if ((session.user.role === 'permanent' || session.user.role === 'temporary' || session.user.role === 'supervisor')) {
-      if (session.user.id !== overtime.data.employeeId) {
+      if (session.user.id !== overtime.data.employee_id) {
         return NextResponse.json(
           { success: false, message: 'ไม่มีสิทธิ์ลบข้อมูลการทำงานล่วงเวลาของผู้อื่น' },
           { status: 403 }

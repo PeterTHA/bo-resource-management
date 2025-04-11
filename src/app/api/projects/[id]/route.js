@@ -16,25 +16,25 @@ export async function GET(req, { params }) {
     
     const { id } = await Promise.resolve(params);
     
-    const project = await prisma.project.findUnique({
+    const project = await prisma.projects.findUnique({
       where: { id },
       include: {
-        creator: {
+        employees: {
           select: {
             id: true,
-            firstName: true,
-            lastName: true,
+            first_name: true,
+            last_name: true,
             position: true,
             image: true
           }
         },
         members: {
           include: {
-            employee: {
+            employees: {
               select: {
                 id: true,
-                firstName: true,
-                lastName: true,
+                first_name: true,
+                last_name: true,
                 position: true,
                 image: true
               }
@@ -44,14 +44,14 @@ export async function GET(req, { params }) {
         },
         activityLogs: {
           orderBy: {
-            createdAt: 'desc'
+            created_at: 'desc'
           },
           include: {
-            employee: {
+            employees: {
               select: {
                 id: true,
-                firstName: true,
-                lastName: true,
+                first_name: true,
+                last_name: true,
                 image: true
               }
             }
@@ -73,7 +73,7 @@ export async function GET(req, { params }) {
       data: project
     });
   } catch (error) {
-    console.error('Error getting project:', error);
+    console.error('Error getting projects:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to get project' },
       { status: 500 }
@@ -94,10 +94,10 @@ export async function PUT(req, { params }) {
     
     const { id } = await Promise.resolve(params);
     const body = await req.json();
-    const { name, code, description, startDate, endDate, status, priority } = body;
+    const { name, code, description, start_date, end_date, status, priority } = body;
     
     // ตรวจสอบว่าโปรเจคมีอยู่จริงหรือไม่
-    const existingProject = await prisma.project.findUnique({
+    const existingProject = await prisma.projects.findUnique({
       where: { id }
     });
     
@@ -118,7 +118,7 @@ export async function PUT(req, { params }) {
     
     // ตรวจสอบการซ้ำของรหัสโปรเจคถ้ามีการเปลี่ยนแปลง
     if (code !== existingProject.code) {
-      const duplicateCode = await prisma.project.findFirst({
+      const duplicateCode = await prisma.projects.findFirst({
         where: {
           code,
           id: { not: id }
@@ -134,33 +134,33 @@ export async function PUT(req, { params }) {
     }
     
     // อัพเดทโปรเจค
-    const updatedProject = await prisma.project.update({
+    const updatedProject = await prisma.projects.update({
       where: { id },
       data: {
         name,
         code,
         description,
-        startDate: startDate ? new Date(startDate) : null,
-        endDate: endDate ? new Date(endDate) : null,
+        start_date: startDate ? new Date(start_date : null,
+        end_date: endDate ? new Date(end_date : null,
         status,
         priority
       },
       include: {
-        creator: {
+        employees: {
           select: {
             id: true,
-            firstName: true,
-            lastName: true
+            first_name: true,
+            last_name: true
           }
         }
       }
     });
     
     // บันทึก activity log
-    await prisma.projectActivityLog.create({
+    await prisma.projects.ctivityLog.create({
       data: {
-        projectId: id,
-        employeeId: session.user.id,
+        project_id: id,
+        employee_id: session.user.id,
         action: 'update_project',
         details: {
           projectName: updatedProject.name,
@@ -174,7 +174,7 @@ export async function PUT(req, { params }) {
       data: updatedProject
     });
   } catch (error) {
-    console.error('Error updating project:', error);
+    console.error('Error updating projects:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to update project' },
       { status: 500 }
@@ -196,7 +196,7 @@ export async function DELETE(req, { params }) {
     const { id } = await Promise.resolve(params);
     
     // ตรวจสอบว่าโปรเจคมีอยู่จริงหรือไม่
-    const existingProject = await prisma.project.findUnique({
+    const existingProject = await prisma.projects.findUnique({
       where: { id },
       include: {
         members: true
@@ -219,17 +219,17 @@ export async function DELETE(req, { params }) {
     }
     
     // ลบสมาชิกทั้งหมดของโปรเจค
-    await prisma.projectMember.deleteMany({
-      where: { projectId: id }
+    await prisma.projects.ember.deleteMany({
+      where: { project_id: id }
     });
     
     // ลบบันทึกกิจกรรมทั้งหมดของโปรเจค
-    await prisma.projectActivityLog.deleteMany({
-      where: { projectId: id }
+    await prisma.projects.ctivityLog.deleteMany({
+      where: { project_id: id }
     });
     
     // ลบโปรเจค
-    await prisma.project.delete({
+    await prisma.projects.delete({
       where: { id }
     });
     
@@ -238,7 +238,7 @@ export async function DELETE(req, { params }) {
       message: 'Project deleted successfully'
     });
   } catch (error) {
-    console.error('Error deleting project:', error);
+    console.error('Error deleting projects:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to delete project' },
       { status: 500 }
@@ -274,23 +274,23 @@ function determineChanges(oldProject, newProject) {
   }
   
   // แปลงเป็น ISO string เพื่อเปรียบเทียบ
-  const oldStartDate = oldProject.startDate ? new Date(oldProject.startDate).toISOString() : null;
-  const newStartDate = newProject.startDate ? new Date(newProject.startDate).toISOString() : null;
+  const oldStartDate = oldProject.start_date ? new Date(oldProject.start_date).toISOString() : null;
+  const newStartDate = newProject.start_date ? new Date(newProject.start_date).toISOString() : null;
   
   if (oldStartDate !== newStartDate) {
-    changes.startDate = { 
-      from: oldProject.startDate ? new Date(oldProject.startDate).toISOString().split('T')[0] : null, 
-      to: newProject.startDate ? new Date(newProject.startDate).toISOString().split('T')[0] : null 
+    changes.start_date = { 
+      from: oldProject.start_date ? new Date(oldProject.start_date).toISOString().split('T')[0] : null, 
+      to: newProject.start_date ? new Date(newProject.start_date).toISOString().split('T')[0] : null 
     };
   }
   
-  const oldEndDate = oldProject.endDate ? new Date(oldProject.endDate).toISOString() : null;
-  const newEndDate = newProject.endDate ? new Date(newProject.endDate).toISOString() : null;
+  const oldEndDate = oldProject.end_date ? new Date(oldProject.end_date).toISOString() : null;
+  const newEndDate = newProject.end_date ? new Date(newProject.end_date).toISOString() : null;
   
   if (oldEndDate !== newEndDate) {
-    changes.endDate = { 
-      from: oldProject.endDate ? new Date(oldProject.endDate).toISOString().split('T')[0] : null, 
-      to: newProject.endDate ? new Date(newProject.endDate).toISOString().split('T')[0] : null 
+    changes.end_date = { 
+      from: oldProject.end_date ? new Date(oldProject.end_date).toISOString().split('T')[0] : null, 
+      to: newProject.end_date ? new Date(newProject.end_date).toISOString().split('T')[0] : null 
     };
   }
   

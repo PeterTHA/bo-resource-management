@@ -19,15 +19,15 @@ export async function GET(req, { params }) {
     const resolvedParams = await params;
     const id = resolvedParams.id;
     
-    const department = await prisma.department.findUnique({
+    const department = await prisma.departments.findUnique({
       where: { id },
       include: {
         employees: {
           select: {
             id: true,
-            employeeId: true,
-            firstName: true,
-            lastName: true,
+            employee_id: true,
+            first_name: true,
+            last_name: true,
             email: true,
             position: true,
             role: true,
@@ -82,7 +82,7 @@ export async function PUT(req, { params }) {
     }
 
     // ตรวจสอบว่ามีแผนกที่ต้องการแก้ไขหรือไม่
-    const existingDepartment = await prisma.department.findUnique({
+    const existingDepartment = await prisma.departments.findUnique({
       where: { id }
     });
 
@@ -94,7 +94,7 @@ export async function PUT(req, { params }) {
     }
 
     // ตรวจสอบว่ามีรหัสแผนกหรือชื่อแผนกซ้ำกับรายการอื่นหรือไม่
-    const duplicateDepartment = await prisma.department.findFirst({
+    const duplicateDepartment = await prisma.departments.findFirst({
       where: { 
         OR: [
           { code },
@@ -112,7 +112,7 @@ export async function PUT(req, { params }) {
     }
 
     // อัปเดตข้อมูลแผนก
-    const updatedDepartment = await prisma.department.update({
+    const updatedDepartment = await prisma.departments.update({
       where: { id },
       data: {
         code,
@@ -151,7 +151,7 @@ export async function DELETE(req, { params }) {
     const id = resolvedParams.id;
 
     // ตรวจสอบว่ามีแผนกที่ต้องการลบหรือไม่
-    const existingDepartment = await prisma.department.findUnique({
+    const existingDepartment = await prisma.departments.findUnique({
       where: { id },
       include: { employees: true }
     });
@@ -172,7 +172,7 @@ export async function DELETE(req, { params }) {
     }
 
     // ลบแผนก
-    await prisma.department.delete({
+    await prisma.departments.delete({
       where: { id }
     });
 

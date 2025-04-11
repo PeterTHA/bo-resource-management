@@ -1,6 +1,15 @@
 import { PrismaClient } from '@prisma/client';
+import crypto from 'crypto';
 
+// สร้างอินสแตนซ์ PrismaClient แบบเรียบง่าย
 const prisma = new PrismaClient();
+
+// เพิ่มจัดการปิดการเชื่อมต่อเมื่อแอปปิด
+if (process.env.NODE_ENV !== 'production') {
+  // เฉพาะใน development mode
+  // ในโหมด production จะมีการจัดการการเชื่อมต่อโดยอัตโนมัติ
+  global.$prisma = prisma;
+}
 
 export { prisma };
 export default prisma;
@@ -10,12 +19,12 @@ export default prisma;
  */
 export async function getEmployees() {
   try {
-    const employees = await prisma.employee.findMany({
+    const employees = await prisma.employees.findMany({
       orderBy: {
-        createdAt: 'desc'
+        created_at: 'desc'
       },
       include: {
-        teamData: true
+        teams: true
       },
       select: undefined
     });
@@ -38,10 +47,10 @@ export async function getEmployees() {
  */
 export async function getEmployeeById(id) {
   try {
-    const employee = await prisma.employee.findUnique({
+    const employee = await prisma.employees.findUnique({
       where: { id },
       include: {
-        teamData: true
+        teams: true
       }
     });
     
@@ -61,23 +70,23 @@ export async function getEmployeeById(id) {
  */
 export async function getEmployeeByEmail(email) {
   try {
-    const employee = await prisma.employee.findUnique({
+    const employee = await prisma.employees.findUnique({
       where: { email },
       select: {
         id: true,
-        employeeId: true,
-        firstName: true,
-        lastName: true,
+        employee_id: true,
+        first_name: true,
+        last_name: true,
         email: true,
         password: true,
         position: true,
-        department: true,
-        hireDate: true,
+        departments: true,
+        hire_date: true,
         role: true,
-        isActive: true,
+        is_active: true,
         image: true,
-        createdAt: true,
-        updatedAt: true,
+        created_at: true,
+        updated_at: true,
       }
     });
     
@@ -97,7 +106,7 @@ export async function getEmployeeByEmail(email) {
  */
 export async function getTeams() {
   try {
-    const teams = await prisma.team.findMany({
+    const teams = await prisma.teams.findMany({
       orderBy: {
         name: 'asc',
       },
@@ -116,7 +125,7 @@ export async function getTeams() {
 export async function createEmployee(data) {
   try {
     // ตรวจสอบว่ามีอีเมลซ้ำหรือไม่
-    const existingEmployee = await prisma.employee.findUnique({
+    const existingEmployee = await prisma.employees.findUnique({
       where: { email: data.email },
     });
     
@@ -125,8 +134,8 @@ export async function createEmployee(data) {
     }
     
     // ตรวจสอบว่ามีรหัสพนักงานซ้ำหรือไม่
-    const existingEmployeeId = await prisma.employee.findUnique({
-      where: { employeeId: data.employeeId },
+    const existingEmployeeId = await prisma.employees.findUnique({
+      where: { employee_id: data.employee_id },
     });
     
     if (existingEmployeeId) {
@@ -134,20 +143,20 @@ export async function createEmployee(data) {
     }
     
     // สร้างพนักงานใหม่
-    const newEmployee = await prisma.employee.create({
+    const newEmployee = await prisma.employees.create({
       data: {
-        employeeId: data.employeeId,
-        firstName: data.firstName,
-        lastName: data.lastName,
+        employee_id: data.employee_id,
+        first_name: data.first_name,
+        last_name: data.last_name,
         email: data.email,
         password: data.password,
         position: data.position,
-        department: data.department,
-        teamId: data.teamId || null,
-        team: data.team || null,
-        hireDate: new Date(data.hireDate),
+        departments: data.departments,
+        team_id: data.team_id || null,
+        teams: data.teams || null,
+        hire_date: new Date(data.hire_date),
         role: data.role || 'employee',
-        isActive: data.isActive !== undefined ? data.isActive : true,
+        is_active: data.is_active !== undefined ? data.is_active : true,
         image: data.image || null,
       },
     });
@@ -157,7 +166,7 @@ export async function createEmployee(data) {
     
     return { success: true, data: employeeWithoutPassword };
   } catch (error) {
-    console.error('Error creating employee:', error);
+    console.error('Error creating employees:', error);
     return { success: false, message: error.message };
   }
 }
@@ -169,7 +178,7 @@ export async function updateEmployee(id, data) {
   try {
     // ตรวจสอบว่ามีอีเมลซ้ำหรือไม่ (ถ้ามีการเปลี่ยนอีเมล)
     if (data.email) {
-      const existingEmployee = await prisma.employee.findFirst({
+      const existingEmployee = await prisma.employees.findFirst({
         where: {
           email: data.email,
           id: { not: id },
@@ -182,10 +191,10 @@ export async function updateEmployee(id, data) {
     }
     
     // ตรวจสอบว่ามีรหัสพนักงานซ้ำหรือไม่ (ถ้ามีการเปลี่ยนรหัสพนักงาน)
-    if (data.employeeId) {
-      const existingEmployeeId = await prisma.employee.findFirst({
+    if (data.employee_id) {
+      const existingEmployeeId = await prisma.employees.findFirst({
         where: {
-          employeeId: data.employeeId,
+          employee_id: data.employee_id,
           id: { not: id },
         },
       });
@@ -199,37 +208,37 @@ export async function updateEmployee(id, data) {
     const updateData = {};
     
     // เพิ่มเฉพาะฟิลด์ที่ส่งมา
-    if (data.employeeId !== undefined) updateData.employeeId = data.employeeId;
-    if (data.firstName !== undefined) updateData.firstName = data.firstName;
-    if (data.lastName !== undefined) updateData.lastName = data.lastName;
+    if (data.employee_id !== undefined) updateData.employee_id = data.employee_id;
+    if (data.first_name !== undefined) updateData.first_name = data.first_name;
+    if (data.last_name !== undefined) updateData.last_name = data.last_name;
     if (data.email !== undefined) updateData.email = data.email;
     if (data.position !== undefined) updateData.position = data.position;
-    if (data.department !== undefined) updateData.department = data.department;
-    if (data.teamId !== undefined) updateData.teamId = data.teamId;
-    if (data.team !== undefined) updateData.team = data.team;
-    if (data.hireDate !== undefined) updateData.hireDate = new Date(data.hireDate);
+    if (data.departments !== undefined) updateData.departments = data.departments;
+    if (data.team_id !== undefined) updateData.team_id = data.team_id;
+    if (data.teams !== undefined) updateData.teams = data.teams;
+    if (data.hire_date !== undefined) updateData.hire_date = new Date(data.hire_date);
     if (data.role !== undefined) updateData.role = data.role;
-    if (data.isActive !== undefined) updateData.isActive = data.isActive;
+    if (data.is_active !== undefined) updateData.is_active = data.is_active;
     if (data.image !== undefined) updateData.image = data.image;
     
     // อัปเดตพนักงาน
-    const updatedEmployee = await prisma.employee.update({
+    const updatedEmployee = await prisma.employees.update({
       where: { id },
       data: updateData,
       select: {
         id: true,
-        employeeId: true,
-        firstName: true,
-        lastName: true,
+        employee_id: true,
+        first_name: true,
+        last_name: true,
         email: true,
         position: true,
-        department: true,
-        hireDate: true,
+        departments: true,
+        hire_date: true,
         role: true,
-        isActive: true,
+        is_active: true,
         image: true,
-        createdAt: true,
-        updatedAt: true,
+        created_at: true,
+        updated_at: true,
         password: false,
       },
     });
@@ -247,33 +256,33 @@ export async function updateEmployee(id, data) {
 export async function deleteEmployee(id) {
   try {
     // ตรวจสอบว่ามีการลาหรือการทำงานล่วงเวลาที่เกี่ยวข้องหรือไม่
-    const leaves = await prisma.leave.findMany({
-      where: { employeeId: id },
+    const leaves = await prisma.leaves.findMany({
+      where: { employee_id: id },
     });
     
-    const overtimes = await prisma.overtime.findMany({
-      where: { employeeId: id },
+    const overtimes = await prisma.overtimes.findMany({
+      where: { employee_id: id },
     });
     
     // ถ้ามีข้อมูลที่เกี่ยวข้อง ให้ทำการอัปเดตสถานะเป็นไม่ใช้งานแทนการลบ
     if (leaves.length > 0 || overtimes.length > 0) {
-      const updatedEmployee = await prisma.employee.update({
+      const updatedEmployee = await prisma.employees.update({
         where: { id },
-        data: { isActive: false },
+        data: { is_active: false },
         select: {
           id: true,
-          employeeId: true,
-          firstName: true,
-          lastName: true,
+          employee_id: true,
+          first_name: true,
+          last_name: true,
           email: true,
           position: true,
-          department: true,
-          hireDate: true,
+          departments: true,
+          hire_date: true,
           role: true,
-          isActive: true,
+          is_active: true,
           image: true,
-          createdAt: true,
-          updatedAt: true,
+          created_at: true,
+          updated_at: true,
         },
       });
       
@@ -285,7 +294,7 @@ export async function deleteEmployee(id) {
     }
     
     // ถ้าไม่มีข้อมูลที่เกี่ยวข้อง ให้ลบได้เลย
-    await prisma.employee.delete({
+    await prisma.employees.delete({
       where: { id },
     });
     
@@ -301,7 +310,7 @@ export async function deleteEmployee(id) {
  */
 export async function updateEmployeePassword(id, hashedPassword) {
   try {
-    await prisma.employee.update({
+    await prisma.employees.update({
       where: { id },
       data: { password: hashedPassword },
     });
@@ -315,150 +324,236 @@ export async function updateEmployeePassword(id, hashedPassword) {
 
 /**
  * ฟังก์ชันสำหรับดึงข้อมูลการลาทั้งหมด
- * @param {string} employeeId - รหัสพนักงานที่ต้องการดึงข้อมูล (ถ้าไม่ระบุจะดึงทั้งหมด)
- * @param {string} teamId - รหัสทีมที่ต้องการดึงข้อมูล (ใช้กรณีหัวหน้าทีมต้องการดูข้อมูลพนักงานในทีม)
  */
-export async function getLeaves(employeeId = null, teamId = null) {
+export async function getLeaves(options = {}) {
   try {
-    let whereClause = {};
+    const { employee_id, status, start_date, end_date } = options;
     
-    // ถ้ามีการระบุ employeeId จะดึงเฉพาะข้อมูลของพนักงานคนนั้น
-    if (employeeId) {
-      whereClause.employeeId = employeeId;
-    } 
-    // ถ้ามีการระบุ teamId จะดึงข้อมูลของพนักงานในทีมนั้น
-    else if (teamId) {
-      whereClause = {
-        employee: {
-          teamId: teamId
+    // สร้างเงื่อนไขการค้นหา
+    const whereCondition = {};
+    
+    // เพิ่มเงื่อนไขการค้นหาตาม ID พนักงาน
+    if (employee_id) {
+      whereCondition.employee_id = employee_id;
+    }
+    
+    // เพิ่มเงื่อนไขการค้นหาตามสถานะ
+    if (status) {
+      whereCondition.status = status;
+    }
+    
+    // เพิ่มเงื่อนไขการค้นหาตามช่วงวันที่
+    if (start_date && end_date) {
+      whereCondition.OR = [
+        {
+          start_date: {
+            gte: new Date(start_date),
+            lte: new Date(end_date)
+          }
+        },
+        {
+          end_date: {
+            gte: new Date(start_date),
+            lte: new Date(end_date)
+          }
+        },
+        {
+          AND: [
+            { start_date: { lte: new Date(start_date) } },
+            { end_date: { gte: new Date(end_date) } }
+          ]
         }
+      ];
+    } else if (start_date) {
+      whereCondition.start_date = {
+        gte: new Date(start_date)
+      };
+    } else if (end_date) {
+      whereCondition.end_date = {
+        lte: new Date(end_date)
       };
     }
     
-    const leaves = await prisma.leave.findMany({
-      where: whereClause,
-      orderBy: {
-        createdAt: 'desc'
-      },
+    // ดึงข้อมูลการลาพร้อมข้อมูลพนักงาน
+    const leaves = await prisma.leaves.findMany({
+      where: whereCondition,
       include: {
-        employee: {
+        employees: {
           select: {
             id: true,
-            employeeId: true,
-            firstName: true,
-            lastName: true,
+            employee_id: true,
+            first_name: true,
+            last_name: true,
             email: true,
             position: true,
-            department: true,
+            departments: true,
+            role: true,
             image: true,
-            teamId: true,
-            teamData: {
-              select: {
-                id: true,
-                name: true
-              }
-            }
+            team_id: true
           }
         },
-        approvals: {
+        leave_approvals: {
           orderBy: {
-            createdAt: 'desc'
+            created_at: 'desc'
           },
           include: {
-            employee: {
+            employees: {
               select: {
                 id: true,
-                firstName: true,
-                lastName: true,
+                first_name: true,
+                last_name: true,
                 position: true,
                 role: true
               }
             }
           }
         }
+      },
+      orderBy: {
+        created_at: 'desc'
       }
     });
     
-    // แปลงข้อมูลเพื่อความเข้ากันได้กับโค้ดเดิม
+    // แปลงข้อมูลให้อยู่ในรูปแบบที่ต้องการ
     const transformedLeaves = leaves.map(leave => {
-      // เรียงลำดับ approvals ตาม createdAt ใหม่ ให้ล่าสุดอยู่ก่อน
-      leave.approvals.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      // แปลงข้อมูลพนักงาน
+      const formattedEmployee = leave.employees ? {
+        id: leave.employees.id,
+        employeeId: leave.employees.employee_id,
+        firstName: leave.employees.first_name,
+        lastName: leave.employees.last_name,
+        email: leave.employees.email,
+        position: leave.employees.position,
+        departments: leave.employees.departments,
+        role: leave.employees.role,
+        image: leave.employees.image,
+        teamId: leave.employees.team_id
+      } : null;
+      
+      // แปลงข้อมูลประวัติการอนุมัติ
+      const formattedApprovals = leave.leave_approvals ? leave.leave_approvals.map(approval => {
+        const formattedApprovalEmployee = approval.employees ? {
+          id: approval.employees.id,
+          firstName: approval.employees.first_name,
+          lastName: approval.employees.last_name,
+          position: approval.employees.position,
+          role: approval.employees.role
+        } : null;
+        
+        return {
+          id: approval.id,
+          type: approval.type,
+          status: approval.status,
+          reason: approval.reason,
+          comment: approval.comment,
+          employeeId: approval.employee_id,
+          createdAt: approval.created_at,
+          updatedAt: approval.updated_at,
+          employees: formattedApprovalEmployee
+        };
+      }) : [];
       
       // ค้นหา approval ล่าสุดตามประเภท
-      const lastApproval = leave.approvals[0] || null;
-      const approveAction = leave.approvals.find(a => a.type === 'approve' && a.status === 'completed');
-      const rejectAction = leave.approvals.find(a => a.type === 'reject' && a.status === 'completed');
-      const requestCancelAction = leave.approvals.find(a => a.type === 'request_cancel' && a.status === 'completed');
-      const approveCancelAction = leave.approvals.find(a => a.type === 'approve_cancel' && a.status === 'completed');
-      const rejectCancelAction = leave.approvals.find(a => a.type === 'reject_cancel' && a.status === 'completed');
+      const lastApproval = leave.leave_approvals && leave.leave_approvals.length > 0 ? leave.leave_approvals[0] : null;
+      const approveAction = leave.leave_approvals ? leave.leave_approvals.find(a => a.type === 'approve' && a.status === 'completed') : null;
+      const rejectAction = leave.leave_approvals ? leave.leave_approvals.find(a => a.type === 'reject' && a.status === 'completed') : null;
+      const requestCancelAction = leave.leave_approvals ? leave.leave_approvals.find(a => a.type === 'request_cancel' && a.status === 'completed') : null;
+      const approveCancelAction = leave.leave_approvals ? leave.leave_approvals.find(a => a.type === 'approve_cancel' && a.status === 'completed') : null;
+      const rejectCancelAction = leave.leave_approvals ? leave.leave_approvals.find(a => a.type === 'reject_cancel' && a.status === 'completed') : null;
       
       // ตรวจสอบสถานะล่าสุดจาก transaction log
-      // หากมีการขอยกเลิกล่าสุด แต่ไม่พบ approveCancelAction หรือ rejectCancelAction ที่เกิดหลังจากการขอยกเลิกล่าสุด
-      // แสดงว่ายังอยู่ในสถานะรออนุมัติ
       const isLatestRequestCancel = lastApproval && lastApproval.type === 'request_cancel';
       
       // สถานะยกเลิก
       let cancelStatusValue = null;
       if (approveCancelAction) {
-        cancelStatusValue = 'อนุมัติ';
+        cancelStatusValue = 'approved';
       } else if (isLatestRequestCancel && !approveCancelAction && !rejectCancelAction) {
-        cancelStatusValue = 'รออนุมัติ';
+        cancelStatusValue = 'waiting_for_approve';
       } else if (rejectCancelAction) {
-        cancelStatusValue = 'ไม่อนุมัติ';
+        cancelStatusValue = 'rejected';
+      }
+      
+      // ประมวลผลสถานะสำหรับแสดงผล
+      let statusText = leave.status;
+      let statusDisplay = "";
+      
+      if (statusText === 'waiting_for_approve') {
+        statusDisplay = 'รออนุมัติ';
+      } else if (statusText === 'approved') {
+        statusDisplay = 'อนุมัติ';
+      } else if (statusText === 'rejected') {
+        statusDisplay = 'ไม่อนุมัติ';
+      } else if (statusText === 'canceled') {
+        statusDisplay = 'ยกเลิกแล้ว';
       }
       
       // สร้างเวอร์ชันของข้อมูลที่เข้ากันได้กับโค้ดเดิม
       const transformed = {
-        ...leave,
+        id: leave.id,
+        employeeId: leave.employee_id,
+        startDate: leave.start_date,
+        endDate: leave.end_date,
+        reason: leave.reason,
+        leaveType: leave.leave_type,
+        status: leave.status,
+        statusText: statusDisplay,
+        leaveFormat: leave.leave_format || 'เต็มวัน',
+        leaveDays: leave.total_days || 0, // เพิ่ม leaveDays สำหรับแสดงผล
+        totalDays: leave.total_days || 0,
+        attachments: leave.attachments || [],
+        createdAt: leave.created_at,
+        updatedAt: leave.updated_at,
+        
+        // ข้อมูลพนักงานและประวัติการอนุมัติ
+        employee: formattedEmployee,
+        approvals: formattedApprovals,
+        
         // สำหรับการอนุมัติ/ไม่อนุมัติปกติ
-        approvedById: approveAction?.employeeId || rejectAction?.employeeId || null,
-        approvedAt: approveAction?.createdAt || rejectAction?.createdAt || null,
+        approvedById: approveAction?.employee_id || rejectAction?.employee_id || null,
+        approvedAt: approveAction?.created_at || rejectAction?.created_at || null,
         comment: approveAction?.comment || rejectAction?.comment || null,
-        approvedBy: approveAction?.employee || rejectAction?.employee || null,
+        approvedBy: approveAction?.employees ? {
+          id: approveAction.employees.id,
+          firstName: approveAction.employees.first_name,
+          lastName: approveAction.employees.last_name,
+          position: approveAction.employees.position,
+          role: approveAction.employees.role
+        } : null,
         
-        // สำหรับการยกเลิก
-        cancelRequestedAt: requestCancelAction?.createdAt || null,
+        // สำหรับการขอยกเลิก
+        cancelRequestedAt: requestCancelAction?.created_at || null,
         cancelReason: requestCancelAction?.reason || null,
-        cancelStatus: cancelStatusValue,
-        cancelApprovedById: approveCancelAction?.employeeId || rejectCancelAction?.employeeId || null,
-        cancelApprovedAt: approveCancelAction?.createdAt || rejectCancelAction?.createdAt || null,
-        cancelComment: approveCancelAction?.comment || rejectCancelAction?.comment || null,
-        cancelApprovedBy: approveCancelAction?.employee || rejectCancelAction?.employee || null,
-        isCancelled: !!approveCancelAction,
+        cancelRequestBy: requestCancelAction?.employees ? {
+          id: requestCancelAction.employees.id,
+          firstName: requestCancelAction.employees.first_name,
+          lastName: requestCancelAction.employees.last_name,
+          position: requestCancelAction.employees.position,
+          role: requestCancelAction.employees.role
+        } : null,
         
-        // เพิ่มข้อมูล transaction logs สำหรับหน้ารายละเอียด
-        transactionLogs: leave.approvals.map(approval => ({
-          id: approval.id,
-          type: approval.type,
-          status: approval.status,
-          reason: approval.reason || null,
-          comment: approval.comment || null,
-          createdAt: approval.createdAt,
-          updatedAt: approval.updatedAt,
-          employee: approval.employee
-        })),
+        // สำหรับการตอบกลับการขอยกเลิก
+        cancelStatus: cancelStatusValue,
+        cancelResponseAt: approveCancelAction?.created_at || rejectCancelAction?.created_at || null,
+        cancelResponseComment: approveCancelAction?.comment || rejectCancelAction?.comment || null,
+        cancelResponseBy: approveCancelAction?.employees ? {
+          id: approveCancelAction.employees.id,
+          firstName: approveCancelAction.employees.first_name,
+          lastName: approveCancelAction.employees.last_name,
+          position: approveCancelAction.employees.position,
+          role: approveCancelAction.employees.role
+        } : rejectCancelAction?.employees ? {
+          id: rejectCancelAction.employees.id,
+          firstName: rejectCancelAction.employees.first_name,
+          lastName: rejectCancelAction.employees.last_name,
+          position: rejectCancelAction.employees.position,
+          role: rejectCancelAction.employees.role
+        } : null,
+        
+        // สถานะการขอยกเลิก
+        isDuringCancel: requestCancelAction && !approveCancelAction && !rejectCancelAction,
+        isCancelled: !!approveCancelAction,
       };
-      
-      // แปลงสถานะใหม่ให้เป็นสถานะเดิมเพื่อความเข้ากันได้
-      if (transformed.status === 'waiting_for_approve') {
-        transformed.status = 'รออนุมัติ';
-      } else if (transformed.status === 'approved') {
-        transformed.status = 'อนุมัติ';
-      } else if (transformed.status === 'rejected') {
-        transformed.status = 'ไม่อนุมัติ';
-      } else if (transformed.status === 'canceled') {
-        transformed.status = 'ยกเลิกแล้ว';
-      }
-      
-      // แปลงสถานะการยกเลิกตามที่ต้องการบนหน้าจอ
-      if (transformed.cancelStatus === 'อนุมัติ') {
-        transformed.cancelStatus = 'ยกเลิกแล้ว';
-      } else if (transformed.cancelStatus === 'ไม่อนุมัติ') {
-        // ถ้าเป็นการปฏิเสธการยกเลิก ให้กำหนดเป็น null เพื่อซ่อนปุ่มอนุมัติ/ปฏิเสธการยกเลิก
-        transformed.cancelStatus = null;
-      } else if (transformed.cancelStatus === 'รอยกเลิก') {
-        transformed.cancelStatus = 'รออนุมัติ';
-      }
       
       return transformed;
     });
@@ -475,33 +570,33 @@ export async function getLeaves(employeeId = null, teamId = null) {
  */
 export async function getLeaveById(id) {
   try {
-    const leave = await prisma.leave.findUnique({
+    const leave = await prisma.leaves.findUnique({
       where: { id },
       include: {
-        employee: {
+        employees: {
           select: {
             id: true,
-            employeeId: true,
-            firstName: true,
-            lastName: true,
+            employee_id: true,
+            first_name: true,
+            last_name: true,
             email: true,
             position: true,
-            department: true,
+            departments: true,
             role: true,
             image: true,
-            teamId: true
+            team_id: true
           }
         },
-        approvals: {
+        leave_approvals: {
           orderBy: {
-            createdAt: 'desc'
+            created_at: 'desc'
           },
           include: {
-            employee: {
+            employees: {
               select: {
                 id: true,
-                firstName: true,
-                lastName: true,
+                first_name: true,
+                last_name: true,
                 position: true,
                 role: true
               }
@@ -515,61 +610,145 @@ export async function getLeaveById(id) {
       return { success: false, message: 'ไม่พบข้อมูลการลา' };
     }
     
-    // เรียงลำดับ approvals ตาม createdAt ใหม่ ให้ล่าสุดอยู่ก่อน
-    leave.approvals.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    // แปลงข้อมูลพนักงาน
+    const formattedEmployee = leave.employees ? {
+      id: leave.employees.id,
+      employeeId: leave.employees.employee_id,
+      firstName: leave.employees.first_name,
+      lastName: leave.employees.last_name,
+      email: leave.employees.email,
+      position: leave.employees.position,
+      departments: leave.employees.departments,
+      role: leave.employees.role,
+      image: leave.employees.image,
+      teamId: leave.employees.team_id
+    } : null;
     
-    const lastApproval = leave.approvals[0] || null;
-    const approveAction = leave.approvals.find(a => a.type === 'approve' && a.status === 'completed');
-    const rejectAction = leave.approvals.find(a => a.type === 'reject' && a.status === 'completed');
-    const requestCancelAction = leave.approvals.find(a => a.type === 'request_cancel' && a.status === 'completed');
-    const approveCancelAction = leave.approvals.find(a => a.type === 'approve_cancel' && a.status === 'completed');
-    const rejectCancelAction = leave.approvals.find(a => a.type === 'reject_cancel' && a.status === 'completed');
-    
-    // แปลงสถานะเพื่อให้เข้ากับ UI
-    let statusText = leave.status;
-    if (leave.status === 'waiting_for_approve') statusText = 'รออนุมัติ';
-    else if (leave.status === 'approved') statusText = 'อนุมัติ';
-    else if (leave.status === 'rejected') statusText = 'ไม่อนุมัติ';
-    else if (leave.status === 'canceled') statusText = 'ยกเลิกแล้ว';
-    
-    // สร้างข้อมูลเพิ่มเติมเพื่อความเข้ากันได้กับ UI เดิม
-    const transformedLeave = {
-      ...leave,
-      status: statusText,
-      // ข้อมูลการอนุมัติ
-      approvedBy: approveAction ? approveAction.employee : null,
-      approvedAt: approveAction ? approveAction.createdAt : null,
-      comment: approveAction ? approveAction.comment : (rejectAction ? rejectAction.comment : null),
-      // ข้อมูลการยกเลิก
-      cancelStatus: requestCancelAction && !approveCancelAction && !rejectCancelAction ? 'รออนุมัติ' :
-                    approveCancelAction ? 'อนุมัติ' :
-                    rejectCancelAction ? 'ไม่อนุมัติ' : null,
-      cancelReason: requestCancelAction ? requestCancelAction.reason : null,
-      cancelRequestBy: requestCancelAction ? requestCancelAction.employee : null,
-      cancelRequestAt: requestCancelAction ? requestCancelAction.createdAt : null,
-      cancelResponseBy: approveCancelAction ? approveCancelAction.employee : 
-                        (rejectCancelAction ? rejectCancelAction.employee : null),
-      cancelResponseAt: approveCancelAction ? approveCancelAction.createdAt :
-                        (rejectCancelAction ? rejectCancelAction.createdAt : null),
-      cancelResponseComment: approveCancelAction ? approveCancelAction.comment :
-                            (rejectCancelAction ? rejectCancelAction.comment : null),
-      isCancelled: approveCancelAction ? true : false,
-      // เพิ่ม transactionLogs สำหรับหน้ารายละเอียด
-      transactionLogs: leave.approvals.map(approval => ({
+    // แปลงข้อมูลประวัติการอนุมัติ
+    const formattedApprovals = leave.leave_approvals ? leave.leave_approvals.map(approval => {
+      const formattedApprovalEmployee = approval.employees ? {
+        id: approval.employees.id,
+        firstName: approval.employees.first_name,
+        lastName: approval.employees.last_name,
+        position: approval.employees.position,
+        role: approval.employees.role
+      } : null;
+      
+      return {
         id: approval.id,
         type: approval.type,
         status: approval.status,
-        reason: approval.reason || null,
-        comment: approval.comment || null,
-        createdAt: approval.createdAt,
-        updatedAt: approval.updatedAt,
-        employee: approval.employee
-      })),
+        reason: approval.reason,
+        comment: approval.comment,
+        employeeId: approval.employee_id,
+        createdAt: approval.created_at,
+        updatedAt: approval.updated_at,
+        employees: formattedApprovalEmployee
+      };
+    }) : [];
+    
+    // ค้นหา approval ล่าสุดตามประเภท
+    const lastApproval = leave.leave_approvals && leave.leave_approvals.length > 0 ? leave.leave_approvals[0] : null;
+    const approveAction = leave.leave_approvals ? leave.leave_approvals.find(a => a.type === 'approve' && a.status === 'completed') : null;
+    const rejectAction = leave.leave_approvals ? leave.leave_approvals.find(a => a.type === 'reject' && a.status === 'completed') : null;
+    const requestCancelAction = leave.leave_approvals ? leave.leave_approvals.find(a => a.type === 'request_cancel' && a.status === 'completed') : null;
+    const approveCancelAction = leave.leave_approvals ? leave.leave_approvals.find(a => a.type === 'approve_cancel' && a.status === 'completed') : null;
+    const rejectCancelAction = leave.leave_approvals ? leave.leave_approvals.find(a => a.type === 'reject_cancel' && a.status === 'completed') : null;
+    
+    // สถานะยกเลิก
+    let cancelStatusValue = null;
+    if (approveCancelAction) {
+      cancelStatusValue = 'approved';
+    } else if (requestCancelAction && !approveCancelAction && !rejectCancelAction) {
+      cancelStatusValue = 'waiting_for_approve';
+    } else if (rejectCancelAction) {
+      cancelStatusValue = 'rejected';
+    }
+    
+    // ประมวลผลสถานะสำหรับแสดงผล
+    let statusText = leave.status;
+    let statusDisplay = "";
+    
+    if (statusText === 'waiting_for_approve') {
+      statusDisplay = 'รออนุมัติ';
+    } else if (statusText === 'approved') {
+      statusDisplay = 'อนุมัติ';
+    } else if (statusText === 'rejected') {
+      statusDisplay = 'ไม่อนุมัติ';
+    } else if (statusText === 'canceled') {
+      statusDisplay = 'ยกเลิกแล้ว';
+    }
+    
+    // สร้างข้อมูลสำหรับส่งกลับ
+    const transformedLeave = {
+      id: leave.id,
+      employeeId: leave.employee_id,
+      startDate: leave.start_date,
+      endDate: leave.end_date,
+      reason: leave.reason,
+      leaveType: leave.leave_type,
+      status: leave.status,
+      statusText: statusDisplay,
+      leaveFormat: leave.leave_format || 'เต็มวัน',
+      leaveDays: leave.total_days || 0, // เพิ่ม leaveDays สำหรับแสดงผล
+      totalDays: leave.total_days || 0,
+      attachments: leave.attachments || [],
+      createdAt: leave.created_at,
+      updatedAt: leave.updated_at,
+      
+      // ข้อมูลพนักงานและประวัติการอนุมัติ
+      employee: formattedEmployee,
+      approvals: formattedApprovals,
+      
+      // สำหรับการอนุมัติ/ไม่อนุมัติปกติ
+      approvedById: approveAction?.employee_id || rejectAction?.employee_id || null,
+      approvedAt: approveAction?.created_at || rejectAction?.created_at || null,
+      comment: approveAction?.comment || rejectAction?.comment || null,
+      approvedBy: approveAction?.employees ? {
+        id: approveAction.employees.id,
+        firstName: approveAction.employees.first_name,
+        lastName: approveAction.employees.last_name,
+        position: approveAction.employees.position,
+        role: approveAction.employees.role
+      } : null,
+      
+      // สำหรับการขอยกเลิก
+      cancelRequestedAt: requestCancelAction?.created_at || null,
+      cancelReason: requestCancelAction?.reason || null,
+      cancelRequestBy: requestCancelAction?.employees ? {
+        id: requestCancelAction.employees.id,
+        firstName: requestCancelAction.employees.first_name,
+        lastName: requestCancelAction.employees.last_name,
+        position: requestCancelAction.employees.position,
+        role: requestCancelAction.employees.role
+      } : null,
+      
+      // สำหรับการตอบกลับการขอยกเลิก
+      cancelStatus: cancelStatusValue,
+      cancelResponseAt: approveCancelAction?.created_at || rejectCancelAction?.created_at || null,
+      cancelResponseComment: approveCancelAction?.comment || rejectCancelAction?.comment || null,
+      cancelResponseBy: approveCancelAction?.employees ? {
+        id: approveCancelAction.employees.id,
+        firstName: approveCancelAction.employees.first_name,
+        lastName: approveCancelAction.employees.last_name,
+        position: approveCancelAction.employees.position,
+        role: approveCancelAction.employees.role
+      } : rejectCancelAction?.employees ? {
+        id: rejectCancelAction.employees.id,
+        firstName: rejectCancelAction.employees.first_name,
+        lastName: rejectCancelAction.employees.last_name,
+        position: rejectCancelAction.employees.position,
+        role: rejectCancelAction.employees.role
+      } : null,
+      
+      // สถานะการขอยกเลิก
+      isDuringCancel: requestCancelAction && !approveCancelAction && !rejectCancelAction,
+      isCancelled: !!approveCancelAction,
     };
     
     return { success: true, data: transformedLeave };
   } catch (error) {
-    console.error(`Error fetching leave with ID ${id}:`, error);
+    console.error('Error fetching leave by ID:', error);
     return { success: false, message: error.message };
   }
 }
@@ -580,8 +759,8 @@ export async function getLeaveById(id) {
 export async function createLeave(data) {
   try {
     // ตรวจสอบว่าพนักงานมีอยู่จริงหรือไม่
-    const employee = await prisma.employee.findUnique({
-      where: { id: data.employeeId },
+    const employee = await prisma.employees.findUnique({
+      where: { id: data.employee_id },
     });
     
     if (!employee) {
@@ -597,31 +776,39 @@ export async function createLeave(data) {
       else if (data.status === 'ยกเลิกแล้ว') newStatus = 'canceled';
     }
     
+    // ตรวจสอบและแปลงค่า attachments ให้เป็น array เสมอ
+    const attachments = Array.isArray(data.attachments) ? data.attachments : 
+                        (data.attachments ? [data.attachments] : []);
+    
     // สร้างข้อมูลการลาใหม่
-    const newLeave = await prisma.leave.create({
+    const newLeave = await prisma.leaves.create({
       data: {
-        employeeId: data.employeeId,
-        leaveType: data.leaveType,
-        startDate: new Date(data.startDate),
-        endDate: new Date(data.endDate),
+        id: crypto.randomUUID(),
+        employee_id: data.employee_id,
+        leave_type: data.leave_type,
+        start_date: new Date(data.start_date),
+        end_date: new Date(data.end_date),
         reason: data.reason,
         status: newStatus,
-        leaveFormat: data.leaveFormat || 'เต็มวัน',
-        totalDays: data.totalDays || 0,
-        attachments: data.attachments || [],
+        leave_format: data.leave_format || 'เต็มวัน',
+        total_days: data.total_days || 0,
+        attachments: attachments,
+        updated_at: new Date(),
       },
     });
     
     // ถ้ามีข้อมูลการอนุมัติ สร้าง approval record
     if (data.approvedById && data.approvedAt) {
-      await prisma.leaveApproval.create({
+      await prisma.leave_approvals.create({
         data: {
-          leaveId: newLeave.id,
-          employeeId: data.approvedById,
+          id: crypto.randomUUID(),
+          leave_id: newLeave.id,
+          employee_id: data.approvedById,
           type: data.status === 'อนุมัติ' ? 'approve' : 'reject',
           status: 'completed',
           comment: data.comment || null,
-          createdAt: new Date(data.approvedAt),
+          created_at: new Date(data.approvedAt),
+          updated_at: new Date(),
         },
       });
     }
@@ -631,7 +818,7 @@ export async function createLeave(data) {
     
     return { success: true, data: fullLeave.data };
   } catch (error) {
-    console.error('Error creating leave:', error);
+    console.error('Error creating leaves:', error);
     return { success: false, message: error.message };
   }
 }
@@ -642,10 +829,10 @@ export async function createLeave(data) {
 export async function updateLeave(id, data) {
   try {
     // ตรวจสอบว่ามีข้อมูลการลาหรือไม่
-    const existingLeave = await prisma.leave.findUnique({
+    const existingLeave = await prisma.leaves.findUnique({
       where: { id },
       include: {
-        approvals: true
+        leave_approvals: true
       }
     });
     
@@ -657,12 +844,12 @@ export async function updateLeave(id, data) {
     const transactions = [];
     
     // ข้อมูลพื้นฐานที่อัปเดตได้เสมอ
-    if (data.leaveType !== undefined) updateData.leaveType = data.leaveType;
-    if (data.startDate !== undefined) updateData.startDate = new Date(data.startDate);
-    if (data.endDate !== undefined) updateData.endDate = new Date(data.endDate);
+    if (data.leave_type !== undefined) updateData.leave_type = data.leave_type;
+    if (data.start_date !== undefined) updateData.start_date = new Date(data.start_date);
+    if (data.end_date !== undefined) updateData.end_date = new Date(data.end_date);
     if (data.reason !== undefined) updateData.reason = data.reason;
-    if (data.leaveFormat !== undefined) updateData.leaveFormat = data.leaveFormat;
-    if (data.totalDays !== undefined) updateData.totalDays = data.totalDays;
+    if (data.leave_format !== undefined) updateData.leave_format = data.leave_format;
+    if (data.total_days !== undefined) updateData.total_days = data.total_days;
     if (data.attachments !== undefined) updateData.attachments = data.attachments;
     
     // ถ้ามีการเปลี่ยนสถานะ
@@ -676,30 +863,52 @@ export async function updateLeave(id, data) {
       
       updateData.status = newStatus;
       
-      // ถ้าสถานะเป็นอนุมัติหรือไม่อนุมัติ สร้าง approval record
-      if ((data.status === 'อนุมัติ' || data.status === 'ไม่อนุมัติ') && data.approvedById) {
-        transactions.push(
-          prisma.leaveApproval.create({
-            data: {
-              leaveId: id,
-              employeeId: data.approvedById,
-              type: data.status === 'อนุมัติ' ? 'approve' : 'reject',
-              status: 'completed',
-              comment: data.comment || null,
-            },
-          })
+      // ถ้าสถานะเป็นอนุมัติหรือไม่อนุมัติ และยังไม่เคยมีการอนุมัติก่อนหน้านี้
+      if ((data.status === 'approved' || data.status === 'rejected' || 
+           data.status === 'อนุมัติ' || data.status === 'ไม่อนุมัติ') && 
+          data.approvedById) {
+        
+        // ตรวจสอบว่ามีการอนุมัติหรือปฏิเสธไปแล้วหรือไม่
+        const hasApproveOrReject = existingLeave.leave_approvals.some(
+          a => (a.type === 'approve' || a.type === 'reject') && a.status === 'completed'
         );
+        
+        // ถ้ายังไม่มีการอนุมัติหรือปฏิเสธ ให้สร้าง approval record ใหม่
+        if (!hasApproveOrReject) {
+          const type = (data.status === 'approved' || data.status === 'อนุมัติ') ? 'approve' : 'reject';
+          
+          transactions.push(
+            prisma.leave_approvals.create({
+              data: {
+                leave_id: id,
+                employee_id: data.approvedById,
+                type,
+                status: 'completed',
+                comment: data.comment || null,
+                created_at: data.approvedAt ? new Date(data.approvedAt) : new Date(),
+                updated_at: new Date()
+              },
+            })
+          );
+        }
       }
     }
     
     // อัปเดตข้อมูลการลาและสร้าง approval records ถ้ามี
-    const [updatedLeave] = await prisma.$transaction([
-      prisma.leave.update({
+    const updatedLeave = await prisma.$transaction(async (tx) => {
+      // อัปเดตข้อมูลการลา
+      const updated = await tx.leaves.update({
         where: { id },
         data: updateData,
-      }),
-      ...transactions
-    ]);
+      });
+      
+      // ทำรายการอื่นๆ ที่เกี่ยวข้อง (เช่น สร้าง approval)
+      for (const txn of transactions) {
+        await txn;
+      }
+      
+      return updated;
+    });
     
     // ดึงข้อมูลการลาที่อัปเดตแล้วพร้อมข้อมูลเพิ่มเติม
     const fullLeave = await getLeaveById(id);
@@ -733,12 +942,12 @@ export async function requestCancelLeave(id, data) {
     }
     
     // ตรวจสอบว่ามีข้อมูลการลาหรือไม่
-    const existingLeave = await prisma.leave.findUnique({
+    const existingLeave = await prisma.leaves.findUnique({
       where: { id },
       include: {
-        employee: true,
-        approvals: {
-          orderBy: { createdAt: 'desc' }
+        employees: true,
+        leave_approvals: {
+          orderBy: { created_at: 'desc' }
         }
       }
     });
@@ -750,7 +959,7 @@ export async function requestCancelLeave(id, data) {
     console.log('Existing Leave:', {
       id: existingLeave.id,
       status: existingLeave.status,
-      numApprovals: existingLeave.approvals?.length || 0
+      numApprovals: existingLeave.leave_approvals?.length || 0
     });
     
     // ตรวจสอบว่าเป็นการลาที่อนุมัติแล้วหรือไม่
@@ -763,13 +972,14 @@ export async function requestCancelLeave(id, data) {
     }
     
     // ตรวจสอบว่ามีคำขอยกเลิกที่ยังรออนุมัติอยู่แล้วหรือไม่
-    const pendingCancelRequest = existingLeave.approvals?.some(a => 
+    existingLeave.approvals = existingLeave.leave_approvals || [];
+    const pendingCancelRequest = existingLeave.leave_approvals?.some(a => 
       a.type === 'request_cancel' && 
       a.status === 'completed' && 
-      !existingLeave.approvals.some(b => 
+      !existingLeave.leave_approvals.some(b => 
         (b.type === 'approve_cancel' || b.type === 'reject_cancel') && 
         b.status === 'completed' && 
-        b.createdAt > a.createdAt
+        b.created_at > a.created_at
       )
     );
     
@@ -784,32 +994,34 @@ export async function requestCancelLeave(id, data) {
     try {
       // สร้างคำขอการยกเลิกใน LeaveApproval
       const approvalData = {
-        leaveId: id,
-        employeeId: data.requestedById,
+        id: crypto.randomUUID(),
+        leave_id: id,
+        employee_id: data.requestedById,
         type: 'request_cancel',
         status: 'completed',
-        reason: data.cancelReason
+        reason: data.cancelReason || null,
+        updated_at: new Date()
       };
       
       console.log('Creating approval with data:', approvalData);
       
-      const approval = await prisma.leaveApproval.create({
+      const approval = await prisma.leave_approvals.create({
         data: approvalData
       });
       
       console.log('Created approval:', {
         id: approval.id,
         type: approval.type,
-        employeeId: approval.employeeId
+        employee_id: approval.employee_id
       });
       
       // ดึงข้อมูลการลาที่อัปเดตแล้วพร้อมข้อมูลเพิ่มเติม
-      const fullLeave = await prisma.leave.findUnique({
+      const fullLeave = await prisma.leaves.findUnique({
         where: { id },
         include: {
-          employee: true,
-          approvals: {
-            orderBy: { createdAt: 'desc' }
+          employees: true,
+          leave_approvals: {
+            orderBy: { created_at: 'desc' }
           }
         }
       });
@@ -840,7 +1052,7 @@ export async function requestCancelLeave(id, data) {
 export async function approveLeave(id, approverId, comment = null) {
   try {
     // ตรวจสอบว่ามีข้อมูลการลาหรือไม่
-    const existingLeave = await prisma.leave.findUnique({
+    const existingLeave = await prisma.leaves.findUnique({
       where: { id }
     });
     
@@ -855,19 +1067,21 @@ export async function approveLeave(id, approverId, comment = null) {
     
     // อัปเดตสถานะการลาและสร้าง approval record
     const [updatedLeave, newApproval] = await prisma.$transaction([
-      prisma.leave.update({
+      prisma.leaves.update({
         where: { id },
         data: {
           status: 'approved',
         },
       }),
-      prisma.leaveApproval.create({
+      prisma.leave_approvals.create({
         data: {
-          leaveId: id,
-          employeeId: approverId,
+          id: crypto.randomUUID(),
+          leave_id: id,
+          employee_id: approverId,
           type: 'approve',
           status: 'completed',
           comment: comment,
+          updated_at: new Date()
         },
       })
     ]);
@@ -888,7 +1102,7 @@ export async function approveLeave(id, approverId, comment = null) {
 export async function rejectLeave(id, approverId, comment = null) {
   try {
     // ตรวจสอบว่ามีข้อมูลการลาหรือไม่
-    const existingLeave = await prisma.leave.findUnique({
+    const existingLeave = await prisma.leaves.findUnique({
       where: { id }
     });
     
@@ -903,19 +1117,21 @@ export async function rejectLeave(id, approverId, comment = null) {
     
     // อัปเดตสถานะการลาและสร้าง approval record
     const [updatedLeave, newApproval] = await prisma.$transaction([
-      prisma.leave.update({
+      prisma.leaves.update({
         where: { id },
         data: {
           status: 'rejected',
         },
       }),
-      prisma.leaveApproval.create({
+      prisma.leave_approvals.create({
         data: {
-          leaveId: id,
-          employeeId: approverId,
+          id: crypto.randomUUID(),
+          leave_id: id,
+          employee_id: approverId,
           type: 'reject',
           status: 'completed',
           comment: comment,
+          updated_at: new Date()
         },
       })
     ]);
@@ -936,16 +1152,16 @@ export async function rejectLeave(id, approverId, comment = null) {
 export async function approveCancelLeave(id, approverId, comment = null) {
   try {
     // ตรวจสอบว่ามีข้อมูลการลาหรือไม่
-    const existingLeave = await prisma.leave.findUnique({
+    const existingLeave = await prisma.leaves.findUnique({
       where: { id },
       include: {
-        employee: true,
-        approvals: {
+        employees: true,
+        leave_approvals: {
           where: { 
             type: 'request_cancel',
             status: 'completed'
           },
-          orderBy: { createdAt: 'desc' },
+          orderBy: { created_at: 'desc' },
           take: 1
         }
       }
@@ -956,7 +1172,7 @@ export async function approveCancelLeave(id, approverId, comment = null) {
     }
     
     // ตรวจสอบว่ามีคำขอยกเลิกหรือไม่
-    if (!existingLeave.approvals || existingLeave.approvals.length === 0) {
+    if (!existingLeave.leave_approvals || existingLeave.leave_approvals.length === 0) {
       return { success: false, message: 'ไม่พบคำขอยกเลิกการลานี้' };
     }
     
@@ -967,19 +1183,21 @@ export async function approveCancelLeave(id, approverId, comment = null) {
     
     // อัปเดตสถานะการลาและสร้าง approval record
     const [updatedLeave, newApproval] = await prisma.$transaction([
-      prisma.leave.update({
+      prisma.leaves.update({
         where: { id },
         data: {
           status: 'canceled',
         },
       }),
-      prisma.leaveApproval.create({
+      prisma.leave_approvals.create({
         data: {
-          leaveId: id,
-          employeeId: approverId,
+          id: crypto.randomUUID(),
+          leave_id: id,
+          employee_id: approverId,
           type: 'approve_cancel',
           status: 'completed',
           comment: comment,
+          updated_at: new Date()
         },
       })
     ]);
@@ -989,7 +1207,7 @@ export async function approveCancelLeave(id, approverId, comment = null) {
     
     return { success: true, data: fullLeave.data, message: 'อนุมัติการยกเลิกการลาเรียบร้อยแล้ว' };
   } catch (error) {
-    console.error(`Error approving cancel leave with ID ${id}:`, error);
+    console.error(`Error approving cancel request for leave with ID ${id}:`, error);
     return { success: false, message: error.message };
   }
 }
@@ -1000,16 +1218,16 @@ export async function approveCancelLeave(id, approverId, comment = null) {
 export async function rejectCancelLeave(id, approverId, comment = null) {
   try {
     // ตรวจสอบว่ามีข้อมูลการลาหรือไม่
-    const existingLeave = await prisma.leave.findUnique({
+    const existingLeave = await prisma.leaves.findUnique({
       where: { id },
       include: {
-        employee: true,
-        approvals: {
+        employees: true,
+        leave_approvals: {
           where: { 
             type: 'request_cancel',
             status: 'completed'
           },
-          orderBy: { createdAt: 'desc' },
+          orderBy: { created_at: 'desc' },
           take: 1
         }
       }
@@ -1020,7 +1238,7 @@ export async function rejectCancelLeave(id, approverId, comment = null) {
     }
     
     // ตรวจสอบว่ามีคำขอยกเลิกหรือไม่
-    if (!existingLeave.approvals || existingLeave.approvals.length === 0) {
+    if (!existingLeave.leave_approvals || existingLeave.leave_approvals.length === 0) {
       return { success: false, message: 'ไม่พบคำขอยกเลิกการลานี้' };
     }
     
@@ -1030,13 +1248,15 @@ export async function rejectCancelLeave(id, approverId, comment = null) {
     }
     
     // สร้าง approval record สำหรับการไม่อนุมัติการยกเลิก
-    const newApproval = await prisma.leaveApproval.create({
+    const newApproval = await prisma.leave_approvals.create({
       data: {
-        leaveId: id,
-        employeeId: approverId,
+        id: crypto.randomUUID(),
+        leave_id: id,
+        employee_id: approverId,
         type: 'reject_cancel',
         status: 'completed',
         comment: comment,
+        updated_at: new Date()
       },
     });
     
@@ -1045,7 +1265,7 @@ export async function rejectCancelLeave(id, approverId, comment = null) {
     
     return { success: true, data: fullLeave.data, message: 'ปฏิเสธการยกเลิกการลาเรียบร้อยแล้ว' };
   } catch (error) {
-    console.error(`Error rejecting cancel leave with ID ${id}:`, error);
+    console.error(`Error rejecting cancel request for leave with ID ${id}:`, error);
     return { success: false, message: error.message };
   }
 }
@@ -1057,7 +1277,7 @@ export async function getOvertimes(employeeId = null, startDate = null, endDate 
   try {
     let where = {};
     if (employeeId) {
-      where.employeeId = employeeId;
+      where.employee_id = employeeId;
     }
     if (startDate && endDate) {
       where.date = {
@@ -1084,7 +1304,7 @@ export async function getOvertimes(employeeId = null, startDate = null, endDate 
           COUNT(*) as count,
           STRING_AGG(DISTINCT status, ', ') as statuses
         FROM overtimes
-        WHERE employee_id = ${employeeId}
+        WHERE employee_id = ${employee_id}
         GROUP BY EXTRACT(YEAR FROM date), EXTRACT(MONTH FROM date)
         ORDER BY year DESC, month DESC
       `;
@@ -1093,37 +1313,37 @@ export async function getOvertimes(employeeId = null, startDate = null, endDate 
     }
     
     // ดึงข้อมูลการทำงานล่วงเวลาทั้งหมด
-    const overtimes = await prisma.overtime.findMany({
+    const overtimes = await prisma.overtimes.findMany({
       where,
       orderBy: {
         date: 'desc',
       },
       include: {
-        employee: {
+        employees: {
           select: {
             id: true,
-            employeeId: true,
-            firstName: true,
-            lastName: true,
+            employee_id: true,
+            first_name: true,
+            last_name: true,
             position: true,
-            department: true,
-            departmentId: true,
+            departments: true,
+            department_id: true,
             email: true,
             role: true,
             image: true,
-            teamId: true,
+            team_id: true,
           },
         },
-        approvals: {
+        overtime_approvals: {
           orderBy: {
-            createdAt: 'desc'
+            created_at: 'desc'
           },
           include: {
-            employee: {
+            employees: {
               select: {
                 id: true,
-                firstName: true,
-                lastName: true,
+                first_name: true,
+                last_name: true,
                 position: true,
                 role: true
               }
@@ -1136,7 +1356,8 @@ export async function getOvertimes(employeeId = null, startDate = null, endDate 
     // แปลงข้อมูลเพื่อความเข้ากันได้กับโค้ดเดิม
     const transformedOvertimes = overtimes.map(overtime => {
       // สร้างข้อมูลเพิ่มเติมจาก approvals
-      overtime.approvals.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      overtime.approvals = overtime.overtime_approvals || [];
+      overtime.approvals.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
       
       const approveAction = overtime.approvals.find(a => a.type === 'approve' && a.status === 'completed');
       const rejectAction = overtime.approvals.find(a => a.type === 'reject' && a.status === 'completed');
@@ -1153,18 +1374,18 @@ export async function getOvertimes(employeeId = null, startDate = null, endDate 
       return {
         ...overtime,
         // ข้อมูลการอนุมัติ
-        approvedBy: approveAction ? approveAction.employee : null,
-        approvedAt: approveAction ? approveAction.createdAt : null,
+        approvedBy: approveAction ? approveAction.employees : null,
+        approvedAt: approveAction ? approveAction.created_at : null,
         comment: approveAction ? approveAction.comment : (rejectAction ? rejectAction.comment : null),
         // ข้อมูลการยกเลิก
         cancelStatus: cancelStatus,
         cancelReason: requestCancelAction ? requestCancelAction.reason : null,
-        cancelRequestBy: requestCancelAction ? requestCancelAction.employee : null,
-        cancelRequestAt: requestCancelAction ? requestCancelAction.createdAt : null,
-        cancelResponseBy: approveCancelAction ? approveCancelAction.employee : 
-                         (rejectCancelAction ? rejectCancelAction.employee : null),
-        cancelResponseAt: approveCancelAction ? approveCancelAction.createdAt :
-                         (rejectCancelAction ? rejectCancelAction.createdAt : null),
+        cancelRequestBy: requestCancelAction ? requestCancelAction.employees : null,
+        cancelRequestAt: requestCancelAction ? requestCancelAction.created_at : null,
+        cancelResponseBy: approveCancelAction ? approveCancelAction.employees : 
+                         (rejectCancelAction ? rejectCancelAction.employees : null),
+        cancelResponseAt: approveCancelAction ? approveCancelAction.created_at :
+                         (rejectCancelAction ? rejectCancelAction.created_at : null),
         cancelResponseComment: approveCancelAction ? approveCancelAction.comment :
                              (rejectCancelAction ? rejectCancelAction.comment : null),
         isCancelled: approveCancelAction ? true : false
@@ -1183,33 +1404,33 @@ export async function getOvertimes(employeeId = null, startDate = null, endDate 
  */
 export async function getOvertimeById(id) {
   try {
-    const overtime = await prisma.overtime.findUnique({
+    const overtime = await prisma.overtimes.findUnique({
       where: { id },
       include: {
-        employee: {
+        employees: {
           select: {
             id: true,
-            employeeId: true,
-            firstName: true,
-            lastName: true,
+            employee_id: true,
+            first_name: true,
+            last_name: true,
             email: true,
             position: true,
-            department: true,
+            departments: true,
             role: true,
             image: true,
-            teamId: true
+            team_id: true
           }
         },
-        approvals: {
+        overtime_approvals: {
           orderBy: {
-            createdAt: 'desc'
+            created_at: 'desc'
           },
           include: {
-            employee: {
+            employees: {
               select: {
                 id: true,
-                firstName: true,
-                lastName: true,
+                first_name: true,
+                last_name: true,
                 position: true,
                 role: true
               }
@@ -1224,7 +1445,7 @@ export async function getOvertimeById(id) {
     }
     
     // เรียงลำดับ approvals ตาม createdAt ใหม่ ให้ล่าสุดอยู่ก่อน
-    overtime.approvals.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    overtime.approvals.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     
     const lastApproval = overtime.approvals[0] || null;
     const approveAction = overtime.approvals.find(a => a.type === 'approve' && a.status === 'completed');
@@ -1242,18 +1463,18 @@ export async function getOvertimeById(id) {
     const transformedOvertime = {
       ...overtime,
       // ข้อมูลการอนุมัติ
-      approvedBy: approveAction ? approveAction.employee : null,
-      approvedAt: approveAction ? approveAction.createdAt : null,
+      approvedBy: approveAction ? approveAction.employees : null,
+      approvedAt: approveAction ? approveAction.created_at : null,
       comment: approveAction ? approveAction.comment : (rejectAction ? rejectAction.comment : null),
       // ข้อมูลการยกเลิก
       cancelStatus: cancelStatus,
       cancelReason: requestCancelAction ? requestCancelAction.reason : null,
-      cancelRequestBy: requestCancelAction ? requestCancelAction.employee : null,
-      cancelRequestAt: requestCancelAction ? requestCancelAction.createdAt : null,
-      cancelResponseBy: approveCancelAction ? approveCancelAction.employee : 
-                        (rejectCancelAction ? rejectCancelAction.employee : null),
-      cancelResponseAt: approveCancelAction ? approveCancelAction.createdAt :
-                        (rejectCancelAction ? rejectCancelAction.createdAt : null),
+      cancelRequestBy: requestCancelAction ? requestCancelAction.employees : null,
+      cancelRequestAt: requestCancelAction ? requestCancelAction.created_at : null,
+      cancelResponseBy: approveCancelAction ? approveCancelAction.employees : 
+                        (rejectCancelAction ? rejectCancelAction.employees : null),
+      cancelResponseAt: approveCancelAction ? approveCancelAction.created_at :
+                        (rejectCancelAction ? rejectCancelAction.created_at : null),
       cancelResponseComment: approveCancelAction ? approveCancelAction.comment :
                             (rejectCancelAction ? rejectCancelAction.comment : null),
       isCancelled: approveCancelAction ? true : false
@@ -1272,8 +1493,8 @@ export async function getOvertimeById(id) {
 export async function createOvertimeNew(data) {
   try {
     // ตรวจสอบว่าพนักงานมีอยู่จริงหรือไม่
-    const employee = await prisma.employee.findUnique({
-      where: { id: data.employeeId },
+    const employee = await prisma.employees.findUnique({
+      where: { id: data.employee_id },
     });
     
     if (!employee) {
@@ -1291,13 +1512,13 @@ export async function createOvertimeNew(data) {
     }
     
     // สร้างข้อมูลการทำงานล่วงเวลาใหม่
-    const newOvertime = await prisma.overtime.create({
+    const newOvertime = await prisma.overtimes.create({
       data: {
-        employeeId: data.employeeId,
+        employee_id: data.employee_id,
         date: new Date(data.date),
-        startTime: data.startTime,
-        endTime: data.endTime,
-        totalHours: parseFloat(data.totalHours),
+        start_time: data.start_time,
+        end_time: data.end_time,
+        total_hours: parseFloat(data.total_hours),
         reason: data.reason,
         status: status,
       },
@@ -1305,14 +1526,14 @@ export async function createOvertimeNew(data) {
     
     // ถ้ามีข้อมูลการอนุมัติ สร้าง approval record
     if (data.approvedById) {
-      await prisma.overtimeApproval.create({
+      await prisma.overtime_approvals.create({
         data: {
-          overtimeId: newOvertime.id,
-          employeeId: data.approvedById,
+          overtime_id: newOvertime.id,
+          employee_id: data.approvedById,
           type: status === 'approved' ? 'approve' : 'reject',
           status: 'completed',
           comment: data.comment || null,
-          createdAt: data.approvedAt ? new Date(data.approvedAt) : new Date(),
+          created_at: data.approvedAt ? new Date(data.approvedAt) : new Date(),
         },
       });
     }
@@ -1322,7 +1543,7 @@ export async function createOvertimeNew(data) {
     
     return { success: true, data: fullOvertime.data };
   } catch (error) {
-    console.error('Error creating overtime:', error);
+    console.error('Error creating overtimes:', error);
     return { success: false, message: error.message };
   }
 }
@@ -1333,10 +1554,10 @@ export async function createOvertimeNew(data) {
 export async function updateOvertimeNew(id, data) {
   try {
     // ตรวจสอบว่ามีข้อมูลการทำงานล่วงเวลาหรือไม่
-    const existingOvertime = await prisma.overtime.findUnique({
+    const existingOvertime = await prisma.overtimes.findUnique({
       where: { id },
       include: {
-        approvals: true
+        overtime_approvals: true
       }
     });
     
@@ -1349,9 +1570,9 @@ export async function updateOvertimeNew(id, data) {
     
     // ข้อมูลพื้นฐานที่อัปเดตได้เสมอ
     if (data.date !== undefined) updateData.date = new Date(data.date);
-    if (data.startTime !== undefined) updateData.startTime = data.startTime;
-    if (data.endTime !== undefined) updateData.endTime = data.endTime;
-    if (data.totalHours !== undefined) updateData.totalHours = parseFloat(data.totalHours);
+    if (data.start_time !== undefined) updateData.start_time = data.start_time;
+    if (data.end_time !== undefined) updateData.end_time = data.end_time;
+    if (data.total_hours !== undefined) updateData.total_hours = parseFloat(data.total_hours);
     if (data.reason !== undefined) updateData.reason = data.reason;
     
     // ถ้ามีการเปลี่ยนสถานะ
@@ -1368,10 +1589,10 @@ export async function updateOvertimeNew(id, data) {
       // ถ้าสถานะเป็นอนุมัติหรือไม่อนุมัติ สร้าง approval record
       if ((data.status === 'อนุมัติ' || data.status === 'ไม่อนุมัติ') && data.approvedById) {
         transactions.push(
-          prisma.overtimeApproval.create({
+          prisma.overtime_approvals.create({
             data: {
-              overtimeId: id,
-              employeeId: data.approvedById,
+              overtime_id: id,
+              employee_id: data.approvedById,
               type: data.status === 'อนุมัติ' ? 'approve' : 'reject',
               status: 'completed',
               comment: data.comment || null,
@@ -1383,7 +1604,7 @@ export async function updateOvertimeNew(id, data) {
     
     // อัปเดตข้อมูลการทำงานล่วงเวลาและสร้าง approval records ถ้ามี
     const [updatedOvertime] = await prisma.$transaction([
-      prisma.overtime.update({
+      prisma.overtimes.update({
         where: { id },
         data: updateData,
       }),
@@ -1406,10 +1627,10 @@ export async function updateOvertimeNew(id, data) {
 export async function deleteOvertime(id) {
   try {
     // ตรวจสอบว่ามีข้อมูลการทำงานล่วงเวลาหรือไม่
-    const existingOvertime = await prisma.overtime.findUnique({
+    const existingOvertime = await prisma.overtimes.findUnique({
       where: { id },
       include: {
-        approvals: true
+        overtime_approvals: true
       }
     });
     
@@ -1419,10 +1640,10 @@ export async function deleteOvertime(id) {
     
     // ลบทั้ง OvertimeApproval และ Overtime ในชุดคำสั่งเดียว
     await prisma.$transaction([
-      prisma.overtimeApproval.deleteMany({
-        where: { overtimeId: id }
+      prisma.overtime_approvals.deleteMany({
+        where: { overtime_id: id }
       }),
-      prisma.overtime.delete({
+      prisma.overtimes.delete({
         where: { id }
       })
     ]);
@@ -1452,21 +1673,21 @@ export async function getStatistics() {
     }
 
     // ดึงจำนวนพนักงานทั้งหมด
-    const totalEmployees = await prisma.employee.count({
+    const totalEmployees = await prisma.employees.count({
       where: {
-        isActive: true
+        is_active: true
       }
     });
     
     // ดึงจำนวนคำขอลาที่รออนุมัติ
-    const pendingLeaves = await prisma.leave.count({
+    const pendingLeaves = await prisma.leaves.count({
       where: {
         status: 'รออนุมัติ'
       }
     });
     
     // ดึงจำนวนคำขอทำงานล่วงเวลาที่รออนุมัติ
-    const pendingOvertimes = await prisma.overtime.count({
+    const pendingOvertimes = await prisma.overtimes.count({
       where: {
         status: 'รออนุมัติ'
       }
@@ -1508,8 +1729,8 @@ export async function getEmployeeCalendarData(startDate, endDate) {
     
     console.log('Calendar range - start:', start.toISOString(), 'end:', end.toISOString());
     
-    // ตรวจสอบว่ามี prisma.workStatus หรือไม่
-    const hasWorkStatus = typeof prisma.workStatus !== 'undefined';
+    // ตรวจสอบว่ามี prisma.work_statusesือไม่
+    const hasWorkStatus = typeof prisma.work_statuses !== 'undefined';
     
     // สร้าง Promise ทั้งหมดเพื่อดึงข้อมูลพร้อมกัน
     let employees = [], leaves = [], overtimes = [], workStatuses = [];
@@ -1518,22 +1739,22 @@ export async function getEmployeeCalendarData(startDate, endDate) {
       // ถ้ามี workStatus model ให้ดึงข้อมูลทั้งหมดพร้อมกัน
       [employees, leaves, overtimes, workStatuses] = await Promise.all([
         // ดึงข้อมูลพนักงานเฉพาะที่ active และเฉพาะฟิลด์ที่จำเป็น
-        prisma.employee.findMany({
+        prisma.employees.findMany({
           where: {
-            isActive: true,
+            is_active: true,
           },
           select: {
             id: true,
-            employeeId: true,
-            firstName: true,
-            lastName: true,
+            employee_id: true,
+            first_name: true,
+            last_name: true,
             email: true,
             position: true,
-            department: true,
+            departments: true,
             role: true,
             image: true,
-            teamId: true,
-            teamData: {
+            team_id: true,
+            teams: {
               select: {
                 id: true,
                 name: true,
@@ -1542,17 +1763,17 @@ export async function getEmployeeCalendarData(startDate, endDate) {
             }
           },
           orderBy: {
-            firstName: 'asc',
+            first_name: 'asc',
           },
         }),
         
         // ดึงข้อมูลการลาในช่วงเวลาที่กำหนด (เฉพาะที่ได้รับอนุมัติหรือรออนุมัติ)
-        prisma.leave.findMany({
+        prisma.leaves.findMany({
           where: {
-            startDate: {
+            start_date: {
               lte: end,
             },
-            endDate: {
+            end_date: {
               gte: start,
             },
             // เฉพาะที่ได้รับอนุมัติหรือรออนุมัติ
@@ -1562,27 +1783,27 @@ export async function getEmployeeCalendarData(startDate, endDate) {
           },
           select: {
             id: true,
-            employeeId: true,
-            startDate: true,
-            endDate: true,
-            leaveType: true,
-            totalDays: true,
+            employee_id: true,
+            start_date: true,
+            end_date: true,
+            leave_type: true,
+            total_days: true,
             status: true,
             reason: true,
-            employee: {
+            employees: {
               select: {
                 id: true,
-                firstName: true,
-                lastName: true,
+                first_name: true,
+                last_name: true,
                 position: true,
-                teamId: true,
+                team_id: true,
               },
             },
           },
         }),
         
         // ดึงข้อมูลการทำงานล่วงเวลาในช่วงเวลาที่กำหนด
-        prisma.overtime.findMany({
+        prisma.overtimes.findMany({
           where: {
             date: {
               gte: start,
@@ -1595,27 +1816,27 @@ export async function getEmployeeCalendarData(startDate, endDate) {
           },
           select: {
             id: true,
-            employeeId: true,
+            employee_id: true,
             date: true,
-            startTime: true,
-            endTime: true,
-            totalHours: true,
+            start_time: true,
+            end_time: true,
+            total_hours: true,
             status: true,
             reason: true,
-            employee: {
+            employees: {
               select: {
                 id: true,
-                firstName: true,
-                lastName: true,
+                first_name: true,
+                last_name: true,
                 position: true,
-                teamId: true,
+                team_id: true,
               },
             },
           },
         }),
         
         // ดึงข้อมูลสถานะการทำงาน
-        prisma.workStatus.findMany({
+        prisma.work_statuses.findMany({
           where: {
             date: {
               gte: start,
@@ -1624,18 +1845,18 @@ export async function getEmployeeCalendarData(startDate, endDate) {
           },
           select: {
             id: true,
-            employeeId: true,
+            employee_id: true,
             date: true,
             status: true,
             note: true,
-            employee: {
+            employees: {
               select: {
                 id: true,
-                firstName: true,
-                lastName: true,
+                first_name: true,
+                last_name: true,
                 position: true,
-                teamId: true,
-                teamData: {
+                team_id: true,
+                teams: {
                   select: {
                     id: true,
                     name: true
@@ -1653,22 +1874,22 @@ export async function getEmployeeCalendarData(startDate, endDate) {
       // ถ้าไม่มี workStatus model ให้ดึงข้อมูลเฉพาะ employee, leave, และ overtime
       [employees, leaves, overtimes] = await Promise.all([
         // ดึงข้อมูลพนักงานเฉพาะที่ active และเฉพาะฟิลด์ที่จำเป็น
-        prisma.employee.findMany({
+        prisma.employees.findMany({
           where: {
-            isActive: true,
+            is_active: true,
           },
           select: {
             id: true,
-            employeeId: true,
-            firstName: true,
-            lastName: true,
+            employee_id: true,
+            first_name: true,
+            last_name: true,
             email: true,
             position: true,
-            department: true,
+            departments: true,
             role: true,
             image: true,
-            teamId: true,
-            teamData: {
+            team_id: true,
+            teams: {
               select: {
                 id: true,
                 name: true,
@@ -1677,17 +1898,17 @@ export async function getEmployeeCalendarData(startDate, endDate) {
             }
           },
           orderBy: {
-            firstName: 'asc',
+            first_name: 'asc',
           },
         }),
         
         // ดึงข้อมูลการลาในช่วงเวลาที่กำหนด (เฉพาะที่ได้รับอนุมัติหรือรออนุมัติ)
-        prisma.leave.findMany({
+        prisma.leaves.findMany({
           where: {
-            startDate: {
+            start_date: {
               lte: end,
             },
-            endDate: {
+            end_date: {
               gte: start,
             },
             // เฉพาะที่ได้รับอนุมัติหรือรออนุมัติ
@@ -1697,27 +1918,27 @@ export async function getEmployeeCalendarData(startDate, endDate) {
           },
           select: {
             id: true,
-            employeeId: true,
-            startDate: true,
-            endDate: true,
-            leaveType: true,
-            totalDays: true,
+            employee_id: true,
+            start_date: true,
+            end_date: true,
+            leave_type: true,
+            total_days: true,
             status: true,
             reason: true,
-            employee: {
+            employees: {
               select: {
                 id: true,
-                firstName: true,
-                lastName: true,
+                first_name: true,
+                last_name: true,
                 position: true,
-                teamId: true,
+                team_id: true,
               },
             },
           },
         }),
         
         // ดึงข้อมูลการทำงานล่วงเวลาในช่วงเวลาที่กำหนด
-        prisma.overtime.findMany({
+        prisma.overtimes.findMany({
           where: {
             date: {
               gte: start,
@@ -1730,20 +1951,20 @@ export async function getEmployeeCalendarData(startDate, endDate) {
           },
           select: {
             id: true,
-            employeeId: true,
+            employee_id: true,
             date: true,
-            startTime: true,
-            endTime: true,
-            totalHours: true,
+            start_time: true,
+            end_time: true,
+            total_hours: true,
             status: true,
             reason: true,
-            employee: {
+            employees: {
               select: {
                 id: true,
-                firstName: true,
-                lastName: true,
+                first_name: true,
+                last_name: true,
                 position: true,
-                teamId: true,
+                team_id: true,
               },
             },
           },
@@ -1775,10 +1996,9 @@ export async function getEmployeeCalendarData(startDate, endDate) {
 export async function getWorkStatuses(employeeId = null, date = null, startDate = null, endDate = null) {
   try {
     // ตรวจสอบว่ามี workStatus model หรือไม่
-    const hasWorkStatusModel = typeof prisma.workStatus !== 'undefined';
     const hasWorkStatusesModel = typeof prisma.work_statuses !== 'undefined';
     
-    if (!hasWorkStatusModel && !hasWorkStatusesModel) {
+    if (!hasWorkStatusesModel) {
       return {
         success: false,
         message: 'โมเดลข้อมูลสถานะการทำงานยังไม่พร้อมใช้งาน กรุณาตรวจสอบการติดตั้งฐานข้อมูล',
@@ -1787,21 +2007,17 @@ export async function getWorkStatuses(employeeId = null, date = null, startDate 
     }
     
     // ใช้โมเดลที่มีอยู่ (work_statuses หรือ workStatus)
-    const model = hasWorkStatusesModel ? prisma.work_statuses : prisma.workStatus;
+    const model = prisma.work_statuses
     
     console.log('================ WORK STATUS FETCH DEBUG ================');
-    console.log(`Using model: ${hasWorkStatusesModel ? 'work_statuses' : 'workStatus'}`);
+    console.log(`Using model: work_statuses`);
     
     const whereClause = {};
     
     if (employeeId) {
       // ปรับตามชื่อฟิลด์ของแต่ละโมเดล
-      if (hasWorkStatusesModel) {
-        whereClause.employee_id = employeeId;
-      } else {
-        whereClause.employeeId = employeeId;
-      }
-      console.log('Filtering by employeeId:', employeeId);
+      whereClause.employee_id = employeeId;
+      console.log('Filtering by employee_id:', employeeId);
     }
     
     if (date) {
@@ -1855,21 +2071,21 @@ export async function getWorkStatuses(employeeId = null, date = null, startDate 
       workStatuses = await model.findMany({
         where: whereClause,
         include: {
-          employees_work_statuses_employee_idToemployees: {
+          employees_work_statuses_employee_id_to_employees: {
             select: {
               id: true,
-              firstName: true,
-              lastName: true,
+              first_name: true,
+              last_name: true,
               position: true,
-              departmentId: true,
+              department_id: true,
               image: true,
             },
           },
           employees_work_statuses_created_by_idToemployees: {
             select: {
               id: true,
-              firstName: true,
-              lastName: true,
+              first_name: true,
+              last_name: true,
             },
           },
         },
@@ -1881,25 +2097,25 @@ export async function getWorkStatuses(employeeId = null, date = null, startDate 
       // แปลงชื่อ field ให้เป็นรูปแบบ camelCase
       workStatuses = workStatuses.map(item => ({
         id: item.id,
-        employeeId: item.employee_id,
+        employee_id: item.employee_id,
         date: item.date,
         status: item.status,
         note: item.note,
-        createdById: item.created_by_id,
-        createdAt: item.created_at,
-        updatedAt: item.updated_at,
-        employee: item.employees_work_statuses_employee_idToemployees ? {
-          id: item.employees_work_statuses_employee_idToemployees.id,
-          firstName: item.employees_work_statuses_employee_idToemployees.firstName,
-          lastName: item.employees_work_statuses_employee_idToemployees.lastName,
-          position: item.employees_work_statuses_employee_idToemployees.position,
-          departmentId: item.employees_work_statuses_employee_idToemployees.departmentId,
-          image: item.employees_work_statuses_employee_idToemployees.image,
+        created_by_id: item.created_by_id,
+        created_at: item.created_at,
+        updated_at: item.updated_at,
+        employee: item.employees_work_statuses_employee_id_to_employees ? {
+          id: item.employees_work_statuses_employee_id_to_employees.id,
+          first_name: item.employees_work_statuses_employee_id_to_employees.first_name,
+          last_name: item.employees_work_statuses_employee_id_to_employees.last_name,
+          position: item.employees_work_statuses_employee_id_to_employees.position,
+          department_id: item.employees_work_statuses_employee_id_to_employees.department_id,
+          image: item.employees_work_statuses_employee_id_to_employees.image,
         } : null,
-        createdBy: item.employees_work_statuses_created_by_idToemployees ? {
+        created_by: item.employees_work_statuses_created_by_idToemployees ? {
           id: item.employees_work_statuses_created_by_idToemployees.id,
-          firstName: item.employees_work_statuses_created_by_idToemployees.firstName,
-          lastName: item.employees_work_statuses_created_by_idToemployees.lastName,
+          first_name: item.employees_work_statuses_created_by_idToemployees.first_name,
+          last_name: item.employees_work_statuses_created_by_idToemployees.last_name,
         } : null,
       }));
     } else {
@@ -1907,23 +2123,23 @@ export async function getWorkStatuses(employeeId = null, date = null, startDate 
       workStatuses = await model.findMany({
         where: whereClause,
         include: {
-          employee: {
+          employees: {
             select: {
               id: true,
-              firstName: true,
-              lastName: true,
+              first_name: true,
+              last_name: true,
               position: true,
-              teamId: true,
-              teamData: true,
-              department: true,
+              team_id: true,
+              teams: true,
+              departments: true,
               image: true,
             },
           },
-          createdBy: {
+          employees: {
             select: {
               id: true,
-              firstName: true,
-              lastName: true,
+              first_name: true,
+              last_name: true,
             },
           },
         },
@@ -1961,10 +2177,9 @@ export async function getWorkStatuses(employeeId = null, date = null, startDate 
 export async function getWorkStatusById(id) {
   try {
     // ตรวจสอบว่ามี workStatus model หรือไม่
-    const hasWorkStatusModel = typeof prisma.workStatus !== 'undefined';
     const hasWorkStatusesModel = typeof prisma.work_statuses !== 'undefined';
     
-    if (!hasWorkStatusModel && !hasWorkStatusesModel) {
+    if (!hasWorkStatusesModel) {
       return {
         success: false,
         message: 'โมเดลข้อมูลสถานะการทำงานยังไม่พร้อมใช้งาน กรุณาตรวจสอบการติดตั้งฐานข้อมูล',
@@ -1973,7 +2188,7 @@ export async function getWorkStatusById(id) {
     }
     
     // ใช้โมเดลที่มีอยู่ (work_statuses หรือ workStatus)
-    const model = hasWorkStatusesModel ? prisma.work_statuses : prisma.workStatus;
+    const model = prisma.work_statuses
     
     let workStatus;
     
@@ -1982,21 +2197,21 @@ export async function getWorkStatusById(id) {
       workStatus = await model.findUnique({
         where: { id },
         include: {
-          employees_work_statuses_employee_idToemployees: {
+          employees_work_statuses_employee_id_to_employees: {
             select: {
               id: true,
-              firstName: true,
-              lastName: true,
+              first_name: true,
+              last_name: true,
               position: true,
-              departmentId: true,
+              department_id: true,
               image: true,
             },
           },
           employees_work_statuses_created_by_idToemployees: {
             select: {
               id: true,
-              firstName: true,
-              lastName: true,
+              first_name: true,
+              last_name: true,
             },
           },
         },
@@ -2006,25 +2221,25 @@ export async function getWorkStatusById(id) {
         // แปลงชื่อ field ให้เป็นรูปแบบ camelCase
         workStatus = {
           id: workStatus.id,
-          employeeId: workStatus.employee_id,
+          employee_id: workStatus.employee_id,
           date: workStatus.date,
           status: workStatus.status,
           note: workStatus.note,
-          createdById: workStatus.created_by_id,
-          createdAt: workStatus.created_at,
-          updatedAt: workStatus.updated_at,
-          employee: workStatus.employees_work_statuses_employee_idToemployees ? {
-            id: workStatus.employees_work_statuses_employee_idToemployees.id,
-            firstName: workStatus.employees_work_statuses_employee_idToemployees.firstName,
-            lastName: workStatus.employees_work_statuses_employee_idToemployees.lastName,
-            position: workStatus.employees_work_statuses_employee_idToemployees.position,
-            departmentId: workStatus.employees_work_statuses_employee_idToemployees.departmentId,
-            image: workStatus.employees_work_statuses_employee_idToemployees.image,
+          created_by_id: workStatus.created_by_id,
+          created_at: workStatus.created_at,
+          updated_at: workStatus.updated_at,
+          employee: workStatus.employees_work_statuses_employee_id_to_employees ? {
+            id: workStatus.employees_work_statuses_employee_id_to_employees.id,
+            first_name: workStatus.employees_work_statuses_employee_id_to_employees.first_name,
+            last_name: workStatus.employees_work_statuses_employee_id_to_employees.last_name,
+            position: workStatus.employees_work_statuses_employee_id_to_employees.position,
+            department_id: workStatus.employees_work_statuses_employee_id_to_employees.department_id,
+            image: workStatus.employees_work_statuses_employee_id_to_employees.image,
           } : null,
-          createdBy: workStatus.employees_work_statuses_created_by_idToemployees ? {
+          created_by: workStatus.employees_work_statuses_created_by_idToemployees ? {
             id: workStatus.employees_work_statuses_created_by_idToemployees.id,
-            firstName: workStatus.employees_work_statuses_created_by_idToemployees.firstName,
-            lastName: workStatus.employees_work_statuses_created_by_idToemployees.lastName,
+            first_name: workStatus.employees_work_statuses_created_by_idToemployees.first_name,
+            last_name: workStatus.employees_work_statuses_created_by_idToemployees.last_name,
           } : null,
         };
       }
@@ -2033,21 +2248,21 @@ export async function getWorkStatusById(id) {
       workStatus = await model.findUnique({
         where: { id },
         include: {
-          employee: {
+          employees: {
             select: {
               id: true,
-              firstName: true,
-              lastName: true,
+              first_name: true,
+              last_name: true,
               position: true,
-              departmentId: true,
+              department_id: true,
               image: true,
             },
           },
-          createdBy: {
+          employees: {
             select: {
               id: true,
-              firstName: true,
-              lastName: true,
+              first_name: true,
+              last_name: true,
             },
           },
         },
@@ -2074,7 +2289,7 @@ export async function getWorkStatusById(id) {
 export async function deleteWorkStatus(id) {
   try {
     // ตรวจสอบว่ามี workStatus model หรือไม่
-    const hasWorkStatusModel = typeof prisma.workStatus !== 'undefined';
+    const hasWorkStatusModel = typeof prisma.work_statuses !== 'undefined';
     const hasWorkStatusesModel = typeof prisma.work_statuses !== 'undefined';
     
     if (!hasWorkStatusModel && !hasWorkStatusesModel) {
@@ -2086,7 +2301,7 @@ export async function deleteWorkStatus(id) {
     }
     
     // ใช้โมเดลที่มีอยู่ (work_statuses หรือ workStatus)
-    const model = hasWorkStatusesModel ? prisma.work_statuses : prisma.workStatus;
+    const model = hasWorkStatusesModel ? prisma.work_statuses: prisma.work_statuses
     
     // ตรวจสอบว่ามีข้อมูลนี้อยู่หรือไม่
     const existingWorkStatus = await model.findUnique({
@@ -2120,11 +2335,11 @@ export async function deleteWorkStatus(id) {
 export async function approveOvertimeNew(id, data) {
   try {
     // ตรวจสอบว่ามีข้อมูลการทำงานล่วงเวลาหรือไม่
-    const existingOvertime = await prisma.overtime.findUnique({
+    const existingOvertime = await prisma.overtimes.findUnique({
       where: { id },
       include: {
-        approvals: true,
-        employee: true
+        overtime_approvals: true,
+        employees: true
       }
     });
     
@@ -2138,19 +2353,19 @@ export async function approveOvertimeNew(id, data) {
     }
     
     // อัปเดตสถานะการทำงานล่วงเวลาเป็น approved
-    const updatedOvertime = await prisma.overtime.update({
+    const updatedOvertime = await prisma.overtimes.update({
       where: { id },
       data: {
         status: 'approved',
-        updatedAt: new Date()
+        updated_at: new Date()
       }
     });
     
     // บันทึกการอนุมัติลงในตาราง OvertimeApproval
-    const approval = await prisma.overtimeApproval.create({
+    const approval = await prisma.overtime_approvals.create({
       data: {
-        overtimeId: id,
-        employeeId: data.approverId,
+        overtime_id: id,
+        employee_id: data.approverId,
         type: 'approve',
         status: 'completed',
         comment: data.comment || '',
@@ -2177,11 +2392,11 @@ export async function approveOvertimeNew(id, data) {
 export async function rejectOvertimeNew(id, data) {
   try {
     // ตรวจสอบว่ามีข้อมูลการทำงานล่วงเวลาหรือไม่
-    const existingOvertime = await prisma.overtime.findUnique({
+    const existingOvertime = await prisma.overtimes.findUnique({
       where: { id },
       include: {
-        approvals: true,
-        employee: true
+        overtime_approvals: true,
+        employees: true
       }
     });
     
@@ -2195,19 +2410,19 @@ export async function rejectOvertimeNew(id, data) {
     }
     
     // อัปเดตสถานะการทำงานล่วงเวลาเป็น rejected
-    const updatedOvertime = await prisma.overtime.update({
+    const updatedOvertime = await prisma.overtimes.update({
       where: { id },
       data: {
         status: 'rejected',
-        updatedAt: new Date()
+        updated_at: new Date()
       }
     });
     
     // บันทึกการไม่อนุมัติลงในตาราง OvertimeApproval
-    const approval = await prisma.overtimeApproval.create({
+    const approval = await prisma.overtime_approvals.create({
       data: {
-        overtimeId: id,
-        employeeId: data.approverId,
+        overtime_id: id,
+        employee_id: data.approverId,
         type: 'reject',
         status: 'completed',
         comment: data.comment || '',
@@ -2234,13 +2449,13 @@ export async function rejectOvertimeNew(id, data) {
 export async function requestCancelOvertimeNew(id, data) {
   try {
     // ตรวจสอบว่ามีข้อมูลการทำงานล่วงเวลาหรือไม่
-    const existingOvertime = await prisma.overtime.findUnique({
+    const existingOvertime = await prisma.overtimes.findUnique({
       where: { id },
       include: {
-        approvals: {
-          orderBy: { createdAt: 'desc' }
+        overtime_approvals: {
+          orderBy: { created_at: 'desc' }
         },
-        employee: true
+        employees: true
       }
     });
     
@@ -2248,23 +2463,36 @@ export async function requestCancelOvertimeNew(id, data) {
       return { success: false, message: 'ไม่พบข้อมูลการทำงานล่วงเวลา' };
     }
     
-    // ตรวจสอบว่าเป็นการทำงานล่วงเวลาที่อนุมัติแล้วหรือไม่
+    // ตรวจสอบว่าสถานะปัจจุบันเป็น approved หรือไม่
     if (existingOvertime.status !== 'approved') {
-      return { success: false, message: 'สามารถยกเลิกได้เฉพาะการทำงานล่วงเวลาที่อนุมัติแล้วเท่านั้น' };
+      return { success: false, message: 'สามารถขอยกเลิกได้เฉพาะการทำงานล่วงเวลาที่อนุมัติแล้วเท่านั้น' };
     }
     
-    // บันทึกคำขอยกเลิกการทำงานล่วงเวลาในตาราง OvertimeApproval
-    const newApproval = await prisma.overtimeApproval.create({
+    // ตรวจสอบว่ามีคำขอยกเลิกที่ยังรออนุมัติอยู่แล้วหรือไม่
+    const pendingCancelRequest = existingOvertime.overtime_approvals?.some(a => 
+      a.type === 'request_cancel' && 
+      !existingOvertime.overtime_approvals.some(b => 
+        (b.type === 'approve_cancel' || b.type === 'reject_cancel') && 
+        b.created_at > a.created_at
+      )
+    );
+    
+    if (pendingCancelRequest) {
+      return { success: false, message: 'มีคำขอยกเลิกการทำงานล่วงเวลานี้ที่ยังรออนุมัติอยู่แล้ว' };
+    }
+
+    // สร้างคำขอการยกเลิกใน OvertimeApproval
+    const newApproval = await prisma.overtime_approvals.create({
       data: {
-        overtimeId: id,
-        employeeId: data.employeeId,
+        overtime_id: id,
+        employee_id: data.employee_id,
         type: 'request_cancel',
-        status: 'completed',
-        reason: data.reason,
-      },
+        status: 'waiting',
+        comment: data.comment || '',
+      }
     });
     
-    // ดึงข้อมูลการทำงานล่วงเวลาที่อัปเดตแล้วพร้อมข้อมูลเพิ่มเติม
+    // ดึงข้อมูลการลาที่อัปเดตแล้วพร้อมข้อมูลเพิ่มเติม
     const fullOvertime = await getOvertimeById(id);
     
     return { 
@@ -2284,13 +2512,13 @@ export async function requestCancelOvertimeNew(id, data) {
 export async function approveCancelOvertimeNew(id, data) {
   try {
     // ตรวจสอบว่ามีข้อมูลการทำงานล่วงเวลาหรือไม่
-    const existingOvertime = await prisma.overtime.findUnique({
+    const existingOvertime = await prisma.overtimes.findUnique({
       where: { id },
       include: {
-        approvals: {
-          orderBy: { createdAt: 'desc' }
+        overtime_approvals: {
+          orderBy: { created_at: 'desc' }
         },
-        employee: true
+        employees: true
       }
     });
     
@@ -2299,7 +2527,7 @@ export async function approveCancelOvertimeNew(id, data) {
     }
     
     // ตรวจสอบว่ามีคำขอยกเลิกหรือไม่
-    const requestCancelAction = existingOvertime.approvals.find(a => a.type === 'request_cancel' && a.status === 'completed');
+    const requestCancelAction = existingOvertime.overtime_approvals.find(a => a.type === 'request_cancel' && a.status === 'completed');
     if (!requestCancelAction) {
       return { success: false, message: 'ไม่พบคำขอยกเลิกการทำงานล่วงเวลา' };
     }
@@ -2310,19 +2538,19 @@ export async function approveCancelOvertimeNew(id, data) {
     }
     
     // อัปเดตสถานะการทำงานล่วงเวลาเป็น canceled
-    const updatedOvertime = await prisma.overtime.update({
+    const updatedOvertime = await prisma.overtimes.update({
       where: { id },
       data: {
         status: 'canceled',
-        updatedAt: new Date()
+        updated_at: new Date()
       }
     });
     
     // บันทึกการอนุมัติยกเลิกลงในตาราง OvertimeApproval
-    const approval = await prisma.overtimeApproval.create({
+    const approval = await prisma.overtime_approvals.create({
       data: {
-        overtimeId: id,
-        employeeId: data.approverId,
+        overtime_id: id,
+        employee_id: data.approverId,
         type: 'approve_cancel',
         status: 'completed',
         comment: data.comment || '',
@@ -2349,13 +2577,13 @@ export async function approveCancelOvertimeNew(id, data) {
 export async function rejectCancelOvertimeNew(id, data) {
   try {
     // ตรวจสอบว่ามีข้อมูลการทำงานล่วงเวลาหรือไม่
-    const existingOvertime = await prisma.overtime.findUnique({
+    const existingOvertime = await prisma.overtimes.findUnique({
       where: { id },
       include: {
-        approvals: {
-          orderBy: { createdAt: 'desc' }
+        overtime_approvals: {
+          orderBy: { created_at: 'desc' }
         },
-        employee: true
+        employees: true
       }
     });
     
@@ -2364,7 +2592,7 @@ export async function rejectCancelOvertimeNew(id, data) {
     }
     
     // ตรวจสอบว่ามีคำขอยกเลิกหรือไม่
-    const requestCancelAction = existingOvertime.approvals.find(a => a.type === 'request_cancel' && a.status === 'completed');
+    const requestCancelAction = existingOvertime.overtime_approvals.find(a => a.type === 'request_cancel' && a.status === 'completed');
     if (!requestCancelAction) {
       return { success: false, message: 'ไม่พบคำขอยกเลิกการทำงานล่วงเวลา' };
     }
@@ -2375,10 +2603,10 @@ export async function rejectCancelOvertimeNew(id, data) {
     }
     
     // บันทึกการไม่อนุมัติยกเลิกลงในตาราง OvertimeApproval (ไม่มีการเปลี่ยนสถานะ Overtime)
-    const approval = await prisma.overtimeApproval.create({
+    const approval = await prisma.overtime_approvals.create({
       data: {
-        overtimeId: id,
-        employeeId: data.approverId,
+        overtime_id: id,
+        employee_id: data.approverId,
         type: 'reject_cancel',
         status: 'completed',
         comment: data.comment || '',
@@ -2405,7 +2633,7 @@ export async function rejectCancelOvertimeNew(id, data) {
 export async function deleteLeave(id) {
   try {
     // ตรวจสอบว่ามีข้อมูลการลาหรือไม่
-    const existingLeave = await prisma.leave.findUnique({
+    const existingLeave = await prisma.leaves.findUnique({
       where: { id }
     });
     
@@ -2414,12 +2642,12 @@ export async function deleteLeave(id) {
     }
     
     // ลบข้อมูลการอนุมัติทั้งหมดที่เกี่ยวข้องก่อน
-    await prisma.leaveApproval.deleteMany({
-      where: { leaveId: id }
+    await prisma.leave_approvals.deleteMany({
+      where: { leave_id: id }
     });
     
     // ลบข้อมูลการลา
-    const deletedLeave = await prisma.leave.delete({
+    const deletedLeave = await prisma.leaves.delete({
       where: { id }
     });
     
@@ -2435,10 +2663,10 @@ export async function deleteLeave(id) {
  */
 export async function createOrUpdateWorkStatus(data) {
   try {
-    const { employeeId, date, status, note, createdById } = data;
+    const { employee_id, date, status, note, created_by_id } = data;
     
     // ตรวจสอบว่ามี workStatus model หรือไม่
-    const hasWorkStatusModel = typeof prisma.workStatus !== 'undefined';
+    const hasWorkStatusModel = typeof prisma.work_statuses !== 'undefined';
     const hasWorkStatusesModel = typeof prisma.work_statuses !== 'undefined';
     
     if (!hasWorkStatusModel && !hasWorkStatusesModel) {
@@ -2450,7 +2678,7 @@ export async function createOrUpdateWorkStatus(data) {
     }
     
     // ใช้โมเดลที่มีอยู่ (work_statuses หรือ workStatus)
-    const model = hasWorkStatusesModel ? prisma.work_statuses : prisma.workStatus;
+    const model = hasWorkStatusesModel ? prisma.work_statuses: prisma.work_statuses
     
     // ตรวจสอบข้อมูลวันที่ที่รับเข้ามา
     console.log('================ WORK STATUS SAVE DEBUG ================');
@@ -2487,7 +2715,7 @@ export async function createOrUpdateWorkStatus(data) {
       // ตรวจสอบว่ามีข้อมูลอยู่แล้วหรือไม่
       existingWorkStatus = await model.findFirst({
         where: {
-          employee_id: employeeId,
+          employee_id: employee_id,
           date: formattedDate
         }
       });
@@ -2501,24 +2729,24 @@ export async function createOrUpdateWorkStatus(data) {
           data: {
             status,
             note,
-            created_by_id: createdById, // อัปเดต created_by_id เป็นคนล่าสุดที่แก้ไขข้อมูล
+            created_by_id: created_by_id, // อัปเดต created_by_id เป็นคนล่าสุดที่แก้ไขข้อมูล
           },
           include: {
-            employees_work_statuses_employee_idToemployees: {
+            employees_work_statuses_employee_id_to_employees: {
               select: {
                 id: true,
-                firstName: true,
-                lastName: true,
+                first_name: true,
+                last_name: true,
                 position: true,
-                departmentId: true,
+                department_id: true,
                 image: true,
               },
             },
             employees_work_statuses_created_by_idToemployees: {
               select: {
                 id: true,
-                firstName: true,
-                lastName: true,
+                first_name: true,
+                last_name: true,
               },
             },
           },
@@ -2527,55 +2755,55 @@ export async function createOrUpdateWorkStatus(data) {
         // แปลงชื่อ field ให้เป็นรูปแบบ camelCase
         result = {
           id: result.id,
-          employeeId: result.employee_id,
+          employee_id: result.employee_id,
           date: result.date,
           status: result.status,
           note: result.note,
-          createdById: result.created_by_id,
-          createdAt: result.created_at,
-          updatedAt: result.updated_at,
-          employee: result.employees_work_statuses_employee_idToemployees ? {
-            id: result.employees_work_statuses_employee_idToemployees.id,
-            firstName: result.employees_work_statuses_employee_idToemployees.firstName,
-            lastName: result.employees_work_statuses_employee_idToemployees.lastName,
-            position: result.employees_work_statuses_employee_idToemployees.position,
-            departmentId: result.employees_work_statuses_employee_idToemployees.departmentId,
-            image: result.employees_work_statuses_employee_idToemployees.image,
+          created_by_id: result.created_by_id,
+          created_at: result.created_at,
+          updated_at: result.updated_at,
+          employee: result.employees_work_statuses_employee_id_to_employees ? {
+            id: result.employees_work_statuses_employee_id_to_employees.id,
+            first_name: result.employees_work_statuses_employee_id_to_employees.first_name,
+            last_name: result.employees_work_statuses_employee_id_to_employees.last_name,
+            position: result.employees_work_statuses_employee_id_to_employees.position,
+            department_id: result.employees_work_statuses_employee_id_to_employees.department_id,
+            image: result.employees_work_statuses_employee_id_to_employees.image,
           } : null,
-          createdBy: result.employees_work_statuses_created_by_idToemployees ? {
+          created_by: result.employees_work_statuses_created_by_idToemployees ? {
             id: result.employees_work_statuses_created_by_idToemployees.id,
-            firstName: result.employees_work_statuses_created_by_idToemployees.firstName,
-            lastName: result.employees_work_statuses_created_by_idToemployees.lastName,
-          } : null
+            first_name: result.employees_work_statuses_created_by_idToemployees.first_name,
+            last_name: result.employees_work_statuses_created_by_idToemployees.last_name,
+          } : null,
         };
       } else {
         // ถ้าไม่มีข้อมูลอยู่ ให้สร้างข้อมูลใหม่
-        console.log(`Creating new work status for ${employeeId} on date ${formattedDate.toISOString()}`);
+        console.log(`Creating new work status for ${employee_id} on date ${formattedDate.toISOString()}`);
         
         result = await model.create({
           data: {
-            employee_id: employeeId,
+            employee_id: employee_id,
             date: formattedDate,
             status,
             note,
-            created_by_id: createdById
+            created_by_id: created_by_id
           },
           include: {
-            employees_work_statuses_employee_idToemployees: {
+            employees_work_statuses_employee_id_to_employees: {
               select: {
                 id: true,
-                firstName: true,
-                lastName: true,
+                first_name: true,
+                last_name: true,
                 position: true,
-                departmentId: true,
+                department_id: true,
                 image: true,
               },
             },
             employees_work_statuses_created_by_idToemployees: {
               select: {
                 id: true,
-                firstName: true,
-                lastName: true,
+                first_name: true,
+                last_name: true,
               },
             },
           },
@@ -2584,26 +2812,26 @@ export async function createOrUpdateWorkStatus(data) {
         // แปลงชื่อ field ให้เป็นรูปแบบ camelCase
         result = {
           id: result.id,
-          employeeId: result.employee_id,
+          employee_id: result.employee_id,
           date: result.date,
           status: result.status,
           note: result.note,
-          createdById: result.created_by_id,
-          createdAt: result.created_at,
-          updatedAt: result.updated_at,
-          employee: result.employees_work_statuses_employee_idToemployees ? {
-            id: result.employees_work_statuses_employee_idToemployees.id,
-            firstName: result.employees_work_statuses_employee_idToemployees.firstName,
-            lastName: result.employees_work_statuses_employee_idToemployees.lastName,
-            position: result.employees_work_statuses_employee_idToemployees.position,
-            departmentId: result.employees_work_statuses_employee_idToemployees.departmentId,
-            image: result.employees_work_statuses_employee_idToemployees.image,
+          created_by_id: result.created_by_id,
+          created_at: result.created_at,
+          updated_at: result.updated_at,
+          employee: result.employees_work_statuses_employee_id_to_employees ? {
+            id: result.employees_work_statuses_employee_id_to_employees.id,
+            first_name: result.employees_work_statuses_employee_id_to_employees.first_name,
+            last_name: result.employees_work_statuses_employee_id_to_employees.last_name,
+            position: result.employees_work_statuses_employee_id_to_employees.position,
+            department_id: result.employees_work_statuses_employee_id_to_employees.department_id,
+            image: result.employees_work_statuses_employee_id_to_employees.image,
           } : null,
-          createdBy: result.employees_work_statuses_created_by_idToemployees ? {
+          created_by: result.employees_work_statuses_created_by_idToemployees ? {
             id: result.employees_work_statuses_created_by_idToemployees.id,
-            firstName: result.employees_work_statuses_created_by_idToemployees.firstName,
-            lastName: result.employees_work_statuses_created_by_idToemployees.lastName,
-          } : null
+            first_name: result.employees_work_statuses_created_by_idToemployees.first_name,
+            last_name: result.employees_work_statuses_created_by_idToemployees.last_name,
+          } : null,
         };
       }
     } else {
@@ -2611,7 +2839,7 @@ export async function createOrUpdateWorkStatus(data) {
       // ตรวจสอบว่ามีข้อมูลอยู่แล้วหรือไม่
       existingWorkStatus = await model.findFirst({
         where: {
-          employeeId,
+          employee_id,
           date: formattedDate
         }
       });
@@ -2625,24 +2853,24 @@ export async function createOrUpdateWorkStatus(data) {
           data: {
             status,
             note,
-            createdById, // อัปเดต createdById เป็นคนล่าสุดที่แก้ไขข้อมูล
+            created_by_id, // อัปเดต createdById เป็นคนล่าสุดที่แก้ไขข้อมูล
           },
           include: {
-            employee: {
+            employees: {
               select: {
                 id: true,
-                firstName: true,
-                lastName: true,
+                first_name: true,
+                last_name: true,
                 position: true,
-                departmentId: true,
+                department_id: true,
                 image: true,
               },
             },
-            createdBy: {
+            created_by: {
               select: {
                 id: true,
-                firstName: true,
-                lastName: true,
+                first_name: true,
+                last_name: true,
               },
             },
           },
@@ -2653,28 +2881,28 @@ export async function createOrUpdateWorkStatus(data) {
         
         result = await model.create({
           data: {
-            employeeId,
+            employee_id,
             date: formattedDate,
             status,
             note,
-            createdById
+            created_by_id
           },
           include: {
-            employee: {
+            employees: {
               select: {
                 id: true,
-                firstName: true,
-                lastName: true,
+                first_name: true,
+                last_name: true,
                 position: true,
-                departmentId: true,
+                department_id: true,
                 image: true,
               },
             },
-            createdBy: {
+            created_by: {
               select: {
                 id: true,
-                firstName: true,
-                lastName: true,
+                first_name: true,
+                last_name: true,
               },
             },
           },
@@ -2690,5 +2918,130 @@ export async function createOrUpdateWorkStatus(data) {
   } catch (error) {
     console.error('Error in createOrUpdateWorkStatus:', error);
     return { success: false, message: error.message };
+  }
+}
+
+/**
+ * ตรวจสอบว่าผู้ใช้มีสิทธิ์ที่กำหนดหรือไม่
+ * @param {string} userId - รหัสผู้ใช้
+ * @param {string} permissionCode - รหัสสิทธิ์
+ * @returns {Promise<boolean>} - ผลการตรวจสอบ
+ */
+export async function hasPermission(userId, permissionCode) {
+  try {
+    if (!userId || !permissionCode) {
+      console.log(`Missing userId or permissionCode. UserId: ${userId}, PermissionCode: ${permissionCode}`);
+      return false;
+    }
+
+    // ดึงข้อมูลพนักงานพร้อมบทบาท
+    const employee = await prisma.employees.findUnique({
+      where: { id: userId },
+      include: {
+        roles: true // ใช้ความสัมพันธ์กับตาราง roles ตาม schema
+      }
+    });
+
+    if (!employee || !employee.is_active) {
+      console.log(`Employee not found or inactive. UserId: ${userId}`);
+      return false;
+    }
+
+    // ถ้าไม่ได้เชื่อมโยงกับบทบาท
+    if (!employee.role_id) {
+      console.log(`User ${userId} has no role_id. Permission denied.`);
+      return false;
+    }
+
+    console.log(`Checking permission for user: ${userId}, role_id: ${employee.role_id}, permission: ${permissionCode}`);
+
+    // ถ้าเป็น admin (ตรวจสอบจาก code ในตาราง roles)
+    if (employee.roles && employee.roles.code && employee.roles.code.toUpperCase() === 'ADMIN') {
+      console.log(`User ${userId} has ADMIN role. Permission granted.`);
+      return true;
+    }
+
+    // ค้นหาสิทธิ์ที่เชื่อมโยงกับบทบาทของผู้ใช้
+    const rolePermission = await prisma.role_permissions.findFirst({
+      where: {
+        role_id: employee.role_id,
+        is_active: true,
+        permissions: {
+          code: permissionCode,
+          is_active: true
+        }
+      },
+      include: {
+        permissions: true
+      }
+    });
+
+    console.log(`Role permission check: ${rolePermission ? 'Found' : 'Not found'}`);
+    return !!rolePermission;
+  } catch (error) {
+    console.error(`Error checking permission ${permissionCode} for user ${userId}:`, error);
+    return false;
+  }
+}
+
+/**
+ * ดึงรายการสิทธิ์ทั้งหมดของผู้ใช้
+ * @param {string} userId - รหัสผู้ใช้
+ * @returns {Promise<Array<string>>} - รายการรหัสสิทธิ์
+ */
+export async function getUserPermissions(userId) {
+  try {
+    if (!userId) {
+      return [];
+    }
+
+    // ดึงข้อมูลพนักงานพร้อมบทบาท
+    const employee = await prisma.employees.findUnique({
+      where: { id: userId },
+      include: {
+        roles: true
+      }
+    });
+
+    if (!employee || !employee.is_active) {
+      return [];
+    }
+
+    // ถ้าไม่ได้เชื่อมโยงกับบทบาท
+    if (!employee.role_id) {
+      console.log(`User ${userId} has no role_id. No permissions granted.`);
+      return [];
+    }
+
+    // ถ้าเป็น admin จะดึงทุกสิทธิ์
+    if (employee.roles && employee.roles.code && employee.roles.code.toUpperCase() === 'ADMIN') {
+      const allPermissions = await prisma.permissions.findMany({
+        where: { is_active: true },
+        select: { code: true }
+      });
+      
+      return allPermissions.map(p => p.code);
+    }
+
+    // ค้นหาสิทธิ์ที่เชื่อมโยงกับบทบาทของผู้ใช้
+    const rolePermissions = await prisma.role_permissions.findMany({
+      where: {
+        role_id: employee.role_id,
+        is_active: true,
+        permissions: {
+          is_active: true
+        }
+      },
+      include: {
+        permissions: {
+          select: { code: true }
+        }
+      }
+    });
+
+    return rolePermissions.map(rp => rp.permissions.code);
+  } catch (error) {
+    console.error(`Error fetching permissions for user ${userId}:`, error);
+    return [];
   }
 }

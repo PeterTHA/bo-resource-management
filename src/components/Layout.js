@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FiHome, FiUsers, FiCalendar, FiClock, FiFileText, FiUser, FiLogOut, FiMenu, FiX } from 'react-icons/fi';
+import { FiHome, FiUsers, FiCalendar, FiClock, FiFileText, FiUser, FiLogOut, FiMenu, FiX, FiShield } from 'react-icons/fi';
 import ThemeToggle from './ThemeToggle';
 import Image from 'next/image';
 import { useTheme } from 'next-themes';
@@ -154,6 +154,16 @@ export default function Layout({ children }) {
                   </div>
                 </Link>
               </li>
+              {(session?.user?.role === 'ADMIN' || session?.user?.role?.toUpperCase() === 'ADMIN') && (
+                <li className="relative">
+                  <Link href="/user-access" className={`rounded-md px-4 py-3 flex items-center ${isActive('/user-access')}`}>
+                    <div className="flex items-center">
+                      <FiShield className={`h-5 w-5 mr-2 ${pathname === '/user-access' ? 'text-primary' : ''}`} />
+                      <span>จัดการสิทธิ์</span>
+                    </div>
+                  </Link>
+                </li>
+              )}
             </ul>
           </div>
           
@@ -168,7 +178,7 @@ export default function Layout({ children }) {
                     <div className="rounded-full w-10 h-10 relative overflow-hidden border-2 border-primary">
                       <Image 
                         src={userData.image} 
-                        alt={userData.firstName || 'User'} 
+                        alt={userData.first_name || 'User'} 
                         fill
                         sizes="40px"
                         className="object-cover" 
@@ -185,7 +195,7 @@ export default function Layout({ children }) {
                 <li className="menu-title py-3 px-4 border-b border-base-200 bg-base-200">
                   <div className="flex flex-col">
                     <span className="font-bold text-base">
-                      {userData ? `${userData.firstName} ${userData.lastName}` : userName}
+                      {userData ? `${userData.first_name} ${userData.last_name}` : userName}
                     </span>
                     <span className="text-sm opacity-80">{session.user.email}</span>
                   </div>
@@ -266,6 +276,14 @@ export default function Layout({ children }) {
                 รายงาน
               </Link>
             </li>
+            {(session?.user?.role === 'ADMIN' || session?.user?.role?.toUpperCase() === 'ADMIN') && (
+              <li>
+                <Link href="/user-access" className={`${isActive('/user-access')} my-1`}>
+                  <FiShield className={`h-5 w-5 ${pathname === '/user-access' ? 'text-primary' : ''}`} />
+                  จัดการสิทธิ์
+                </Link>
+              </li>
+            )}
             <li>
               <Link href="/profile" className={`${isActive('/profile')} my-1`}>
                 <FiUser className={`h-5 w-5 ${pathname === '/profile' ? 'text-primary' : ''}`} />
