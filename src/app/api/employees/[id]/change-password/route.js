@@ -6,6 +6,16 @@ import { authOptions } from '@/lib/auth';
 import { getEmployeeById, updateEmployeePassword } from '../../../../../lib/db-prisma';
 import { decryptData } from '@/app/employees/utils/encryptionUtils';
 
+// ฟังก์ชันตรวจสอบสิทธิ์ admin
+function isAdminUser(user) {
+  // ตรวจสอบหลายรูปแบบ
+  return user.role?.toLowerCase() === 'admin' || 
+         user.roles?.code?.toLowerCase() === 'admin' ||
+         user.isAdmin === true || 
+         user.permissions?.includes('admin') ||
+         user.role?.toUpperCase() === 'ADMIN';
+}
+
 // PUT - เปลี่ยนรหัสผ่าน
 export async function PUT(request, { params }) {
   try {
@@ -18,11 +28,15 @@ export async function PUT(request, { params }) {
       );
     }
     
+    console.log('Session user in change-password API:', session.user);
+    console.log('User role:', session.user.role);
+    console.log('Is admin check:', isAdminUser(session.user));
+    
     const resolvedParams = await params;
     const id = resolvedParams.id;
     
     // ตรวจสอบว่าผู้ใช้มีสิทธิ์เปลี่ยนรหัสผ่านหรือไม่
-    if (session.user.role !== 'admin' && session.user.id !== id) {
+    if (!isAdminUser(session.user) && session.user.id !== id) {
       return NextResponse.json(
         { success: false, message: 'ไม่มีสิทธิ์เปลี่ยนรหัสผ่านของผู้ใช้อื่น' },
         { status: 403 }
@@ -67,7 +81,7 @@ export async function PUT(request, { params }) {
     }
     
     // ถ้าไม่ใช่แอดมิน ต้องตรวจสอบรหัสผ่านปัจจุบัน
-    if (session.user.role !== 'admin') {
+    if (!isAdminUser(session.user)) {
       if (!currentPassword) {
         return NextResponse.json(
           { success: false, message: 'กรุณาระบุรหัสผ่านปัจจุบัน' },

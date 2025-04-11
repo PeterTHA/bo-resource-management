@@ -6,6 +6,15 @@ import { hash } from 'bcryptjs';
 import { sendWelcomeEmail } from '@/lib/email-service';
 import { hasPermission } from '@/lib/permissions';
 
+// ฟังก์ชันสำหรับสร้าง UUID
+function generateUuid() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
 // ฟังก์ชันสำหรับสร้างรหัสผ่านแบบสุ่ม
 function generateRandomPassword(length = 10) {
   const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+";

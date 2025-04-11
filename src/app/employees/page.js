@@ -284,6 +284,12 @@ export default function EmployeesPage() {
   const handleAddEmployee = async (e) => {
     e.preventDefault();
     
+    // สร้างรหัสผ่านแบบสุ่ม
+    const randomPassword = Math.random().toString(36).slice(-8);
+    
+    // สร้างตัวแปร imageUrl จากค่า imagePreview ที่มีอยู่
+    const imageUrl = imagePreview || '';
+    
     const transformedData = {
       employee_id: formData.employeeId,
       first_name: formData.firstName,

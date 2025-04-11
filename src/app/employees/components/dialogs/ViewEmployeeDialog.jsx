@@ -1,6 +1,6 @@
 'use client';
 
-import { FiEye, FiMail, FiPhone, FiCalendar, FiUser, FiUsers, FiKey, FiMapPin, FiBriefcase, FiClock, FiMaximize2 } from 'react-icons/fi';
+import { FiEye, FiMail, FiPhone, FiCalendar, FiUser, FiUsers, FiKey, FiMapPin, FiBriefcase, FiClock, FiMaximize2, FiEdit } from 'react-icons/fi';
 import {
   Dialog,
   DialogContent,
@@ -44,13 +44,13 @@ export default function ViewEmployeeDialog({
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-4xl p-0 overflow-hidden bg-white dark:bg-gray-900 rounded-lg">
-          <DialogHeader className="sr-only">
-            <DialogTitle>ข้อมูลพนักงาน</DialogTitle>
+          <DialogHeader className="sticky top-0 z-50 p-0 m-0">
+            <DialogTitle className="sr-only">ข้อมูลพนักงาน</DialogTitle>
           </DialogHeader>
           
           {/* ส่วนหัว - ชื่อพนักงานและรูปโปรไฟล์ */}
-          <div className="relative overflow-hidden bg-black text-white">
-            <div className="absolute inset-0 bg-opacity-20 bg-black"></div>
+          <div className="relative overflow-hidden bg-gray-900 text-white">
+            <div className="absolute inset-0 bg-pattern opacity-5"></div>
             <div className="relative px-6 py-8 flex flex-col md:flex-row items-center md:items-end gap-6">
               <div 
                 className="h-32 w-32 rounded-full border-4 border-white shadow-lg bg-white overflow-hidden cursor-pointer relative group"
@@ -68,17 +68,17 @@ export default function ViewEmployeeDialog({
                   className="h-full w-full object-cover"
                 />
               </div>
-              <div className="text-center md:text-left">
+              <div className="text-center md:text-left flex-1">
                 <h1 className="text-2xl font-bold">{employee.firstName} {employee.lastName}</h1>
-                <p className="text-gray-200">{employee.positionTitle || '-'}</p>
-                <div className="flex mt-2 justify-center md:justify-start gap-2">
+                <p className="text-gray-300">{employee.positionTitle || '-'}</p>
+                <div className="flex mt-2 justify-center md:justify-start gap-2 flex-wrap">
                   <Badge 
-                    variant={employee.isActive ? "success" : "destructive"}
-                    className="bg-white/20 dark:bg-white/10 text-white border-none"
+                    variant={employee.isActive ? "outline" : "outline"}
+                    className="bg-white/10 text-white border-white/25"
                   >
                     {employee.isActive ? 'ใช้งาน' : 'ไม่ใช้งาน'}
                   </Badge>
-                  <Badge className="bg-white/20 dark:bg-white/10 text-white border-none">
+                  <Badge className="bg-white/10 text-white border-white/25">
                     รหัส: {employee.employeeId}
                   </Badge>
                 </div>
@@ -194,10 +194,11 @@ export default function ViewEmployeeDialog({
           </div>
           
           {/* ส่วนท้าย - ปุ่มปิด */}
-          <div className="bg-black px-6 py-4 border-t border-gray-700 flex justify-end">
+          <div className="bg-gray-50 dark:bg-gray-800 px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
             <Button 
               onClick={() => onOpenChange(false)}
-              className="bg-gray-800 hover:bg-gray-700 text-white" 
+              variant="outline" 
+              className="bg-white hover:bg-gray-100 dark:bg-gray-900 dark:hover:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-700"
               size="sm"
             >
               ปิด

@@ -115,6 +115,14 @@ export default function Layout({ children }) {
                 </Link>
               </li>
               <li className="relative">
+                <Link href="/projects" className={`rounded-md px-4 py-3 flex items-center ${isActive('/projects')}`}>
+                  <div className="flex items-center">
+                    <FiFileText className={`h-5 w-5 mr-2 ${pathname === '/projects' ? 'text-primary' : ''}`} />
+                    <span>โปรเจค</span>
+                  </div>
+                </Link>
+              </li>
+              <li className="relative">
                 <Link href="/leaves" className={`rounded-md px-4 py-3 flex items-center ${isActive('/leaves')}`}>
                   <div className="flex items-center">
                     <FiCalendar className={`h-5 w-5 mr-2 ${pathname === '/leaves' ? 'text-primary' : ''}`} />
@@ -138,14 +146,7 @@ export default function Layout({ children }) {
                   </div>
                 </Link>
               </li>
-              <li className="relative">
-                <Link href="/projects" className={`rounded-md px-4 py-3 flex items-center ${isActive('/projects')}`}>
-                  <div className="flex items-center">
-                    <FiFileText className={`h-5 w-5 mr-2 ${pathname === '/projects' ? 'text-primary' : ''}`} />
-                    <span>โปรเจค</span>
-                  </div>
-                </Link>
-              </li>
+              
               <li className="relative">
                 <Link href="/reports" className={`rounded-md px-4 py-3 flex items-center ${isActive('/reports')}`}>
                   <div className="flex items-center">

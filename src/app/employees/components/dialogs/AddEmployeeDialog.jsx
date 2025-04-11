@@ -328,7 +328,7 @@ export default function AddEmployeeDialog({
             
             <div className="space-y-3 md:col-span-1">
               {/* ส่วนของการอัปโหลดรูปโปรไฟล์ */}
-              <div className="flex justify-center h-[209px] mb-8">
+              <div className="flex justify-center h-[209px] mb-9">
                 <div className="w-48 h-48 relative group mt-0">
                   <div className="rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 overflow-hidden flex items-center justify-center h-full">
                     {imagePreview ? (
@@ -369,7 +369,7 @@ export default function AddEmployeeDialog({
                 </div>
               </div>
               
-              <div className="grid grid-cols-2 gap-3 h-[70px] mt-6">
+              <div className="grid grid-cols-2 gap-3 h-[70px] mt-7">
                 <div className="space-y-1">
                   <Label htmlFor="positionId">ตำแหน่ง</Label>
                   <Select
@@ -468,12 +468,29 @@ export default function AddEmployeeDialog({
                   <Switch
                     id="isActive"
                     name="isActive"
-                    checked={formData.isActive}
+                    checked={formData.isActive === true}
                     onCheckedChange={(checked) => {
-                      console.log("Switch changed to:", checked);
+                      const newValue = checked === true ? true : false;
+                      
+                      console.log("============ SWITCH CHANGE ============");
+                      console.log("ค่าปัจจุบัน:", formData.isActive);
+                      console.log("ค่าใหม่ที่จะเปลี่ยนเป็น:", newValue);
+                      console.log("ประเภทข้อมูล:", typeof newValue);
+                      
                       handleFormChange({
-                        target: { name: 'isActive', value: checked, type: 'checkbox' }
+                        target: { 
+                          name: 'isActive', 
+                          value: newValue, 
+                          type: 'checkbox',
+                          checked: newValue
+                        }
                       });
+                      
+                      setTimeout(() => {
+                        console.log("หลังเรียก handleFormChange:");
+                        console.log("ค่าใหม่ในฟอร์ม:", formData.isActive);
+                        console.log("=============================================");
+                      }, 100);
                     }}
                   />
                   <Label htmlFor="isActive" className="cursor-pointer text-sm text-gray-500 pl-1">
