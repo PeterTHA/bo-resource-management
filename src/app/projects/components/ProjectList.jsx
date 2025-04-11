@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FiFolder, FiEdit, FiTrash2, FiEye, FiUsers, FiPlus, FiChevronLeft, FiChevronRight, FiChevronUp, FiChevronDown } from 'react-icons/fi';
+import { FiFolder, FiEdit, FiTrash2, FiEye, FiUsers, FiPlus, FiChevronLeft, FiChevronRight, FiChevronUp, FiChevronDown, FiPaperclip, FiExternalLink, FiDownload, FiFileText, FiImage, FiArchive } from 'react-icons/fi';
+import { BsFiletypePdf, BsFiletypeDocx, BsFiletypeXlsx, BsFiletypePpt, BsFiletypeCsv } from 'react-icons/bs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -18,8 +19,20 @@ import {
   DropdownMenu, 
   DropdownMenuContent, 
   DropdownMenuItem, 
-  DropdownMenuTrigger 
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 export default function ProjectList({
   projects,
@@ -113,6 +126,38 @@ export default function ProjectList({
     return sortConfig.direction === 'asc' ? 
       <FiChevronUp className="h-3 w-3 inline-block ml-1" /> : 
       <FiChevronDown className="h-3 w-3 inline-block ml-1" />;
+  };
+
+  // ฟังก์ชันแสดงไอคอนและสีตามประเภทไฟล์
+  const getFileIcon = (fileName) => {
+    const extension = fileName.split('.').pop().toLowerCase();
+    
+    switch (extension) {
+      case 'pdf':
+        return { icon: <BsFiletypePdf className="h-5 w-5 text-red-600" />, color: "text-red-500", tooltip: "PDF" };
+      case 'doc':
+      case 'docx':
+        return { icon: <BsFiletypeDocx className="h-5 w-5 text-blue-600" />, color: "text-blue-500", tooltip: "Word" };
+      case 'xls':
+      case 'xlsx':
+        return { icon: <BsFiletypeXlsx className="h-5 w-5 text-green-600" />, color: "text-green-500", tooltip: "Excel" };
+      case 'ppt':
+      case 'pptx':
+        return { icon: <BsFiletypePpt className="h-5 w-5 text-orange-600" />, color: "text-orange-500", tooltip: "PowerPoint" };
+      case 'csv':
+        return { icon: <BsFiletypeCsv className="h-5 w-5 text-blue-600" />, color: "text-blue-500", tooltip: "CSV" };
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+      case 'svg':
+        return { icon: <FiImage className="h-5 w-5 text-purple-600" />, color: "text-purple-500", tooltip: "รูปภาพ" };
+      case 'zip':
+      case 'rar':
+        return { icon: <FiArchive className="h-5 w-5 text-yellow-600" />, color: "text-yellow-500", tooltip: "ไฟล์บีบอัด" };
+      default:
+        return { icon: <FiFileText className="h-5 w-5 text-gray-600" />, color: "text-gray-500", tooltip: "เอกสาร" };
+    }
   };
 
   if (isLoading) {
@@ -271,6 +316,7 @@ export default function ProjectList({
                     สถานะ {getSortIcon('status')}
                   </TableHead>
                   <TableHead className="font-semibold text-muted-foreground text-center">ผู้รับผิดชอบ</TableHead>
+                  <TableHead className="font-semibold text-muted-foreground text-center">เอกสาร</TableHead>
                   <TableHead className="w-[100px] text-center font-semibold text-muted-foreground">จัดการ</TableHead>
                 </TableRow>
               </TableHeader>
@@ -341,35 +387,75 @@ export default function ProjectList({
                         </div>
                       </TableCell>
                       <TableCell className="text-center">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 mx-auto">
-                              <FiEdit className="h-4 w-4" />
-                              <span className="sr-only">เมนู</span>
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => onView(project)}>
-                              <FiEye className="mr-2 h-4 w-4" />
-                              <span>ดูรายละเอียด</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => onEdit(project)}>
-                              <FiEdit className="mr-2 h-4 w-4" />
-                              <span>แก้ไข</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => onAddMember(project)}>
-                              <FiUsers className="mr-2 h-4 w-4" />
-                              <span>จัดการสมาชิก</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              onClick={() => onDelete(project)} 
-                              className="text-red-600 focus:text-red-600 focus:bg-red-50"
-                            >
-                              <FiTrash2 className="mr-2 h-4 w-4" />
-                              <span>ลบ</span>
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        {project.attachments && project.attachments.length > 0 ? (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="flex items-center gap-1 text-xs h-7 mx-auto"
+                              >
+                                <FiPaperclip className="h-3 w-3" />
+                                {project.attachments.length} ไฟล์
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-80 p-3" align="center">
+                              <div className="space-y-2">
+                                <h4 className="font-medium text-sm">เอกสารแนบ ({project.attachments.length})</h4>
+                                <div className="max-h-60 overflow-y-auto pr-1">
+                                  {project.attachments.map((file, index) => {
+                                    const fileInfo = getFileIcon(file);
+                                    return (
+                                      <div key={index} className="flex items-center gap-2 p-2 hover:bg-muted/50 rounded-md transition-colors">
+                                        <div className={`flex items-center justify-center w-8 h-8 ${fileInfo.color === 'text-red-500' ? 'bg-red-100' : 
+                                          fileInfo.color === 'text-blue-500' ? 'bg-blue-100' : 
+                                          fileInfo.color === 'text-green-500' ? 'bg-green-100' : 
+                                          fileInfo.color === 'text-orange-500' ? 'bg-orange-100' : 
+                                          fileInfo.color === 'text-purple-500' ? 'bg-purple-100' : 
+                                          fileInfo.color === 'text-yellow-500' ? 'bg-yellow-100' : 
+                                          'bg-gray-100'} rounded-md`}>
+                                          {fileInfo.icon}
+                                        </div>
+                                        <div className="flex-1 truncate text-sm">
+                                          {file}
+                                        </div>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6">
+                                          <FiDownload className="h-3 w-3" />
+                                          <span className="sr-only">ดาวน์โหลด</span>
+                                        </Button>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">ไม่มีเอกสาร</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center space-x-1">
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onView(project)}>
+                            <FiEye className="h-4 w-4" />
+                            <span className="sr-only">ดูรายละเอียด</span>
+                          </Button>
+                          
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(project)}>
+                            <FiEdit className="h-4 w-4" />
+                            <span className="sr-only">แก้ไข</span>
+                          </Button>
+                          
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onAddMember(project)}>
+                            <FiUsers className="h-4 w-4" />
+                            <span className="sr-only">จัดการสมาชิก</span>
+                          </Button>
+                          
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => onDelete(project)}>
+                            <FiTrash2 className="h-4 w-4" />
+                            <span className="sr-only">ลบ</span>
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))

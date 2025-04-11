@@ -229,13 +229,8 @@ export default function AddProjectDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <FiPlus className="h-5 w-5" />
-            <span>เพิ่มโปรเจคใหม่</span>
-          </DialogTitle>
-          <DialogDescription>
-            กรอกข้อมูลเพื่อสร้างโปรเจคใหม่ในระบบ
-          </DialogDescription>
+          <DialogTitle>เพิ่มโปรเจคใหม่</DialogTitle>
+          <DialogDescription>กรอกข้อมูลโปรเจคที่ต้องการสร้าง</DialogDescription>
         </DialogHeader>
 
         <div className="flex gap-1 mb-4 border-b">

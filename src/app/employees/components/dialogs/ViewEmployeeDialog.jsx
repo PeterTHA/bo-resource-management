@@ -46,6 +46,7 @@ export default function ViewEmployeeDialog({
         <DialogContent className="max-w-4xl p-0 overflow-hidden bg-white dark:bg-gray-900 rounded-lg">
           <DialogHeader className="sticky top-0 z-50 p-0 m-0">
             <DialogTitle className="sr-only">ข้อมูลพนักงาน</DialogTitle>
+            <DialogDescription className="sr-only">แสดงรายละเอียดพนักงาน {employee.firstName} {employee.lastName}</DialogDescription>
           </DialogHeader>
           
           {/* ส่วนหัว - ชื่อพนักงานและรูปโปรไฟล์ */}
@@ -212,7 +213,8 @@ export default function ViewEmployeeDialog({
         <Dialog open={showFullImage} onOpenChange={setShowFullImage}>
           <DialogContent className="max-w-4xl p-0 overflow-hidden bg-black border-0 rounded-lg">
             <DialogHeader className="sr-only">
-              <DialogTitle>รูปโปรไฟล์</DialogTitle>
+              <DialogTitle>รูปภาพโปรไฟล์</DialogTitle>
+              <DialogDescription className="sr-only">รูปภาพโปรไฟล์ของ {employee.firstName} {employee.lastName}</DialogDescription>
             </DialogHeader>
             
             <div className="relative w-full h-[80vh] flex items-center justify-center">
