@@ -1,54 +1,17 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '../../components/ui/alert-dialog';
-import { Button } from '../../components/ui/button';
 import { toast } from 'sonner';
-import { FiPlus, FiSearch, FiEdit, FiTrash2, FiUsers, FiFilter, FiChevronDown } from 'react-icons/fi';
-import { Badge } from '../../components/ui/badge';
-import { Tabs, TabsList, TabsTrigger } from '../../components/ui/tabs';
-import { Input } from '../../components/ui/input';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '../../components/ui/table';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '../../components/ui/dropdown-menu';
-import { LoadingPage, LoadingSpinner } from '../../components/ui/loading';
-import { formatDateToDisplay } from '../../lib/utils';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '../../components/ui/command';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '../../components/ui/popover';
-import { Checkbox } from '../../components/ui/checkbox';
-import { Avatar, AvatarFallback, AvatarImage } from '../../components/ui/avatar';
-import { ScrollArea } from '../../components/ui/scroll-area';
+import { Skeleton } from '@/components/ui/skeleton';
+
+// นำเข้า Components
+import ProjectList from './components/ProjectList';
+import AddProjectDialog from './components/dialogs/AddProjectDialog';
+import AddMemberDialog from './components/dialogs/AddMemberDialog';
+import DeleteConfirmDialog from './components/dialogs/DeleteConfirmDialog';
+import ViewProjectDialog from './components/dialogs/ViewProjectDialog';
 
 export default function ProjectPage() {
   const { data: session, status } = useSession();
@@ -79,10 +42,10 @@ export default function ProjectPage() {
   const [isAddProjectDialogOpen, setIsAddProjectDialogOpen] = useState(false);
   const [isEditProjectDialogOpen, setIsEditProjectDialogOpen] = useState(false);
   const [isDeleteProjectDialogOpen, setIsDeleteProjectDialogOpen] = useState(false);
+  const [isViewProjectDialogOpen, setIsViewProjectDialogOpen] = useState(false);
   
   // State สำหรับ dialog การเพิ่มสมาชิก
   const [isAddMemberDialogOpen, setIsAddMemberDialogOpen] = useState(false);
-  const [searchMember, setSearchMember] = useState('');
   const [addMemberLoading, setAddMemberLoading] = useState(false);
   
   // State สำหรับฟอร์มโปรเจค
@@ -98,6 +61,7 @@ export default function ProjectPage() {
   
   // State สำหรับการโหลดดิ้งในขณะบันทึก
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   // State สำหรับข้อความ error
   const [error, setError] = useState('');
@@ -151,13 +115,6 @@ export default function ProjectPage() {
   const handleAddMember = async (employeeId) => {
     if (!selectedProject) return;
     
-    // ตรวจสอบว่าพนักงานอยู่ในโปรเจคแล้วหรือไม่
-    const isAlreadyMember = selectedProject.members?.some(member => member.employeeId === employeeId);
-    if (isAlreadyMember) {
-      toast.error('พนักงานนี้เป็นสมาชิกในโปรเจคอยู่แล้ว');
-      return;
-    }
-    
     try {
       setAddMemberLoading(true);
       
@@ -187,13 +144,150 @@ export default function ProjectPage() {
       
       toast.success(`เพิ่ม ${employee.firstName} ${employee.lastName} เป็นสมาชิกเรียบร้อยแล้ว`);
       
-      // รีเซ็ตค่าการค้นหา
-      setSearchMember('');
+      return true;
     } catch (err) {
       console.error('Error adding member:', err);
       toast.error('เกิดข้อผิดพลาดในการเพิ่มสมาชิก');
+      return false;
     } finally {
       setAddMemberLoading(false);
+    }
+  };
+  
+  // ฟังก์ชันลบโปรเจค
+  const handleDeleteProject = async (projectId) => {
+    try {
+      setIsDeleting(true);
+      
+      // ส่งคำขอลบโปรเจค
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: 'DELETE',
+      });
+      
+      const data = await res.json();
+      
+      if (data.success) {
+        // อัพเดทรายการโปรเจค
+        const updatedProjects = projects.filter(project => project.id !== projectId);
+        setProjects(updatedProjects);
+        
+        // ปิด dialog
+        setIsDeleteProjectDialogOpen(false);
+        toast.success('ลบโปรเจคเรียบร้อยแล้ว');
+      } else {
+        setError(data.message || 'ไม่สามารถลบโปรเจคได้');
+      }
+    } catch (err) {
+      console.error('Error deleting project:', err);
+      setError('เกิดข้อผิดพลาดในการลบโปรเจค');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // ฟังก์ชันเปิด Dialog ต่างๆ
+  const openDialog = (dialog, project = null) => {
+    if (project) {
+      setSelectedProject(project);
+    }
+
+    switch (dialog) {
+      case 'add':
+        setIsAddProjectDialogOpen(true);
+        break;
+      case 'edit':
+        setIsEditProjectDialogOpen(true);
+        break;
+      case 'view':
+        setIsViewProjectDialogOpen(true);
+        break;
+      case 'delete':
+        setIsDeleteProjectDialogOpen(true);
+        break;
+      case 'addMember':
+        setIsAddMemberDialogOpen(true);
+        break;
+      default:
+        break;
+    }
+  };
+
+  // ฟังก์ชันปิด Dialog ต่างๆ
+  const closeDialog = (dialog) => {
+    switch (dialog) {
+      case 'add':
+        setIsAddProjectDialogOpen(false);
+        break;
+      case 'edit':
+        setIsEditProjectDialogOpen(false);
+        break;
+      case 'view':
+        setIsViewProjectDialogOpen(false);
+        break;
+      case 'delete':
+        setIsDeleteProjectDialogOpen(false);
+        break;
+      case 'addMember':
+        setIsAddMemberDialogOpen(false);
+        break;
+      default:
+        break;
+    }
+  };
+
+  // ฟังก์ชันเพิ่มโปรเจคใหม่
+  const handleAddProject = async (projectData) => {
+    try {
+      setIsSaving(true);
+      setError('');
+      
+      // แปลงข้อมูลฟอร์มให้เป็นรูปแบบที่ API ต้องการ
+      const payload = {
+        name: projectData.name,
+        code: projectData.code,
+        description: projectData.description,
+        start_date: projectData.startDate,
+        end_date: projectData.endDate,
+        priority: projectData.priority,
+        status: projectData.status,
+        members: projectData.members,
+        jira_url: projectData.jira_url,
+        confluence_url: projectData.confluence_url,
+        attachments: projectData.attachments.map(file => file.name) // ส่งเฉพาะชื่อไฟล์ไปก่อน ในอนาคตควรอัพโหลดไฟล์ไปยัง storage
+      };
+      
+      // ส่งคำขอสร้างโปรเจคใหม่
+      const res = await fetch('/api/projects', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      
+      const data = await res.json();
+      
+      if (data.success) {
+        // เพิ่มโปรเจคใหม่เข้าไปในรายการ
+        setProjects([data.data, ...projects]);
+        
+        // ปิด dialog
+        setIsAddProjectDialogOpen(false);
+        
+        // แสดงข้อความสำเร็จ
+        toast.success('เพิ่มโปรเจคเรียบร้อยแล้ว');
+        
+        return { success: true };
+      } else {
+        setError(data.message || 'ไม่สามารถเพิ่มโปรเจคได้');
+        return { success: false, message: data.message };
+      }
+    } catch (err) {
+      console.error('Error adding project:', err);
+      setError('เกิดข้อผิดพลาดในการเพิ่มโปรเจค');
+      return { success: false, message: 'เกิดข้อผิดพลาดในการเพิ่มโปรเจค' };
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -214,382 +308,75 @@ export default function ProjectPage() {
 
   // แสดงหน้าโหลดดิ้งหากกำลังโหลดสถานะการเข้าสู่ระบบ
   if (status === 'loading') {
-    return <LoadingPage message="กำลังโหลดข้อมูล..." />;
+    return (
+      <div className="min-h-[200px] w-full flex flex-col items-center justify-center">
+        <div className="w-12 h-12">
+          <Skeleton className="h-12 w-12 rounded-full" />
+        </div>
+        <p className="mt-4 text-muted-foreground">กำลังโหลดข้อมูล...</p>
+      </div>
+    );
   }
 
   // ไม่แสดงอะไรหากยังไม่ได้เข้าสู่ระบบ
   if (!session) {
     return null;
   }
-
-  // ฟังก์ชันแปลงสถานะเป็นภาษาไทย
-  const getStatusLabel = (status) => {
-    const statusMap = {
-      'active': 'กำลังดำเนินการ',
-      'completed': 'เสร็จสิ้น',
-      'on-hold': 'ระงับชั่วคราว',
-      'cancelled': 'ยกเลิก'
-    };
-    return statusMap[status] || status;
-  };
-
-  // ฟังก์ชันแปลงความสำคัญเป็นภาษาไทย
-  const getPriorityLabel = (priority) => {
-    const priorityMap = {
-      'low': 'ต่ำ',
-      'medium': 'ปานกลาง',
-      'high': 'สูง'
-    };
-    return priorityMap[priority] || priority;
-  };
-
-  // ฟังก์ชันแปลงตำแหน่งเป็นภาษาไทย
-  const getRoleTitle = (abbreviation) => {
-    const roleMap = {
-      'PM': 'Project Manager',
-      'TL': 'Team Leader',
-      'BE': 'Backend Developer',
-      'FE': 'Frontend Developer',
-      'FS': 'Full Stack Developer',
-      'QA': 'Quality Assurance',
-      'UX': 'UX Designer',
-      'DV': 'DevOps Engineer',
-      'BA': 'Business Analyst',
-      'AM': 'Account Manager',
-      'SM': 'Scrum Master',
-      'PO': 'Product Owner',
-      'CM': 'Content Manager',
-    };
-    return roleMap[abbreviation] || abbreviation;
-  };
   
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-6">จัดการโปรเจค</h1>
+    <div className="container mx-auto">
+      {/* รายการโปรเจค */}
+      <ProjectList 
+        projects={projects}
+        isLoading={loading}
+        error={error}
+        isAdmin={session?.user?.isAdmin}
+        searchTerm={searchQuery}
+        setSearchTerm={setSearchQuery}
+        onView={(project) => openDialog('view', project)}
+        onEdit={(project) => openDialog('edit', project)}
+        onDelete={(project) => openDialog('delete', project)}
+        onAddMember={(project) => openDialog('addMember', project)}
+        onAdd={() => openDialog('add')}
+        sortConfig={sortConfig}
+        setSortConfig={setSortConfig}
+      />
 
-      {/* Header section with add button */}
-      <div className="flex justify-between items-center mb-6">
-        <div></div>
-        <Button onClick={() => setIsAddProjectDialogOpen(true)}>
-          <FiPlus className="mr-2" />
-          เพิ่มโปรเจค
-          </Button>
-      </div>
-
-      {/* Error message */}
-      {error && (
-        <div className="bg-red-100 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 p-4 rounded-md mb-6">
-          {error}
-        </div>
-      )}
-
-      {/* Filter tabs */}
-      <div className="mb-6">
-        <Tabs defaultValue="all" value={filterStatus} onValueChange={setFilterStatus}>
-          <TabsList>
-            <TabsTrigger value="all">
-              ทั้งหมด
-              <Badge variant="outline" className="ml-2">
-                {projects.length}
-              </Badge>
-            </TabsTrigger>
-            <TabsTrigger value="active">
-              กำลังดำเนินการ
-              <Badge variant="outline" className="ml-2">
-                {projects.filter(p => p.status === 'active').length}
-              </Badge>
-            </TabsTrigger>
-            <TabsTrigger value="completed">
-              เสร็จสิ้น
-              <Badge variant="outline" className="ml-2">
-                {projects.filter(p => p.status === 'completed').length}
-              </Badge>
-            </TabsTrigger>
-            <TabsTrigger value="on-hold">
-              ระงับชั่วคราว
-              <Badge variant="outline" className="ml-2">
-                {projects.filter(p => p.status === 'on-hold').length}
-              </Badge>
-            </TabsTrigger>
-            <TabsTrigger value="cancelled">
-              ยกเลิก
-              <Badge variant="outline" className="ml-2">
-                {projects.filter(p => p.status === 'cancelled').length}
-              </Badge>
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </div>
-      
-      {/* Search field */}
-      <div className="relative mb-6">
-        <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-        <Input
-          className="pl-10"
-          placeholder="ค้นหาโปรเจคตามชื่อ, รหัส หรือผู้สร้าง"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
-      </div>
-
-      {/* Projects table */}
-      {loading ? (
-        <div className="flex justify-center py-10">
-          <LoadingSpinner />
-        </div>
-      ) : (
-        <div className="overflow-x-auto border rounded-lg">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead 
-                  className="cursor-pointer"
-                  onClick={() => {
-                    setSortConfig({
-                      key: 'name',
-                      direction: sortConfig.key === 'name' && sortConfig.direction === 'asc' ? 'desc' : 'asc',
-                    });
-                  }}
-                >
-                  ชื่อโปรเจค
-                  {sortConfig.key === 'name' && (
-                    <span className="ml-1">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
-                  )}
-                </TableHead>
-                <TableHead 
-                  className="cursor-pointer"
-                  onClick={() => {
-                    setSortConfig({
-                      key: 'code',
-                      direction: sortConfig.key === 'code' && sortConfig.direction === 'asc' ? 'desc' : 'asc',
-                    });
-                  }}
-                >
-                  รหัส
-                  {sortConfig.key === 'code' && (
-                    <span className="ml-1">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
-                  )}
-                </TableHead>
-                <TableHead 
-                  className="cursor-pointer"
-                  onClick={() => {
-                    setSortConfig({
-                      key: 'startDate',
-                      direction: sortConfig.key === 'startDate' && sortConfig.direction === 'asc' ? 'desc' : 'asc',
-                    });
-                  }}
-                >
-                  วันที่เริ่ม
-                  {sortConfig.key === 'startDate' && (
-                    <span className="ml-1">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
-                  )}
-                </TableHead>
-                <TableHead 
-                  className="cursor-pointer"
-                  onClick={() => {
-                    setSortConfig({
-                      key: 'endDate',
-                      direction: sortConfig.key === 'endDate' && sortConfig.direction === 'asc' ? 'desc' : 'asc',
-                    });
-                  }}
-                >
-                  วันที่สิ้นสุด
-                  {sortConfig.key === 'endDate' && (
-                    <span className="ml-1">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
-                  )}
-                </TableHead>
-                <TableHead 
-                  className="cursor-pointer"
-                  onClick={() => {
-                    setSortConfig({
-                      key: 'priority',
-                      direction: sortConfig.key === 'priority' && sortConfig.direction === 'asc' ? 'desc' : 'asc',
-                    });
-                  }}
-                >
-                  ความสำคัญ
-                  {sortConfig.key === 'priority' && (
-                    <span className="ml-1">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
-                  )}
-                </TableHead>
-                <TableHead 
-                  className="cursor-pointer"
-                  onClick={() => {
-                    setSortConfig({
-                      key: 'status',
-                      direction: sortConfig.key === 'status' && sortConfig.direction === 'asc' ? 'desc' : 'asc',
-                    });
-                  }}
-                >
-                  สถานะ
-                  {sortConfig.key === 'status' && (
-                    <span className="ml-1">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
-                  )}
-                </TableHead>
-                <TableHead>ผู้รับผิดชอบ</TableHead>
-                <TableHead className="w-[80px]">จัดการ</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {/* จะเพิ่มโค้ดแสดงรายการโปรเจคที่นี่ */}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+      {/* Dialog สำหรับเพิ่มโปรเจค */}
+      <AddProjectDialog
+        open={isAddProjectDialogOpen}
+        onOpenChange={setIsAddProjectDialogOpen}
+        isSaving={isSaving}
+        onAddProject={handleAddProject}
+        employees={employees}
+      />
 
       {/* Dialog สำหรับเพิ่มสมาชิก */}
-      <AlertDialog open={isAddMemberDialogOpen} onOpenChange={setIsAddMemberDialogOpen}>
-        <AlertDialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
-          <AlertDialogHeader>
-            <AlertDialogTitle>เพิ่มสมาชิก</AlertDialogTitle>
-            <AlertDialogDescription>
-              เลือกพนักงานที่ต้องการเพิ่มเป็นสมาชิกในโปรเจค
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          
-          <Command className="rounded-lg border shadow-md">
-            <CommandInput 
-              placeholder="ค้นหาพนักงาน..." 
-              value={searchMember}
-              onValueChange={setSearchMember}
-            />
-            <CommandList>
-              <CommandEmpty>ไม่พบพนักงานที่ค้นหา</CommandEmpty>
-              {teams.map(team => {
-                // กรองพนักงานตามทีม
-                const teamEmployees = employees
-                  .filter(emp => 
-                    emp.team?.id === team.id && 
-                    (!selectedProject || !selectedProject.members?.some(m => m.employeeId === emp.id)) &&
-                    (emp.firstName?.toLowerCase().includes(searchMember.toLowerCase()) || 
-                     emp.lastName?.toLowerCase().includes(searchMember.toLowerCase()))
-                  );
-                
-                // แสดงเฉพาะทีมที่มีพนักงาน
-                if (teamEmployees.length === 0) return null;
-                
-                return (
-                  <CommandGroup key={team.id} heading={team.name}>
-                    {teamEmployees.map(employee => (
-                      <CommandItem 
-                        key={employee.id}
-                        className="cursor-pointer"
-                      >
-                        <div className="flex items-center justify-between w-full">
-                          <div className="flex items-center space-x-2">
-                            <Avatar className="h-8 w-8">
-                              <AvatarImage 
-                                src={employee.image} 
-                                alt={`${employee.firstName} ${employee.lastName}`} 
-                              />
-                              <AvatarFallback>
-                                {employee.firstName?.charAt(0)}
-                                {employee.lastName?.charAt(0)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <p>{employee.firstName} {employee.lastName}</p>
-                              <p className="text-sm text-gray-500">
-                                {employee.position || 'ไม่ระบุตำแหน่ง'}
-                              </p>
-                            </div>
-                          </div>
-                          <Button 
-                            size="sm" 
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleAddMember(employee.id);
-                            }}
-                            disabled={addMemberLoading}
-                          >
-                            {addMemberLoading ? (
-                              <LoadingSpinner className="w-4 h-4 mr-2" />
-                            ) : (
-                              <FiPlus className="mr-1" />
-                            )}
-                            เพิ่ม
-                          </Button>
-                        </div>
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                );
-              })}
-              
-              {/* พนักงานที่ไม่อยู่ในทีมใด */}
-              {(() => {
-                const noTeamEmployees = employees
-                  .filter(emp => 
-                    !emp.team?.id && 
-                    (!selectedProject || !selectedProject.members?.some(m => m.employeeId === emp.id)) &&
-                    (emp.firstName?.toLowerCase().includes(searchMember.toLowerCase()) || 
-                     emp.lastName?.toLowerCase().includes(searchMember.toLowerCase()))
-                  );
-                
-                if (noTeamEmployees.length === 0) return null;
-                
-                return (
-                  <CommandGroup heading="ไม่มีทีม">
-                    {noTeamEmployees.map(employee => (
-                      <CommandItem 
-                        key={employee.id}
-                        className="cursor-pointer"
-                      >
-                        <div className="flex items-center justify-between w-full">
-                          <div className="flex items-center space-x-2">
-                            <Avatar className="h-8 w-8">
-                              <AvatarImage 
-                                src={employee.image} 
-                                alt={`${employee.firstName} ${employee.lastName}`} 
-                              />
-                              <AvatarFallback>
-                                {employee.firstName?.charAt(0)}
-                                {employee.lastName?.charAt(0)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <p>{employee.firstName} {employee.lastName}</p>
-                              <p className="text-sm text-gray-500">
-                                {employee.position || 'ไม่ระบุตำแหน่ง'}
-                              </p>
-                            </div>
-                          </div>
-                          <Button 
-                            size="sm" 
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleAddMember(employee.id);
-                            }}
-                            disabled={addMemberLoading}
-                          >
-                            {addMemberLoading ? (
-                              <LoadingSpinner className="w-4 h-4 mr-2" />
-                            ) : (
-                              <FiPlus className="mr-1" />
-                            )}
-                            เพิ่ม
-                          </Button>
-                        </div>
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                );
-              })()}
-            </CommandList>
-          </Command>
-          
-          <AlertDialogFooter>
-            <Button variant="outline" onClick={() => {
-              setIsAddMemberDialogOpen(false);
-              setSearchMember('');
-            }}>
-              ปิด
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <AddMemberDialog
+        open={isAddMemberDialogOpen}
+        onOpenChange={setIsAddMemberDialogOpen}
+        selectedProject={selectedProject}
+        employees={employees}
+        teams={teams}
+        onAddMember={handleAddMember}
+      />
+
+      {/* Dialog สำหรับลบโปรเจค */}
+      <DeleteConfirmDialog
+        open={isDeleteProjectDialogOpen}
+        onOpenChange={setIsDeleteProjectDialogOpen}
+        project={selectedProject}
+        isDeleting={isDeleting}
+        onConfirmDelete={handleDeleteProject}
+        error={error}
+      />
+
+      {/* Dialog สำหรับดูรายละเอียดโปรเจค */}
+      <ViewProjectDialog
+        open={isViewProjectDialogOpen}
+        onOpenChange={setIsViewProjectDialogOpen}
+        project={selectedProject}
+      />
     </div>
   );
 }

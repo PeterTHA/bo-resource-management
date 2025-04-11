@@ -190,7 +190,7 @@ export default function EmployeeList({
             <FiUser className="text-primary h-5 w-5" />
             <h1 className="text-xl font-bold">รายการพนักงาน</h1>
           </div>
-          <p className="text-sm text-muted-foreground ml-8">
+          <p className="text-sm text-muted-foreground ml-1">
             จัดการข้อมูลพนักงานในระบบ
           </p>
         </div>
@@ -209,7 +209,7 @@ export default function EmployeeList({
                 size="sm"
               >
                 <FiPlus className="mr-1" size={16} />
-                ลงทะเบียนพนักงานใหม่
+                เพิ่มหนักงานใหม่
               </Button>
             )}
           </div>
