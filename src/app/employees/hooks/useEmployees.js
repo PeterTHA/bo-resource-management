@@ -16,7 +16,7 @@ export function useEmployees() {
       setError('');
       setConnectionError(false);
       
-      const res = await fetch('/api/employees');
+      const res = await fetch('/api/employees?includeInactive=true');
       
       if (!res.ok) {
         if (res.status === 500) {
@@ -37,30 +37,49 @@ export function useEmployees() {
         setError(data.message || 'ไม่สามารถเชื่อมต่อกับฐานข้อมูลได้ กรุณาลองใหม่อีกครั้ง');
       }
       
+      console.log("API Response - Received employees data:", data.data ? data.data.length : 0, "items");
+      
+      // Debug the first employee to check the is_active value
+      if (data.data && data.data.length > 0) {
+        console.log("First employee is_active:", data.data[0].is_active);
+        console.log("First employee is_active type:", typeof data.data[0].is_active);
+      }
+      
       // แปลงชื่อตัวแปรจาก snake_case (หลังบ้าน) เป็น camelCase (หน้าบ้าน)
-      const transformedEmployees = (Array.isArray(data) ? data : data.data || []).map(employee => ({
-        id: employee.id,
-        employeeId: employee.employee_id,
-        firstName: employee.first_name,
-        lastName: employee.last_name,
-        email: employee.email,
-        position: employee.position,
-        positionLevel: employee.position_level,
-        positionTitle: employee.position_title,
-        departmentId: employee.department_id,
-        teamId: employee.team_id,
-        department: employee.departments,
-        teamData: employee.teams,
-        roleId: employee.role_id,
-        role: employee.role, // จาก employee.roles?.code ที่แปลงมาจาก API แล้ว
-        roleName: employee.roleName || '', // จาก employee.roles?.name ที่แปลงมาจาก API แล้ว
-        roleNameTh: employee.roleNameTh || '', // จาก employee.roles?.name_th ที่แปลงมาจาก API แล้ว
-        isActive: employee.is_active,
-        birthDate: employee.birth_date,
-        gender: employee.gender,
-        phoneNumber: employee.phone_number,
-        image: employee.image
-      }));
+      const transformedEmployees = (Array.isArray(data) ? data : data.data || []).map(employee => {
+        // ทำให้แน่ใจว่า isActive เป็น boolean ที่ชัดเจน
+        const isActive = (typeof employee.is_active === 'string')
+          ? employee.is_active.toLowerCase() === 'true'
+          : employee.is_active === true;
+
+        console.log(`Employee ${employee.employee_id} - is_active from API: ${employee.is_active} (${typeof employee.is_active}), converted to: ${isActive} (${typeof isActive})`);
+        
+        return {
+          id: employee.id,
+          employeeId: employee.employee_id,
+          firstName: employee.first_name,
+          lastName: employee.last_name,
+          email: employee.email,
+          position: employee.position,
+          positionLevel: employee.position_level,
+          positionTitle: employee.position_title,
+          departmentId: employee.department_id,
+          teamId: employee.team_id,
+          department: employee.departments,
+          teamData: employee.teams,
+          roleId: employee.role_id,
+          role: employee.role, // จาก employee.roles?.code ที่แปลงมาจาก API แล้ว
+          roleName: employee.roleName || '', // จาก employee.roles?.name ที่แปลงมาจาก API แล้ว
+          roleNameTh: employee.roleNameTh || '', // จาก employee.roles?.name_th ที่แปลงมาจาก API แล้ว
+          isActive: isActive, // ใช้ค่า boolean ที่แปลงแล้ว
+          birthDate: employee.birth_date,
+          gender: employee.gender,
+          phoneNumber: employee.phone_number,
+          image: employee.image
+        };
+      });
+      
+      console.log("Transformed employees with corrected isActive values:", transformedEmployees.length, "items");
       
       setEmployees(transformedEmployees);
     } catch (error) {
@@ -97,9 +116,27 @@ export function useEmployees() {
   
   // ฟังก์ชันอัปเดตพนักงาน
   const updateEmployee = (updatedEmployee) => {
-    setEmployees(prev => prev.map(emp => 
-      emp.id === updatedEmployee.id ? updatedEmployee : emp
-    ));
+    console.log("useEmployees - ก่อนอัพเดต:", employees.find(e => e.id === updatedEmployee.id));
+    console.log("useEmployees - ข้อมูลที่จะอัพเดต:", updatedEmployee);
+    console.log("useEmployees - isActive ที่จะอัพเดต:", updatedEmployee.isActive);
+    
+    setEmployees(prev => prev.map(emp => {
+      if (emp.id === updatedEmployee.id) {
+        // ทำให้มั่นใจว่าค่า isActive เป็น boolean ที่ชัดเจน
+        const isActiveValue = updatedEmployee.isActive === true ? true : false;
+        
+        // สร้าง object ใหม่และกำหนดค่า isActive ที่ชัดเจน
+        const updatedEmp = {
+          ...emp,
+          ...updatedEmployee,
+          isActive: isActiveValue
+        };
+        
+        console.log("useEmployees - หลังอัพเดต:", updatedEmp);
+        return updatedEmp;
+      }
+      return emp;
+    }));
   };
   
   // ฟังก์ชันลบพนักงาน

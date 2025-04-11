@@ -45,21 +45,63 @@ export function useEmployeeForm(initialData = {}) {
   const handleFormChange = (e) => {
     const { name, value, type, checked } = e.target;
     
+    if (name === 'isActive') {
+      console.log('====== isActive CHANGE DETECTED [FIXED] =======');
+      console.log('isActive change requested:', checked);
+      console.log('Value type:', typeof checked);
+      console.log('Current formData.isActive value:', formData.isActive);
+      console.log('Current formData.isActive type:', typeof formData.isActive);
+      
+      // สำคัญ: ต้องใช้ setState โดยเรียกเป็นฟังก์ชันเพื่อให้ได้ state ล่าสุด
+      // และต้องระบุค่า Boolean อย่างชัดเจน
+      const newIsActiveValue = checked === true ? true : false;
+      
+      setFormData(prev => {
+        // สร้าง object ใหม่เพื่อไม่ให้ reference ไปที่ object เดิม
+        const updatedFormData = {
+          ...prev,
+          isActive: newIsActiveValue // ต้องกำหนดเป็น boolean ชัดเจน
+        };
+        
+        console.log('Updated formData with new isActive value:', updatedFormData.isActive);
+        console.log('Updated isActive type:', typeof updatedFormData.isActive);
+        console.log('Is value changed correctly?', updatedFormData.isActive !== prev.isActive);
+        console.log('=======================================');
+        
+        return updatedFormData;
+      });
+      
+      // สำคัญมาก: ต้อง return เพื่อหยุดการทำงานฟังก์ชันที่นี่
+      return;
+    }
+    
     if (type === 'select') {
       // สำหรับ Select ที่ส่งค่ามาจาก onValueChange
       const additionalData = e.additionalData || {};
       
-      setFormData(prev => ({
-        ...prev,
-        [name]: value,
-        ...additionalData
-      }));
+      setFormData(prev => {
+        const updated = {
+          ...prev,
+          [name]: value,
+          ...additionalData
+        };
+        if (name === 'isActive') {
+          console.log('Updated formData isActive to:', updated.isActive);
+        }
+        return updated;
+      });
     } else {
       // สำหรับ Input ปกติ
-      setFormData(prev => ({
-        ...prev,
-        [name]: type === 'checkbox' ? checked : value
-      }));
+      setFormData(prev => {
+        const updated = {
+          ...prev,
+          [name]: type === 'checkbox' ? checked : value
+        };
+        if (name === 'isActive') {
+          console.log('Updated formData isActive to:', updated.isActive);
+        }
+        return updated;
+      });
     }
   };
   
@@ -270,24 +312,46 @@ export function useEmployeeForm(initialData = {}) {
         imageUrl = await uploadImage();
       }
       
+      // ตรวจสอบค่า isActive ก่อนส่ง
+      console.log('======================= UPDATE EMPLOYEE API CALL [FIXED] =======================');
+      console.log('formData.isActive (raw value):', formData.isActive);
+      console.log('formData.isActive type:', typeof formData.isActive);
+      
+      // ตรวจสอบว่า isActive มีค่าที่ถูกต้องหรือไม่
+      if (formData.isActive === undefined) {
+        console.warn('WARNING: isActive is undefined, setting explicit false value now');
+      }
+      
+      // ต้องกำหนดค่า boolean ชัดเจน ไม่ว่า formData.isActive จะเป็นอะไรก็ตาม
+      // ใช้เปรียบเทียบกับ false เพื่อให้ได้ผลลัพธ์ที่ชัดเจน
+      const isActiveValue = formData.isActive === false ? false : true;
+      
+      console.log('Final isActive value to be sent:', isActiveValue);
+      console.log('Final isActive type:', typeof isActiveValue);
+      
       // แปลง camelCase เป็น snake_case เพื่อให้ตรงกับ API
       const transformedData = {
         employee_id: formData.employeeId,
         first_name: formData.firstName,
         last_name: formData.lastName,
         email: formData.email,
-        position_id: formData.positionId,
-        position_level_id: formData.positionLevelId,
+        position_id: formData.positionId || '',
+        position_level_id: formData.positionLevelId || '',
         position_title: formData.positionTitle,
-        department_id: formData.departmentId,
-        team_id: formData.teamId,
-        role_id: formData.roleId,
-        is_active: formData.isActive,
-        birth_date: formData.birthDate,
-        gender: formData.gender,
-        phone_number: formData.phoneNumber,
-        image: imageUrl
+        department_id: formData.departmentId || '',
+        team_id: formData.teamId || '',
+        role_id: formData.roleId || '',
+        is_active: isActiveValue, // ใช้ค่าที่กำหนดชัดเจน
+        birth_date: formData.birthDate || null,
+        gender: formData.gender || '',
+        phone_number: formData.phoneNumber || '',
+        image: imageUrl || ''
       };
+      
+      console.log('API request data:', transformedData);
+      console.log('is_active in API request:', transformedData.is_active);
+      console.log('is_active type in API request:', typeof transformedData.is_active);
+      console.log('===============================================================');
       
       const res = await fetch(`/api/employees/${employeeId}`, {
         method: 'PUT',
@@ -296,40 +360,33 @@ export function useEmployeeForm(initialData = {}) {
         },
         body: JSON.stringify(transformedData),
       });
-      
-      const data = await res.json();
-      
+
       if (!res.ok) {
-        setFormError(data.message || 'เกิดข้อผิดพลาดในการอัปเดตข้อมูลพนักงาน');
+        const errorData = await res.json();
+        console.error('Error updating employee:', errorData);
+        setFormError(errorData.message || 'เกิดข้อผิดพลาดในการอัปเดตข้อมูลพนักงาน');
         return null;
       }
+
+      const data = await res.json();
       
-      // แปลง snake_case กลับเป็น camelCase
-      const updatedEmployee = {
-        id: employeeId,
-        employeeId: data.data?.employee_id || formData.employeeId,
-        firstName: data.data?.first_name || formData.firstName,
-        lastName: data.data?.last_name || formData.lastName,
-        email: data.data?.email || formData.email,
-        position: data.data?.position || formData.position,
-        positionLevel: data.data?.position_level || formData.positionLevel,
-        positionTitle: data.data?.position_title || formData.positionTitle,
-        departmentId: data.data?.department_id || formData.departmentId,
-        teamId: data.data?.team_id || formData.teamId,
-        department: data.data?.departments || formData.department,
-        teamData: data.data?.teams || formData.teamData,
-        roleId: formData.roleId,
-        role: data.data?.role || formData.role,
-        roleName: data.data?.role_name || formData.roleName || '',
-        roleNameTh: data.data?.role_name_th || formData.roleNameTh || '',
-        isActive: data.data?.is_active !== undefined ? data.data.is_active : formData.isActive,
-        birthDate: data.data?.birth_date || formData.birthDate,
-        gender: data.data?.gender || formData.gender,
-        phoneNumber: data.data?.phone_number || formData.phoneNumber,
-        image: data.data?.image || imageUrl
-      };
+      console.log('======================= API RESPONSE [FIXED] =======================');
+      console.log('Response from API:', data);
       
-      return updatedEmployee;
+      if (data.data && data.data.is_active !== undefined) {
+        console.log('is_active from API response:', data.data.is_active);
+        console.log('is_active type from API response:', typeof data.data.is_active);
+        console.log('is_active === true:', data.data.is_active === true);
+        console.log('is_active === false:', data.data.is_active === false);
+        
+        // เปรียบเทียบกับค่าที่ส่งไป
+        console.log('Matches what we sent?', data.data.is_active === transformedData.is_active);
+      } else {
+        console.warn('No is_active found in API response or no data returned');
+      }
+      console.log('==================================================================');
+
+      return data.data || data;
     } catch (error) {
       console.error('Error updating employee:', error);
       setFormError('เกิดข้อผิดพลาดในการอัปเดตข้อมูลพนักงาน');
@@ -420,6 +477,22 @@ export function useEmployeeForm(initialData = {}) {
       console.log('Need to find roleId for role code:', employee.role);
     }
     
+    // แปลงวันที่เกิดให้อยู่ในรูปแบบที่ input type="date" รองรับ (YYYY-MM-DD)
+    let formattedBirthDate = '';
+    if (employee.birthDate) {
+      try {
+        const birthDate = new Date(employee.birthDate);
+        if (!isNaN(birthDate.getTime())) {
+          formattedBirthDate = birthDate.toISOString().split('T')[0]; // รูปแบบ YYYY-MM-DD
+          console.log('Formatted birth date:', formattedBirthDate);
+        } else {
+          console.warn('Invalid birth date:', employee.birthDate);
+        }
+      } catch (error) {
+        console.error('Error formatting birth date:', error);
+      }
+    }
+    
     setFormData({
       employeeId: employee.employeeId || '',
       firstName: employee.firstName || '',
@@ -438,7 +511,7 @@ export function useEmployeeForm(initialData = {}) {
       departmentId: employee.departmentId || '',
       teamId: employee.teamId || '',
       gender: employee.gender || '',
-      birthDate: employee.birthDate || '',
+      birthDate: formattedBirthDate, // ใช้วันที่ที่แปลงแล้ว
       isActive: employee.isActive !== undefined ? employee.isActive : true,
       image: employee.image || ''
     });

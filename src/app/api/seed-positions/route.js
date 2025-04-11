@@ -57,7 +57,7 @@ export async function POST(req) {
 
       // เพิ่มข้อมูลระดับตำแหน่ง
       for (const level of positionLevels) {
-        await prisma.positions.evel.upsert({
+        await prisma.position_levels.upsert({
           where: { code: level.code },
           update: level,
           create: level,
@@ -114,7 +114,7 @@ export async function GET(req) {
       const positions = await prisma.positions.findMany();
       
       // ดึงข้อมูลระดับตำแหน่ง
-      const positionLevels = await prisma.positions.evel.findMany({
+      const positionLevels = await prisma.position_levels.findMany({
         orderBy: { level: 'asc' }
       });
       

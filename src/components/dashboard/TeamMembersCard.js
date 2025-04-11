@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Alert, AlertDescription } from '@/components/ui/Alert';
-import { Badge } from '@/components/ui/Badge';
+import { Badge } from '@/components/ui/badge';
 import { format, parseISO } from 'date-fns';
 import { th } from 'date-fns/locale';
 import { FiHome, FiBriefcase, FiRefreshCw, FiMapPin, FiCalendar } from 'react-icons/fi';

@@ -20,6 +20,15 @@ export async function GET(req) {
     // เงื่อนไขพื้นฐานคือระดับตำแหน่งที่ยังใช้งานอยู่
     const where = { is_active: true };
 
+    // ตรวจสอบสิทธิ์ admin (ปรับปรุงให้ตรวจสอบหลายรูปแบบ)
+    const isAdmin = 
+      session.user.role?.toLowerCase() === 'admin' || 
+      session.user.isAdmin === true || 
+      session.user.permissions?.includes('admin');
+    
+    console.log('User role from session:', session.user.role);
+    console.log('Checking if user is admin:', isAdmin);
+
     // ดึงข้อมูลระดับตำแหน่ง
     let positionLevels = await prisma.position_levels.findMany({
       where,
@@ -27,14 +36,18 @@ export async function GET(req) {
     });
     
     // ถ้าเป็น admin เพิ่มระดับตำแหน่ง Admin ที่มีไว้สำหรับ admin เท่านั้น
-    if (session.user.role === 'admin') {
+    if (isAdmin) {
+      console.log('User is admin, checking for ADMIN position level');
       // ตรวจสอบว่ามีระดับตำแหน่ง Admin อยู่แล้วหรือไม่
       const adminLevelExists = await prisma.position_levels.findUnique({
         where: { code: 'ADMIN' }
       });
       
+      console.log('ADMIN position level exists:', !!adminLevelExists);
+      
       // ถ้ายังไม่มี ให้สร้างระดับตำแหน่ง Admin
       if (!adminLevelExists) {
+        console.log('Creating ADMIN position level');
         await prisma.position_levels.create({
           data: {
             id: uuidv4(),
@@ -55,8 +68,12 @@ export async function GET(req) {
       });
     } else {
       // ถ้าไม่ใช่ admin ไม่แสดงระดับ Admin
+      console.log('User is not admin, filtering out admin-only position levels');
       positionLevels = positionLevels.filter(level => level.code !== 'ADMIN');
     }
+    
+    console.log('Returning position levels count:', positionLevels.length);
+    console.log('Position level codes included:', positionLevels.map(p => p.code).join(', '));
     
     return NextResponse.json({
       success: true,

@@ -20,6 +20,15 @@ export async function GET(req) {
     // เงื่อนไขพื้นฐานคือตำแหน่งที่ยังใช้งานอยู่
     const where = { is_active: true };
 
+    // ตรวจสอบสิทธิ์ admin (ปรับปรุงให้ตรวจสอบหลายรูปแบบ)
+    const isAdmin = 
+      session.user.role?.toLowerCase() === 'admin' || 
+      session.user.isAdmin === true || 
+      session.user.permissions?.includes('admin');
+    
+    console.log('User role from session:', session.user.role);
+    console.log('Checking if user is admin:', isAdmin);
+
     // ดึงข้อมูลตำแหน่ง
     let positions = await prisma.positions.findMany({
       where,
@@ -27,14 +36,18 @@ export async function GET(req) {
     });
     
     // ถ้าเป็น admin เพิ่มตำแหน่ง Web Master ที่มีไว้สำหรับ admin เท่านั้น
-    if (session.user.role === 'admin') {
+    if (isAdmin) {
+      console.log('User is admin, checking for WEBMASTER position');
       // ตรวจสอบว่ามีตำแหน่ง Web Master อยู่แล้วหรือไม่
       const webMasterExists = await prisma.positions.findUnique({
         where: { code: 'WEBMASTER' }
       });
       
+      console.log('WEBMASTER position exists:', !!webMasterExists);
+      
       // ถ้ายังไม่มี ให้สร้างตำแหน่ง Web Master
       if (!webMasterExists) {
+        console.log('Creating WEBMASTER position');
         await prisma.positions.create({
           data: {
             id: uuidv4(),
@@ -55,8 +68,12 @@ export async function GET(req) {
       });
     } else {
       // ถ้าไม่ใช่ admin กรองตำแหน่งที่มีไว้เฉพาะ admin ออก
+      console.log('User is not admin, filtering out admin-only positions');
       positions = positions.filter(pos => pos.category !== 'admin');
     }
+    
+    console.log('Returning positions count:', positions.length);
+    console.log('Position codes included:', positions.map(p => p.code).join(', '));
     
     return NextResponse.json({
       success: true,

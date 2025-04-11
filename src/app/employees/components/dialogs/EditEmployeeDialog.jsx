@@ -1,6 +1,6 @@
 'use client';
 
-import { FiEdit, FiUser, FiX, FiUpload } from 'react-icons/fi';
+import { FiEdit, FiUser, FiX, FiUpload, FiCalendar } from 'react-icons/fi';
 import {
   Dialog,
   DialogContent,
@@ -19,6 +19,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import ProfileImage from '@/components/ui/ProfileImage';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useState, useEffect } from 'react';
@@ -39,8 +41,21 @@ export default function EditEmployeeDialog({
   imagePreview,
   handleImageChange,
   handleRemoveImage,
+  isAdmin,
+  isTeamLead,
+  isCurrentUser,
+  currentUserId
 }) {
   const [debugValues, setDebugValues] = useState(false);
+
+  // กำหนดสิทธิ์ในการแก้ไขแต่ละฟิลด์
+  const canEditBasicInfo = true; // ทุกคนแก้ไขข้อมูลพื้นฐานได้
+  const canEditPositionInfo = isAdmin || isTeamLead; // แอดมินและหัวหน้าทีมแก้ไขตำแหน่งได้
+  const canEditRoleInfo = isAdmin; // เฉพาะแอดมินแก้ไขบทบาทได้
+  const canEditEmployeeId = isAdmin; // เฉพาะแอดมินแก้ไขรหัสพนักงานได้
+  const canEditDepartment = isAdmin; // เฉพาะแอดมินแก้ไขแผนกได้
+  const canEditTeam = isAdmin; // เฉพาะแอดมินแก้ไขทีมได้
+  const canEditActive = isAdmin; // เฉพาะแอดมินแก้ไขสถานะการใช้งานได้
 
   useEffect(() => {
     console.log('Form Data in EditEmployeeDialog:', formData);
@@ -69,7 +84,7 @@ export default function EditEmployeeDialog({
       <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
-            <FiEdit className="text-blue-600 dark:text-blue-400" /> 
+            <FiEdit className="text-gray-600 dark:text-gray-400" /> 
             แก้ไขข้อมูลพนักงาน
           </DialogTitle>
           <DialogDescription>
@@ -90,8 +105,13 @@ export default function EditEmployeeDialog({
                   value={formData.employeeId}
                   onChange={handleFormChange}
                   required
-                  className="h-9"
+                  className={`h-9 ${!canEditEmployeeId ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                  readOnly={!canEditEmployeeId}
+                  disabled={!canEditEmployeeId}
                 />
+                {!canEditEmployeeId && (
+                  <p className="text-xs text-muted-foreground">คุณไม่มีสิทธิ์แก้ไขรหัสพนักงาน</p>
+                )}
               </div>
               
               <div className="grid grid-cols-2 gap-3 h-[70px]">
@@ -153,8 +173,9 @@ export default function EditEmployeeDialog({
                         }
                       }
                     })}
+                    disabled={!canEditDepartment}
                   >
-                    <SelectTrigger className="h-9">
+                    <SelectTrigger className={`h-9 ${!canEditDepartment ? 'bg-gray-100 cursor-not-allowed' : ''}`}>
                       <SelectValue placeholder="เลือกแผนก">
                         {departments.find(d => String(d.id) === String(formData.departmentId))?.name || ''}
                       </SelectValue>
@@ -167,6 +188,9 @@ export default function EditEmployeeDialog({
                       ))}
                     </SelectContent>
                   </Select>
+                  {!canEditDepartment && (
+                    <p className="text-xs text-muted-foreground">คุณไม่มีสิทธิ์แก้ไขแผนก</p>
+                  )}
                 </div>
                 
                 <div className="space-y-1">
@@ -183,8 +207,9 @@ export default function EditEmployeeDialog({
                         }
                       }
                     })}
+                    disabled={!canEditTeam}
                   >
-                    <SelectTrigger className="h-9">
+                    <SelectTrigger className={`h-9 ${!canEditTeam ? 'bg-gray-100 cursor-not-allowed' : ''}`}>
                       <SelectValue placeholder="เลือกทีม">
                         {teams.find(t => String(t.id) === String(formData.teamId))?.name || ''}
                       </SelectValue>
@@ -197,6 +222,9 @@ export default function EditEmployeeDialog({
                       ))}
                     </SelectContent>
                   </Select>
+                  {!canEditTeam && (
+                    <p className="text-xs text-muted-foreground">คุณไม่มีสิทธิ์แก้ไขทีม</p>
+                  )}
                 </div>
               </div>
               
@@ -243,8 +271,9 @@ export default function EditEmployeeDialog({
                         }
                       });
                     }}
+                    disabled={!canEditRoleInfo}
                   >
-                    <SelectTrigger className="h-9">
+                    <SelectTrigger className={`h-9 ${!canEditRoleInfo ? 'bg-gray-100 cursor-not-allowed' : ''}`}>
                       <SelectValue placeholder="เลือกบทบาท">
                         {roles.find(r => r.id === formData.roleId)?.name_th || 
                          roles.find(r => r.id === formData.roleId)?.name || ''}
@@ -258,10 +287,13 @@ export default function EditEmployeeDialog({
                           </SelectItem>
                         ))
                       ) : (
-                        <SelectItem value="" disabled>ไม่มีบทบาทให้เลือก</SelectItem>
+                        <SelectItem value="none" disabled>ไม่มีบทบาทให้เลือก</SelectItem>
                       )}
                     </SelectContent>
                   </Select>
+                  {!canEditRoleInfo && (
+                    <p className="text-xs text-muted-foreground">คุณไม่มีสิทธิ์แก้ไขบทบาท</p>
+                  )}
                 </div>
               </div>
               
@@ -281,69 +313,92 @@ export default function EditEmployeeDialog({
                 
                 <div className="space-y-1">
                   <Label htmlFor="birthDate">วันเกิด</Label>
-                  <Input 
-                    id="birthDate"
-                    name="birthDate"
-                    type="date"
-                    value={formData.birthDate || ''}
-                    onChange={handleFormChange}
-                    className="h-9"
-                  />
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <div className="relative">
+                        <Input
+                          id="birthDate"
+                          name="birthDateDisplay"
+                          value={formData.birthDate ? new Date(formData.birthDate).toLocaleDateString('th-TH') : ''}
+                          className="pl-10 h-9"
+                          placeholder="เลือกวันเกิด"
+                          readOnly
+                        />
+                        <FiCalendar className="absolute left-3 top-2.5 h-4 w-4 text-gray-500 dark:text-gray-400" />
+                      </div>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0 z-[999]" align="start" style={{ zIndex: 999 }}>
+                      <Calendar
+                        mode="single"
+                        selected={formData.birthDate ? new Date(formData.birthDate) : undefined}
+                        onSelect={(date) => {
+                          if (date) {
+                            const year = date.getFullYear();
+                            const month = String(date.getMonth() + 1).padStart(2, '0');
+                            const day = String(date.getDate()).padStart(2, '0');
+                            const formattedDate = `${year}-${month}-${day}`;
+                            
+                            handleFormChange({
+                              target: {
+                                name: 'birthDate',
+                                value: formattedDate
+                              }
+                            });
+                          }
+                        }}
+                        initialFocus
+                        className="pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </div>
             </div>
             
             <div className="space-y-3 md:col-span-1">
               {/* ส่วนของการอัปโหลดรูปโปรไฟล์ */}
-              <div className="space-y-1 h-[233px]">
-                <Label>รูปโปรไฟล์</Label>
-                <div className="flex flex-col items-center border border-gray-300 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-900 h-[200px]">
-                  <div className="flex flex-col items-center">
+              <div className="flex justify-center h-[209px] mb-9">
+                <div className="w-48 h-48 relative group mt-0">
+                  <div className="rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 overflow-hidden flex items-center justify-center h-full">
                     {imagePreview ? (
-                      <div className="relative mb-2">
-                        <div className="w-20 h-20 overflow-hidden rounded-full border-2 border-primary/20 flex items-center justify-center">
-                          <ProfileImage
-                            src={imagePreview}
-                            alt="รูปโปรไฟล์"
-                            size="lg"
-                            fallbackText={`${formData.firstName} ${formData.lastName}`}
-                            clickable={false}
-                            className="object-cover w-full h-full"
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleRemoveImage}
-                          className="absolute -top-1 -right-1 bg-red-500 text-white p-1 rounded-full hover:bg-red-600 shadow-sm"
-                          title="ลบรูปภาพ"
-                        >
-                          <FiX size={14} />
-                        </button>
-                      </div>
+                      <img 
+                        src={imagePreview} 
+                        alt="Preview" 
+                        className="object-cover w-full h-full" 
+                      />
                     ) : (
-                      <div className="w-20 h-20 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-2 border-2 border-primary/20">
-                        <FiUser className="h-10 w-10 text-gray-400" />
+                      <div className="flex flex-col items-center justify-center p-4">
+                        <FiUser size={40} className="text-gray-600 dark:text-gray-400 mb-2" />
+                        <p className="text-xs text-center text-gray-500 dark:text-gray-400">ยังไม่มีรูปโปรไฟล์</p>
                       </div>
                     )}
-                    
-                    <label className="flex items-center justify-center px-2 py-1 text-xs bg-primary/10 text-primary hover:bg-primary/20 rounded-md cursor-pointer transition-colors">
-                      <FiUpload className="mr-1 h-3 w-3" />
-                      <span>อัปโหลดรูปภาพ</span>
-                      <input
-                        type="file"
-                        className="hidden"
-                        accept="image/jpeg,image/png,image/gif,image/webp"
+                  </div>
+                  
+                  <div className="absolute bottom-0 right-0 flex space-x-1">
+                    <label className="cursor-pointer bg-gray-800 hover:bg-black text-white p-2 rounded-full shadow-md">
+                      <FiUpload size={16} />
+                      <input 
+                        type="file" 
+                        className="hidden" 
                         onChange={handleImageChange}
+                        accept="image/*"
                       />
                     </label>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      รองรับไฟล์ JPG, PNG, GIF, WEBP (≤10MB)
-                    </p>
+                    
+                    {imagePreview && (
+                      <button 
+                        type="button"
+                        className="bg-gray-800 hover:bg-black text-white p-2 rounded-full shadow-md"
+                        onClick={handleRemoveImage}
+                      >
+                        <FiX size={16} />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
               
-              <div className="grid grid-cols-2 gap-3 h-[70px]">
+              <div className="grid grid-cols-2 gap-3 h-[70px] mt-7">
                 <div className="space-y-1">
                   <Label htmlFor="positionId">ตำแหน่ง</Label>
                   <Select
@@ -362,8 +417,9 @@ export default function EditEmployeeDialog({
                         }
                       });
                     }}
+                    disabled={!canEditPositionInfo}
                   >
-                    <SelectTrigger className="h-9">
+                    <SelectTrigger className={`h-9 ${!canEditPositionInfo ? 'bg-gray-100 cursor-not-allowed' : ''}`}>
                       <SelectValue placeholder="เลือกตำแหน่ง">
                         {positions.find(p => String(p.id) === String(formData.positionId))?.name_th || 
                          positions.find(p => String(p.id) === String(formData.positionId))?.name || ''}
@@ -377,10 +433,13 @@ export default function EditEmployeeDialog({
                           </SelectItem>
                         ))
                       ) : (
-                        <SelectItem value="" disabled>ไม่มีตำแหน่งให้เลือก</SelectItem>
+                        <SelectItem value="none" disabled>ไม่มีตำแหน่งให้เลือก</SelectItem>
                       )}
                     </SelectContent>
                   </Select>
+                  {!canEditPositionInfo && (
+                    <p className="text-xs text-muted-foreground">คุณไม่มีสิทธิ์แก้ไขตำแหน่ง</p>
+                  )}
                 </div>
                 
                 <div className="space-y-1">
@@ -401,8 +460,9 @@ export default function EditEmployeeDialog({
                         }
                       });
                     }}
+                    disabled={!canEditPositionInfo}
                   >
-                    <SelectTrigger className="h-9">
+                    <SelectTrigger className={`h-9 ${!canEditPositionInfo ? 'bg-gray-100 cursor-not-allowed' : ''}`}>
                       <SelectValue placeholder="เลือกระดับตำแหน่ง">
                         {positionLevels.find(l => String(l.id) === String(formData.positionLevelId))?.name_th || 
                          positionLevels.find(l => String(l.id) === String(formData.positionLevelId))?.name || ''}
@@ -416,10 +476,13 @@ export default function EditEmployeeDialog({
                           </SelectItem>
                         ))
                       ) : (
-                        <SelectItem value="" disabled>ไม่มีระดับตำแหน่งให้เลือก</SelectItem>
+                        <SelectItem value="none" disabled>ไม่มีระดับตำแหน่งให้เลือก</SelectItem>
                       )}
                     </SelectContent>
                   </Select>
+                  {!canEditPositionInfo && (
+                    <p className="text-xs text-muted-foreground">คุณไม่มีสิทธิ์แก้ไขระดับตำแหน่ง</p>
+                  )}
                 </div>
               </div>
               
@@ -432,55 +495,82 @@ export default function EditEmployeeDialog({
                   placeholder="ชื่อตำแหน่ง"
                   value={formData.positionTitle || ''}
                   onChange={handleFormChange}
-                  className="h-9"
+                  className={`h-9 ${!canEditPositionInfo ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                  readOnly={!canEditPositionInfo}
+                  disabled={!canEditPositionInfo}
                 />
+                {!canEditPositionInfo && (
+                  <p className="text-xs text-muted-foreground">คุณไม่มีสิทธิ์แก้ไขชื่อตำแหน่ง</p>
+                )}
               </div>
               
-              <div className="space-y-1 h-[70px] flex items-end">
-                <div className="flex items-center space-x-2">
-                  <Switch 
+              <div className="space-y-2 h-[70px] justify-start mt-2">
+                <Label htmlFor="isActive">สถานะการใช้งาน</Label>
+                <div className="flex items-center gap-2">
+                  <Switch
                     id="isActive"
                     name="isActive"
-                    checked={formData.isActive === undefined ? true : formData.isActive}
-                    onCheckedChange={(checked) => handleFormChange({
-                      target: { name: 'isActive', value: checked, type: 'checkbox' }
-                    })}
+                    checked={formData.isActive === true}
+                    onCheckedChange={(checked) => {
+                      const newValue = checked === true ? true : false;
+                      
+                      console.log("============ SWITCH CHANGE [FIXED] ============");
+                      console.log("ค่าปัจจุบัน:", formData.isActive);
+                      console.log("ค่าใหม่ที่จะเปลี่ยนเป็น:", newValue);
+                      console.log("ประเภทข้อมูล:", typeof newValue);
+                      
+                      handleFormChange({
+                        target: { 
+                          name: 'isActive', 
+                          value: newValue, 
+                          type: 'checkbox',
+                          checked: newValue
+                        }
+                      });
+                      
+                      setTimeout(() => {
+                        console.log("หลังเรียก handleFormChange:");
+                        console.log("ค่าใหม่ในฟอร์ม:", formData.isActive);
+                        console.log("=============================================");
+                      }, 100);
+                    }}
+                    disabled={!canEditActive}
                   />
-                  <Label htmlFor="isActive" className="cursor-pointer">
-                    สถานะการใช้งาน {formData.isActive === undefined || formData.isActive === true ? '(ใช้งาน)' : '(ไม่ใช้งาน)'}
+                  <Label htmlFor="isActive" className={`cursor-pointer text-sm ${!canEditActive ? 'text-muted-foreground' : 'text-gray-500'} pl-1`}>
+                    {formData.isActive === true ? 'ใช้งาน' : 'ไม่ใช้งาน'}
                   </Label>
                 </div>
+                {!canEditActive && (
+                  <p className="text-xs text-muted-foreground">คุณไม่มีสิทธิ์แก้ไขสถานะการใช้งาน</p>
+                )}
               </div>
             </div>
           </div>
           
-          <div className="flex justify-end mt-4 border-t pt-4">
+          {formError && formError.general && (
+            <div className="text-red-500 text-sm mb-4">{formError.general}</div>
+          )}
+          
+          <div className="flex justify-end gap-3 mt-4">
             <Button 
-              key="edit-cancel-button" 
               type="button" 
               variant="outline" 
               onClick={() => onOpenChange(false)}
-              className="mr-2 h-9"
             >
               ยกเลิก
             </Button>
             <Button 
-              key="edit-save-button" 
-              type="submit"
-              className="bg-blue-600 hover:bg-blue-700 text-white h-9" 
+              type="submit" 
+              className="bg-gray-800 hover:bg-black text-white"
               disabled={formLoading}
             >
               {formLoading ? (
                 <>
                   <LoadingSpinner className="mr-2" size="sm" /> กำลังบันทึก...
                 </>
-              ) : 'บันทึกการเปลี่ยนแปลง'}
+              ) : 'บันทึกข้อมูล'}
             </Button>
           </div>
-          
-          {formError && (
-            <p className="text-sm text-red-500 mt-2">{formError}</p>
-          )}
         </form>
       </DialogContent>
     </Dialog>

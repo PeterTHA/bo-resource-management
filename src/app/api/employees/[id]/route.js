@@ -132,6 +132,8 @@ export async function PUT(req, { params }) {
     const resolvedParams = await params;
     const id = resolvedParams.id;
     const data = await req.json();
+    
+    console.log('API - Received data for update:', data);
 
     // ตรวจสอบว่ามีพนักงานที่ต้องการอัปเดตหรือไม่
     const employee = await prisma.employees.findUnique({
@@ -172,6 +174,13 @@ export async function PUT(req, { params }) {
       if (data.first_name !== undefined) dataToUpdate.first_name = data.first_name;
       if (data.last_name !== undefined) dataToUpdate.last_name = data.last_name;
       if (data.email !== undefined) dataToUpdate.email = data.email;
+      if (data.position_id !== undefined) dataToUpdate.position_id = data.position_id;
+      if (data.position_level_id !== undefined) dataToUpdate.position_level_id = data.position_level_id;
+      if (data.position_title !== undefined) dataToUpdate.position_title = data.position_title;
+      if (data.birth_date !== undefined) dataToUpdate.birth_date = data.birth_date ? new Date(data.birth_date) : null;
+      if (data.gender !== undefined) dataToUpdate.gender = data.gender;
+      if (data.phone_number !== undefined) dataToUpdate.phone_number = data.phone_number;
+      if (data.is_active !== undefined) dataToUpdate.is_active = data.is_active;
       
       // อัปเดตรูปภาพทุกครั้งที่มีการส่งมา (รวมถึงกรณีเป็น null เพื่อลบรูป)
       if (data.image !== undefined) {
@@ -187,11 +196,11 @@ export async function PUT(req, { params }) {
       if (data.position_id !== undefined) dataToUpdate.position_id = data.position_id;
       if (data.position_level_id !== undefined) dataToUpdate.position_level_id = data.position_level_id;
       if (data.position_title !== undefined) dataToUpdate.position_title = data.position_title;
+      if (data.is_active !== undefined) dataToUpdate.is_active = data.is_active;
       
       // แต่ไม่สามารถแก้ไขบทบาทได้ (เฉพาะ admin)
       if (isAdmin) {
         if (data.role_id !== undefined) dataToUpdate.role_id = data.role_id;
-        if (data.is_active !== undefined) dataToUpdate.is_active = data.is_active;
         if (data.department_id !== undefined) dataToUpdate.department_id = data.department_id;
         if (data.team_id !== undefined) dataToUpdate.team_id = data.team_id;
         if (data.employee_id !== undefined) dataToUpdate.employee_id = data.employee_id;
@@ -210,18 +219,41 @@ export async function PUT(req, { params }) {
     
     // ถ้าเป็น admin อนุญาตให้แก้ไขทุกฟิลด์ได้
     if (isAdmin) {
+      console.log('Admin is updating fields, checking is_active:', data.is_active);
       Object.keys(data).forEach(key => {
         if (key !== 'id' && data[key] !== undefined) {
           // แปลงวันที่ในรูปแบบที่ถูกต้อง
           if (key === 'birth_date' || key === 'hire_date') {
             dataToUpdate[key] = data[key] ? new Date(data[key]) : null;
           } 
+          // จัดการกับ is_active เป็นกรณีพิเศษ
+          else if (key === 'is_active') {
+            // ข้ามการกำหนดค่าที่นี่ เพราะจะมีการจัดการในขั้นตอนถัดไป
+            console.log('Found is_active in fields, will handle separately');
+          }
           // ตัดฟิลด์ที่ไม่มีในฐานข้อมูลออก
           else if (!['role', 'role_name', 'position', 'position_level'].includes(key)) {
             dataToUpdate[key] = data[key];
           }
         }
       });
+      
+      // จัดการกับ is_active แยกต่างหาก
+      if (data.is_active !== undefined) {
+        console.log('[FIXED] Processing is_active value:');
+        console.log('  Raw value received:', data.is_active);
+        console.log('  Type:', typeof data.is_active);
+        
+        // แปลงค่าเป็น boolean ที่ชัดเจน โดยเปรียบเทียบค่ากับ true เท่านั้น
+        // เพื่อให้ได้ true หรือ false ที่ชัดเจน
+        const isActiveBoolean = data.is_active === true ? true : false;
+        dataToUpdate.is_active = isActiveBoolean;
+        
+        console.log('  Converted to boolean:', isActiveBoolean);
+        console.log('  Final type:', typeof isActiveBoolean);
+        console.log('  Explicitly matches true?', isActiveBoolean === true);
+        console.log('  Explicitly matches false?', isActiveBoolean === false);
+      }
     }
 
     // ตรวจสอบอีเมลซ้ำ
@@ -264,6 +296,8 @@ export async function PUT(req, { params }) {
         message: 'ไม่มีข้อมูลที่จะอัปเดต' 
       });
     }
+    
+    console.log('API - Updating employee with data:', dataToUpdate);
 
     const updatedEmployee = await prisma.employees.update({
       where: { id },

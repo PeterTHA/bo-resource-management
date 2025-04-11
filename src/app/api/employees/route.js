@@ -28,14 +28,11 @@ export async function GET(req) {
 
     // ตรวจสอบ query parameters
     const url = new URL(req.url);
-    const includeInactive = url.searchParams.get('includeInactive') === 'true';
+    const includeInactive = url.searchParams.get('includeInactive') !== 'false';
     const includeAll = url.searchParams.get('includeAll') === 'true';
     
     // สร้างเงื่อนไขการค้นหา
     const where = {};
-    if (!includeInactive) {
-      where.is_active = true;
-    }
     
     // ถ้าไม่ใช่ admin จะเห็นเฉพาะพนักงานในทีมเดียวกัน หรือตัวเอง
     // เว้นแต่จะมีการระบุ includeAll=true

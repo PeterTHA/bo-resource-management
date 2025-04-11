@@ -1,6 +1,6 @@
 'use client';
 
-import { FiKey } from 'react-icons/fi';
+import { FiKey, FiLock, FiUnlock } from 'react-icons/fi';
 import {
   Dialog,
   DialogContent,
@@ -29,7 +29,10 @@ export default function PasswordDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>เปลี่ยนรหัสผ่าน</DialogTitle>
+          <DialogTitle className="flex items-center gap-2 text-xl">
+            <FiKey className="text-gray-600 dark:text-gray-400" />
+            เปลี่ยนรหัสผ่าน
+          </DialogTitle>
           <DialogDescription>
             กำหนดรหัสผ่านใหม่สำหรับ {employee?.firstName} {employee?.lastName}
           </DialogDescription>
@@ -38,7 +41,10 @@ export default function PasswordDialog({
         <form onSubmit={handleUpdatePassword}>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="currentPassword">รหัสผ่านปัจจุบัน<span className="text-red-500">*</span></Label>
+              <Label htmlFor="currentPassword" className="flex items-center gap-1">
+                <FiUnlock className="text-gray-600 dark:text-gray-400" size={14} />
+                รหัสผ่านปัจจุบัน<span className="text-red-500">*</span>
+              </Label>
               <Input
                 id="currentPassword"
                 name="currentPassword"
@@ -52,7 +58,10 @@ export default function PasswordDialog({
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="password">รหัสผ่านใหม่<span className="text-red-500">*</span></Label>
+              <Label htmlFor="password" className="flex items-center gap-1">
+                <FiLock className="text-gray-600 dark:text-gray-400" size={14} />
+                รหัสผ่านใหม่<span className="text-red-500">*</span>
+              </Label>
               <Input
                 id="password"
                 name="password"
@@ -66,7 +75,10 @@ export default function PasswordDialog({
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword">ยืนยันรหัสผ่านใหม่<span className="text-red-500">*</span></Label>
+              <Label htmlFor="confirmPassword" className="flex items-center gap-1">
+                <FiLock className="text-gray-600 dark:text-gray-400" size={14} />
+                ยืนยันรหัสผ่านใหม่<span className="text-red-500">*</span>
+              </Label>
               <Input
                 id="confirmPassword"
                 name="confirmPassword"
@@ -79,7 +91,7 @@ export default function PasswordDialog({
               />
             </div>
             
-            <div className="text-xs text-gray-500 bg-blue-50 dark:bg-blue-950 p-2 rounded border border-blue-200 dark:border-blue-800">
+            <div className="text-xs text-gray-500 bg-gray-50 dark:bg-gray-800/30 p-3 rounded border border-gray-200 dark:border-gray-700">
               <p>ข้อมูลรหัสผ่านของคุณจะถูกเข้ารหัสก่อนส่งไปยังเซิร์ฟเวอร์เพื่อความปลอดภัยสูงสุด</p>
             </div>
             
@@ -88,18 +100,17 @@ export default function PasswordDialog({
             )}
           </div>
           
-          <div className="flex justify-end space-x-2">
+          <div className="flex justify-end gap-3 mt-4">
             <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
-              className="h-9"
             >
               ยกเลิก
             </Button>
             <Button
               type="submit"
-              className="bg-blue-600 hover:bg-blue-700 text-white h-9"
+              className="bg-gray-800 hover:bg-black text-white"
               disabled={formLoading}
             >
               {formLoading ? (
